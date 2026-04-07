@@ -6,7 +6,7 @@ prove that sensitive information has leaked through the multi-agent system.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, UTC
 
 from pydantic import BaseModel, Field
 
@@ -82,7 +82,7 @@ class CanaryLeak(BaseModel):
         description="Where the leak was detected: 'inter_agent_msg', 'delegation', 'final_output'.",
     )
     action_sequence_num: int
-    detected_at: datetime = Field(default_factory=datetime.utcnow)
+    detected_at: datetime = Field(default_factory=datetime.now(UTC))
 
 
 class CanaryVault(BaseModel):

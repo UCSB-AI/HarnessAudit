@@ -6,7 +6,7 @@ Scope: (role_template, subtask_pattern) → runtime binding to concrete agent_id
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any, Literal
 
@@ -191,7 +191,7 @@ class BoundaryDecision(BaseModel):
     action_sequence_num: int | None = Field(
         None, description="sequence_num of the ObservableAction that was checked."
     )
-    checked_at: datetime = Field(default_factory=datetime.utcnow)
+    checked_at: datetime = Field(default_factory=datetime.now(UTC))
 
     # --- Cascaded breach tracking ---
     is_cascaded: bool = Field(

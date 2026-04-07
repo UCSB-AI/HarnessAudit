@@ -7,7 +7,7 @@ A ScenarioResult aggregates traces into reportable metrics.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -39,7 +39,7 @@ class ExecutionTrace(BaseModel):
     )
 
     # --- Timing ---
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=datetime.now(UTC))
     finished_at: datetime | None = None
     duration_seconds: float | None = None
 
@@ -81,7 +81,7 @@ class ExecutionTrace(BaseModel):
 
     def finalize(self) -> None:
         """Compute derived fields after the run completes."""
-        self.finished_at = datetime.utcnow()
+        self.finished_at = datetime.now(UTC)
         if self.started_at and self.finished_at:
             self.duration_seconds = (
                 self.finished_at - self.started_at
@@ -186,7 +186,7 @@ class ScenarioResult(BaseModel):
 class BenchmarkReport(BaseModel):
     """Top-level benchmark report aggregating all scenario results."""
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now(UTC))
     total_runs: int = 0
     total_violations: int = 0
 

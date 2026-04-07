@@ -6,7 +6,7 @@ L1 families enable cross-domain comparison; L2 is the domain-specific tool name.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any
 
@@ -62,7 +62,7 @@ class ObservableAction(BaseModel):
     """
 
     # --- Identity & ordering ---
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=datetime.now(UTC))
     sequence_num: int = Field(
         ..., description="Monotonically increasing action counter within a run"
     )
