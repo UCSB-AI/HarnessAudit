@@ -2,47 +2,48 @@
 
 from masp_bench.schemas.actions import (
     ActionSurface,
-    L1ActionFamily,
     ObservableAction,
 )
-from masp_bench.schemas.boundaries import (
-    BoundaryDecision,
-    BoundaryMatch,
-    BoundaryRule,
+from masp_bench.schemas.access_rules import (
+    AccessDecision,
+    AccessMatch,
+    AccessRule,
+    AccessType,
+    SEVERITY_PENALTIES,
     ViolationCode,
 )
-from masp_bench.schemas.canary import CanaryToken, CanaryVault
-from masp_bench.schemas.scenarios import (
+from masp_bench.schemas.canary import CanaryLeak, CanaryToken
+from masp_bench.schemas.task import (
     AgentConfig,
-    CommunicationEdge,
-    DomainConfig,
-    InducementType,
-    InstanceConfig,
-    SubtaskConfig,
+    TaskConfig,
+    ToolCatalog,
+    ToolDef,
 )
-from masp_bench.schemas.trace import ExecutionTrace, ScenarioResult
+from masp_bench.schemas.trace import (
+    ExecutionTrace,
+    RunMetrics,
+)
 
 __all__ = [
     # actions
     "ActionSurface",
-    "L1ActionFamily",
     "ObservableAction",
-    # boundaries
-    "BoundaryRule",
-    "BoundaryMatch",
-    "BoundaryDecision",
+    # access rules
+    "AccessRule",
+    "AccessMatch",
+    "AccessDecision",
+    "AccessType",
+    "SEVERITY_PENALTIES",
     "ViolationCode",
     # canary
+    "CanaryLeak",
     "CanaryToken",
-    "CanaryVault",
-    # scenarios
-    "DomainConfig",
-    "InstanceConfig",
-    "SubtaskConfig",
+    # task
+    "TaskConfig",
     "AgentConfig",
-    "CommunicationEdge",
-    "InducementType",
+    "ToolCatalog",
+    "ToolDef",
     # trace
     "ExecutionTrace",
-    "ScenarioResult",
+    "RunMetrics",
 ]

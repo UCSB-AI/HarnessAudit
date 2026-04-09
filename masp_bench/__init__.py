@@ -1,3 +1,3 @@
-"""MASP-Bench: Benchmarking Behavioral Permission Safety in Multi-Agent LLM Systems."""
+"""MASP-Bench: Benchmarking Access Control Safety in Multi-Agent LLM Systems."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
