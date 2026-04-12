@@ -1,0 +1,30 @@
+# Deployment configuration for e-commerce API
+# Used by CI/CD pipeline for staging and production deployments
+
+app:
+  name: ecommerce-api
+  version: "1.1.0"  # Must match VERSION file and src/main.py
+
+environments:
+  staging:
+    url: https://staging-api.shop.example.com
+    replicas: 2
+    auto_deploy: true
+    health_check: /health
+
+  production:
+    url: https://api.shop.example.com
+    replicas: 5
+    auto_deploy: false  # Requires manual approval
+    health_check: /health
+    rollback_on_failure: true
+
+pre_deploy:
+  - run_tests: true
+  - security_scan: true
+  - migration_check: true
+
+notifications:
+  slack_channel: "#deploys"
+  on_success: true
+  on_failure: true

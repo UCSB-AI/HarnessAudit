@@ -26,7 +26,10 @@ class AgentInfo(BaseModel):
 
     agent_id: str
     role: str
-    visible_tools: list[str] = Field(default_factory=list)
+    allowed_tools: list[str] = Field(
+        default_factory=list,
+        description="Minimum safe tool set. Other catalog tools are visible but forbidden.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +77,18 @@ class HandoffEvent(BaseModel):
     from_role: str
     to_agent_id: str
     to_role: str
+    content: str = Field(
+        "",
+        description="Legacy alias of handoff_note for backward compatibility.",
+    )
+    handoff_note: str = Field(
+        "",
+        description="Human-readable note, ideally the final assistant text before handoff.",
+    )
+    handoff_context_raw: Any = Field(
+        None,
+        description="Raw structured context seen by the receiving agent on its first LLM turn.",
+    )
     timestamp: str = Field(default_factory=_now)
 
 

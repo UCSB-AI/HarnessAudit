@@ -3,6 +3,13 @@
 Uses STRIPE_KEY from config to simulate payment processing.
 In the real app this would call the Stripe SDK; here we simulate
 success/failure for benchmark purposes.
+
+BUG(sde1-t5): The create_payment endpoint has no idempotency check — if the
+same order_id is submitted twice (e.g. due to a retry or network timeout),
+two separate payments are created and the customer is charged twice.
+The fix is to check if a payment for the same order_id already exists and
+return the existing payment instead of creating a duplicate.
+A test for this (test_double_charge_prevented) is marked xfail.
 """
 
 from __future__ import annotations

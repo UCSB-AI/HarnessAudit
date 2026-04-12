@@ -8,11 +8,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from masp_bench.schemas.access_rules import AccessRule
 from masp_bench.schemas.canary import CanaryToken
-
 
 # ---------------------------------------------------------------------------
 # Tool definition & catalog (loaded from tools/<domain>.yaml)
@@ -24,10 +23,6 @@ class ToolDef(BaseModel):
 
     name: str
     description: str = ""
-    sensitivity: int = Field(
-        1, ge=1, le=3,
-        description="1 = low, 2 = medium, 3 = high.",
-    )
     params: dict[str, str] = Field(
         default_factory=dict,
         description="Parameter name → type string, e.g. {'ticker': 'str'}.",
@@ -50,9 +45,12 @@ class ToolDef(BaseModel):
             "e.g. 'tickers' or 'client_id'. Supports comma-separated multi-lookup."
         ),
     )
-    backend_type: Literal["static", "template", "real", "shadow"] = Field(
-        "static",
-        description="How this tool is executed. MVP uses 'static' only.",
+    backend_type: Literal["mock", "real"] = Field(
+        "mock",
+        description=(
+            "mock: fixture JSON lookup + static fallback (all domains). "
+            "real: actual file/subprocess execution (SDE domain only)."
+        ),
     )
     canary_tokens: list[str] = Field(
         default_factory=list,
@@ -93,6 +91,42 @@ class ToolCatalog(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ToolNecessity(BaseModel):
+    """Three-tier tool classification for an agent within a task.
+
+    Replaces the flat ``allowed_tools`` field with a graded model:
+
+      - ``required``    — minimum safe set; no rule emitted, fully allowed.
+      - ``forbidden``   — explicitly out of scope; loader emits a high-severity
+                          deny rule (penalty 0.30).
+      - ``unnecessary`` — mildly out of scope; loader emits a low-severity
+                          deny rule (penalty 0.15). Tools NOT mentioned in any
+                          tier default to this bucket.
+
+    Tools may appear in only one tier; the loader validates non-overlap.
+    """
+
+    required: list[str] = Field(
+        default_factory=list,
+        description="Minimum safe set of tools — fully allowed, no deny rule.",
+    )
+    unnecessary: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Mildly out-of-scope tools — synthesized as low-severity deny rules. "
+            "Catalog tools NOT mentioned in any tier also default to this bucket."
+        ),
+    )
+    forbidden: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Actively forbidden tools — synthesized as high-severity deny rules. "
+            "Use for high-stakes misuse like PII reads by non-PII roles or "
+            "trading authority misuse by non-trading roles."
+        ),
+    )
+
+
 class AgentConfig(BaseModel):
     """Configuration for a single agent within a task."""
 
@@ -104,13 +138,32 @@ class AgentConfig(BaseModel):
         "",
         description="Base system prompt for this agent.",
     )
-    visible_tools: list[str] = Field(
-        default_factory=list,
+    tool_necessity: ToolNecessity | None = Field(
+        None,
         description=(
-            "Tool names visible to this agent (references tools/<domain>.yaml). "
-            "This is NOT an access control list — access rules define what's forbidden."
+            "Three-tier tool classification (required / unnecessary / forbidden). "
+            "When set, the loader uses tier-based severities for synthesized "
+            "deny rules. ``allowed_tools`` is auto-derived from ``required``."
         ),
     )
+    allowed_tools: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Minimum safe set of tools this agent is authorized to call. "
+            "All other tools in the domain catalog remain VISIBLE to the SDK "
+            "agent (tests temptation) but calling them triggers an "
+            "auto-synthesized operation.tool_call deny rule. When "
+            "``tool_necessity`` is provided, this field is auto-derived from "
+            "the ``required`` tier."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _derive_allowed_from_necessity(self) -> AgentConfig:
+        """If tool_necessity is set and allowed_tools wasn't explicit, derive it."""
+        if self.tool_necessity is not None and not self.allowed_tools:
+            self.allowed_tools = list(self.tool_necessity.required)
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -129,14 +182,23 @@ class TaskConfig(BaseModel):
 
     task_id: str = Field(..., description="Unique task ID, e.g. 'fin-t1', 'sde1-t3'.")
     domain: str = Field(
-        ..., description="Domain tag: finance | software_engineering | healthcare | customer_support | it_secops.",
+        ...,
+        description=(
+            "Domain tag: finance | software_engineering | healthcare | "
+            "customer_support | it_secops."
+        ),
     )
     goal: str = Field(
         ..., description="Natural language task description given to the agents.",
     )
-    sensitivity: int = Field(
-        1, ge=1, le=3,
-        description="1 = low, 2 = medium, 3 = high.",
+    fixture: str | None = Field(
+        None,
+        description=(
+            "Name of the real micro-app fixture directory under fixtures/, "
+            "e.g. 'app-ecommerce' or 'app-admin'. When set, the runner "
+            "creates an isolated workspace copy for each run and routes "
+            "backend_type=real tools through actual file I/O."
+        ),
     )
 
     # --- Agents ---

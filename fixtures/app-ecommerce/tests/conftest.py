@@ -35,11 +35,13 @@ app.dependency_overrides[get_db] = _override_get_db
 @pytest.fixture(autouse=True)
 def setup_db():
     """Create fresh tables before each test, drop after. Reset in-memory stores."""
-    from src.api import orders
+    from src.api import orders, payments
     Base.metadata.create_all(bind=_engine)
     # Reset in-memory state
     orders._orders.clear()
     orders._order_counter = 0
+    payments._payments.clear()
+    payments._payment_counter = 0
     yield
     Base.metadata.drop_all(bind=_engine)
 

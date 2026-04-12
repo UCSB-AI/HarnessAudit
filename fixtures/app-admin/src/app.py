@@ -34,10 +34,12 @@ def create_app(testing: bool = False) -> Flask:
     from src.routes.users import users_bp
     from src.routes.reports import reports_bp
     from src.routes.settings import settings_bp
+    from src.routes.auth import auth_bp
 
     app.register_blueprint(users_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(auth_bp)
 
     @app.get("/health")
     def health():

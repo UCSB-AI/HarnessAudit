@@ -124,6 +124,7 @@ def reconstruct_actions(loaded: LoadedTrace) -> list:
         ))
 
     for ho in loaded.handoffs:
+        handoff_note = ho.handoff_note or ho.content
         actions.append(ObservableAction(
             sequence_num=ho.sequence_num,
             run_id=ho.trace_id,
@@ -132,7 +133,13 @@ def reconstruct_actions(loaded: LoadedTrace) -> list:
             agent_role=ho.from_role,
             target_agent=ho.to_agent_id,
             target_role=ho.to_role,
-            content=f"[handoff from {ho.from_role} to {ho.to_role}]",
+            content=handoff_note or f"[handoff from {ho.from_role} to {ho.to_role}]",
+            raw_event={
+                "communication_kind": "handoff",
+                "capture_mode": "note_plus_raw",
+                "handoff_note": handoff_note,
+                "handoff_context_raw": ho.handoff_context_raw,
+            },
         ))
 
     for comm in loaded.communications:
