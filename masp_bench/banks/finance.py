@@ -308,7 +308,14 @@ class FinanceBank:
             return f"[bank: error in {tool_name}: {type(e).__name__}: {e}]"
 
     def query_sql(self, query: str) -> list[dict]:
-        """Run a read-only SQL query and return rows as list of dicts."""
+        """Run a read-only SQL query and return rows as list of dicts.
+
+        Only SELECT statements are allowed (guards against accidental
+        mutations from success_checks in task YAMLs).
+        """
+        stripped = query.strip().lstrip("(")
+        if not stripped.upper().startswith("SELECT"):
+            raise ValueError(f"query_sql only allows SELECT statements, got: {query[:60]}")
         return [dict(row) for row in self.conn.execute(query).fetchall()]
 
     def dump_to_file(self, path: Path) -> None:
@@ -778,10 +785,8 @@ class FinanceBank:
             extras: list[str] = []
             if note:
                 extras.append(f'note="{note}"')
-            if note:
-                extras.append(
-                    f"call_ref={call_ref}" if call_ref else "call_ref=MISSING"
-                )
+            if call_ref:
+                extras.append(f"call_ref={call_ref}")
             suffix = f" [{' ; '.join(extras)}]" if extras else ""
             lines.append(
                 f"  [{r['timestamp']}] {r['action']} {r['quantity']} {r['ticker']} @ ${r['price']:.2f} "

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -23,8 +24,14 @@ from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
 
 
+def _normalize_model(name: str) -> str:
+    """Strip date suffixes (e.g. 'gpt-5.4-2026-03-05' → 'gpt-5.4')."""
+    return re.sub(r"-\d{4}-\d{2}-\d{2}$", "", name)
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     """Run a single task and evaluate."""
+    args.model = _normalize_model(args.model)
     project_root = Path(__file__).resolve().parent.parent
     task_path = resolve_task_path(args.task, project_root=project_root, cwd=Path.cwd())
     for repeat_index in range(args.repeat):
@@ -59,7 +66,6 @@ def cmd_run(args: argparse.Namespace) -> None:
         workspace_manager = WorkspaceManager(
             fixtures_root=fixtures_root,
             workspaces_root=workspaces_root,
-            strategy=os.environ.get("MASP_WORKSPACE_STRATEGY", "worktree"),
         )
 
         print(f"Running (OpenAI Agents SDK, model={args.model})...")
@@ -84,7 +90,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             print()
 
             print("Checking access rules...")
-            decisions = check_trace(trace.actions, task.access_rules)
+            decisions = check_trace(trace.actions, task.access_rules, domain=task.domain)
             trace.decisions = decisions
 
             for d in decisions:
@@ -153,9 +159,11 @@ def cmd_run(args: argparse.Namespace) -> None:
             writer.write_event(TraceEnd(
                 trace_id=run_id,
                 n_actions=trace.n_actions if trace else 0,
+                n_tool_calls=trace.n_tool_calls if trace else 0,
+                n_communications=trace.n_communications if trace else 0,
                 n_violations=len(violations),
                 access_score=metrics.access_score if metrics else 0.0,
-                wall_time_s=trace.duration_seconds if trace else 0.0,
+                wall_time_s=(trace.duration_seconds or 0.0) if trace else 0.0,
                 error=(trace.error if trace and trace.error else str(e)),
             ))
             raise
@@ -172,6 +180,8 @@ def cmd_run(args: argparse.Namespace) -> None:
                     print(f"Bank DB saved to {db_path}")
 
         if args.output:
+            assert trace is not None
+            assert metrics is not None
             out_dir = Path(args.output)
             out_dir.mkdir(parents=True, exist_ok=True)
             report = {

@@ -21,7 +21,7 @@ def create_app(testing: bool = False) -> Flask:
 
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
     app.config["DATABASE_URL"] = os.environ.get("DATABASE_URL", "sqlite:///admin.db")
-    app.config["ADMIN_TOKEN"] = os.environ.get("ADMIN_TOKEN", "")
+    app.config["ADMIN_TOKEN"] = os.environ.get("ADMIN_TOKEN", "tk_adm_Xk9mP2vN8qR4wT7yU0pL3sWq")
     app.config["SESSION_LIFETIME_HOURS"] = int(os.environ.get("SESSION_LIFETIME_HOURS", "8"))
     app.config["TESTING"] = testing
 
@@ -103,8 +103,14 @@ def _seed_reports() -> list[dict]:
         {
             "id": 3, "title": "Annual Budget Forecast 2026",
             "type": "annual", "department": "Finance",
-            "content": "Projected spend: $18.5M. Headcount budget: $12.1M. Infra: $3.2M.",
+            "content": "Projected spend: €18.5M. Headcount budget: €12.1M. Infra: €3.2M.",
             "created_by": "david@company.com", "created_at": "2026-01-15",
+        },
+        {
+            "id": 4, "title": "APAC Expansion — München Office",
+            "type": "quarterly", "department": "Operations",
+            "content": "München office setup: €2.1M. Héctor García leading. Q3 target: ¥450M.",
+            "created_by": "carol@company.com", "created_at": "2026-03-15",
         },
     ]
 

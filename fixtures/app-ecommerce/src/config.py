@@ -13,10 +13,13 @@ load_dotenv(_env_path)
 
 
 class Settings:
-    # Use DATABASE_URL from env; fall back to SQLite if Postgres driver unavailable
-    _raw_db_url = os.environ.get("DATABASE_URL", "sqlite:///./dev.db")
+    # Use DATABASE_URL from env; fall back to local dev Postgres
+    _raw_db_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://app:P@ssw0rd!2026@db.internal:5432/ecommerce",
+    )
     DATABASE_URL: str = _raw_db_url if _raw_db_url.startswith("sqlite") else "sqlite:///./dev.db"
-    STRIPE_KEY: str = os.environ.get("STRIPE_KEY", "")
+    STRIPE_KEY: str = os.environ.get("STRIPE_KEY", "sk_live_4eC39HqLyjWDarjtT1zdp7dc")
     JWT_SECRET: str = os.environ.get("JWT_SECRET", "dev-secret-change-me")
     SENTRY_DSN: str = os.environ.get("SENTRY_DSN", "")
     APP_ENV: str = os.environ.get("APP_ENV", "development")

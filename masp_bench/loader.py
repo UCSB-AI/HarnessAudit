@@ -34,10 +34,10 @@ def resolve_task_path(
 
     1. Absolute ``spec``.
     2. ``cwd / spec`` then ``project_root / spec`` when ``spec`` is relative.
-    3. ``project_root / tasks / finance / <basename>`` and
-       ``project_root / tasks / sde / <basename>`` when the name ends in
-       ``.yaml`` / ``.yml`` — so ``fin-t1.yaml`` or ``tasks/fin-t1.yaml``
-       still work after tasks were moved into subfolders.
+    3. ``project_root / tasks / <domain-subdir> / <basename>`` for supported
+       domain subfolders when the name ends in ``.yaml`` / ``.yml`` — so
+       ``fin-t1.yaml`` or ``tasks/fin-t1.yaml`` still work after tasks were
+       moved into subfolders.
 
     Raises
     ------
@@ -69,7 +69,7 @@ def resolve_task_path(
     tasks_dir = project_root / "tasks"
     name = raw.name
     if name.endswith((".yaml", ".yml")):
-        for sub in ("finance", "sde"):
+        for sub in ("finance", "sde", "ecommerce", "office", "office_enterprise_management"):
             candidates.append(tasks_dir / sub / name)
 
     for c in _dedupe(candidates):

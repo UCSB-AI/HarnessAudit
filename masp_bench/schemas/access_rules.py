@@ -10,7 +10,7 @@ Two branches:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+
 from enum import Enum
 from typing import Any, Literal
 
@@ -34,7 +34,7 @@ class ViolationCode(str, Enum):
     V_OT = "V-OT"  # Operation Access: forbidden tool call
     V_OR = "V-OR"  # Operation Access: forbidden resource/arg
     V_IC = "V-IC"  # Information Access: forbidden communication
-    V_ID = "V-ID"  # Information Access: data leak
+    V_ID = "V-ID"  # Information Access: sensitive data leak
 
 
 # Severity → penalty mapping for the score formulas.
@@ -64,52 +64,22 @@ class AccessMatch(BaseModel):
     - operation.tool_call:        tool (pattern)
     - operation.resource:         tool + allowed_args
     - information.communication:  recipient (agent pattern)
-    - information.data_leak:      data_class + canary_token + canary_forbidden_to
+    - information.data_leak:      data_class + forbidden_to
     """
 
     # --- Operation Access (tool_call / resource) ---
-    tool: str | None = Field(
-        None,
-        description=(
-            "Tool name or glob pattern, e.g. 'execute_trade' or 'execute_*'. "
-            "Used by operation.tool_call and operation.resource rules."
-        ),
-    )
-    allowed_args: dict[str, Any] | None = Field(
-        None,
-        description=(
-            "Allowlist constraints on tool arguments, e.g. "
-            "{'portfolio_id': 'PF-4821'}. The rule matches (fires) when "
-            "every listed key is PRESENT in tool_args AND does NOT equal "
-            "its allowed value. If a listed key is absent (i.e., the tool "
-            "uses its default value), the rule does NOT fire. "
-            "Used by operation.resource rules only. "
-            "Allowlist semantics: 'ONLY this exact resource is permitted'."
-        ),
-    )
+    tool: str | None = None
+    allowed_args: dict[str, Any] | None = None
 
     # --- Information Access (communication) ---
-    recipient: str | None = Field(
-        None,
-        description=(
-            "Target agent role pattern, e.g. 'risk_officer' or 'external_*'. "
-            "Used by information.communication rules."
-        ),
-    )
+    recipient: str | None = None
 
     # --- Information Access (data_leak) ---
-    data_class: str | None = Field(
-        None,
-        description="Semantic label for sensitive info, e.g. 'client_ssn', 'unblinding_key'.",
-    )
-    canary_token: str | None = Field(
-        None,
-        description="Exact canary string to detect in content.",
-    )
-    canary_forbidden_to: list[str] = Field(
+    data_class: str | None = None
+    forbidden_to: list[str] = Field(
         default_factory=lambda: ["*"],
         description=(
-            "List of agent roles that must NOT receive this info. "
+            "Roles that must NOT receive this sensitive data. "
             "'*' = forbidden to everyone."
         ),
     )
@@ -213,9 +183,15 @@ class AccessDecision(BaseModel):
     action_sequence_num: int | None = Field(
         None, description="sequence_num of the ObservableAction that was checked."
     )
-    checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def allowed(cls, action_seq: int | None = None) -> AccessDecision:
         """Factory for a non-violating decision."""
-        return cls(violated=False, action_sequence_num=action_seq)
+        return cls(
+            violated=False,
+            rule=None,
+            violation_code=None,
+            effect=None,
+            severity=None,
+            action_sequence_num=action_seq,
+        )

@@ -11,7 +11,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from masp_bench.schemas.access_rules import AccessRule
-from masp_bench.schemas.canary import CanaryToken
 
 # ---------------------------------------------------------------------------
 # Tool definition & catalog (loaded from tools/<domain>.yaml)
@@ -54,7 +53,7 @@ class ToolDef(BaseModel):
     )
     canary_tokens: list[str] = Field(
         default_factory=list,
-        description="Canary token labels injected into this tool's response.",
+        description="Deprecated — kept for YAML backward compat; ignored at runtime.",
     )
 
     # Runtime-loaded fixture data (not in YAML, populated by loader)
@@ -175,7 +174,11 @@ class TaskConfig(BaseModel):
     """A single benchmark task (self-contained).
 
     One YAML file per task. Contains everything needed to run and evaluate:
-    agents, tool references, access rules, canary tokens, and success checks.
+    agents, tool references, access rules, and success checks.
+
+    Sensitive-data leak detection uses recognizer-based pattern matching
+    (see ``masp_bench.recognizer``) keyed by the ``data_class`` field in
+    ``information.data_leak`` access rules. No canary tokens needed.
 
     Tool definitions are loaded separately from tools/<domain>.yaml.
     """
@@ -210,12 +213,6 @@ class TaskConfig(BaseModel):
     access_rules: list[AccessRule] = Field(
         default_factory=list,
         description="Access control rules. Matching an action = violation.",
-    )
-
-    # --- Canary tokens ---
-    canary_tokens: list[CanaryToken] = Field(
-        default_factory=list,
-        description="Canary tokens planted in tool responses for leak detection.",
     )
 
     # --- Success checks (for TSR computation) ---

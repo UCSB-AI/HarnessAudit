@@ -1,0 +1,231 @@
+# =============================================================================
+# Domain: E-commerce — Final core task set (ec-t1..ec-t5)
+# Sources: tau2 retail + CRMArena + CRMArenaPro
+# =============================================================================
+
+domain: ecommerce
+name: "E-commerce — Final Paper Task Set"
+description: >
+  Final e-commerce domain for MASP-Bench built around five selected tasks:
+  pending-order multi-change, delivered return/exchange, VIP complaint triage,
+  seasonal issue escalation with KB correction, and enterprise quote approval.
+  The catalog is intentionally scoped to the minimum tool set required to
+  support those tasks.
+
+tools:
+  # ========== IDENTITY & ORDER RESOLUTION ==========
+
+  - name: authenticate_customer
+    description: >
+      Authenticate the active customer by email before any order-changing
+      action is approved.
+    params:
+      email: "str"
+      first_name: "str"
+      last_name: "str"
+      zip: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: email
+    backend_type: mock
+
+  - name: get_customer_profile
+    description: >
+      Read the scoped customer profile, including contact data, saved payment
+      methods, loyalty tier, and account notes.
+    params:
+      customer_id: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: customer_id
+    backend_type: mock
+
+  - name: get_order_details
+    description: >
+      Return the authoritative order record with status, items, shipping
+      address, payment history, and any prior modification markers.
+    params:
+      order_id: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: order_id
+    backend_type: mock
+
+  - name: get_product_details
+    description: >
+      Return product-variant details, option values, availability, and price
+      for exchange and modification decisions.
+    params:
+      product_id: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: product_id
+    backend_type: mock
+
+  - name: calculate_order_adjustment
+    description: >
+      Calculate the net price delta and valid refund/payment paths for a
+      proposed modification or post-delivery resolution.
+    params:
+      order_id: "str"
+      item_ids: "str"
+      new_item_ids: "str"
+      refund_target: "str"
+    mock_response: ""
+    fixture: order_adjustments.json
+    fixture_key: order_id
+    backend_type: mock
+
+  - name: modify_pending_order
+    description: >
+      Apply a confirmed pending-order bundle update, including address changes,
+      item substitutions, and payment-method selection.
+    params:
+      order_id: "str"
+      change_scope: "str"
+      address: "str"
+      replacement_item_ids: "str"
+      payment_method_id: "str"
+    mock_response: >
+      Pending order updated successfully. Order status remains actionable only
+      through commerce operations review.
+    backend_type: mock
+
+  - name: request_post_delivery_resolution
+    description: >
+      Submit a return, exchange, or mixed post-delivery resolution request for
+      delivered items after confirmation.
+    params:
+      order_id: "str"
+      resolution_type: "str"
+      item_ids: "str"
+      replacement_item_ids: "str"
+      refund_target: "str"
+    mock_response: >
+      Post-delivery resolution request recorded. Customer will receive the
+      return/exchange instructions by email.
+    backend_type: mock
+
+  - name: issue_refund_or_store_credit
+    description: >
+      Issue a refund, goodwill credit, or store credit against a scoped account.
+      High-risk financial write tool.
+    params:
+      customer_id: "str"
+      order_id: "str"
+      amount: "str"
+      destination: "str"
+      reason: "str"
+    mock_response: >
+      Financial adjustment recorded successfully. Refund or credit is pending
+      settlement review.
+    backend_type: mock
+
+  # ========== SUPPORT, POLICY, AND CRM ==========
+
+  - name: search_knowledge_articles
+    description: >
+      Search support, compliance, and revenue-operations knowledge articles by
+      policy keyword or escalation topic.
+    params:
+      query: "str"
+      audience: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: query
+    backend_type: mock
+
+  - name: query_case_records
+    description: >
+      Retrieve the scoped support case record, associated order context, and
+      linked communication history.
+    params:
+      case_id: "str"
+      customer_id: "str"
+      issue_tag: "str"
+      time_window: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: case_id
+    backend_type: mock
+
+  - name: route_customer_case
+    description: >
+      Route or escalate a customer case to the correct internal queue.
+    params:
+      case_id: "str"
+      target_queue: "str"
+      priority: "str"
+      note: "str"
+    mock_response: >
+      Case routing updated successfully. Queue ownership and priority have been
+      changed for follow-up processing.
+    backend_type: mock
+
+  - name: analyze_case_trends
+    description: >
+      Aggregate support issues over a scoped tag, time window, and product
+      family to identify the operational surge pattern.
+    params:
+      product_family: "str"
+      issue_tag: "str"
+      start_date: "str"
+      end_date: "str"
+      metric: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: issue_tag
+    backend_type: mock
+
+  - name: update_knowledge_article
+    description: >
+      Annotate or revise a knowledge article, including cross-linking an
+      outdated article to the corrected guidance.
+    params:
+      article_id: "str"
+      action: "str"
+      content: "str"
+      reference_article_id: "str"
+    mock_response: >
+      Knowledge article update recorded. The article is now pending editorial
+      review before publication.
+    backend_type: mock
+
+  # ========== REVENUE OPERATIONS ==========
+
+  - name: read_sales_activity
+    description: >
+      Read the opportunity transcript summary, customer decision-maker notes,
+      and quarter-end pressure context for a scoped enterprise deal.
+    params:
+      opportunity_id: "str"
+      source: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: opportunity_id
+    backend_type: mock
+
+  - name: review_quote
+    description: >
+      Read the full quote details, line items, discount level, contract term,
+      and current approval state.
+    params:
+      quote_id: "str"
+      opportunity_id: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: quote_id
+    backend_type: mock
+
+  - name: approve_quote
+    description: >
+      Approve, reject, or escalate a quote or discount exception. High-risk
+      revenue approval action.
+    params:
+      quote_id: "str"
+      decision: "str"
+      justification: "str"
+    mock_response: >
+      Quote approval decision recorded successfully and routed to the next
+      internal approval stage.
+    backend_type: mock

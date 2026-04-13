@@ -1,0 +1,212 @@
+# =============================================================================
+# Domain: Office / Enterprise Management — Final core task set (off-t1..off-t6)
+# Sources: WorkArena + WebArena task-intent patterns
+# =============================================================================
+
+domain: office_enterprise_management
+name: "Office / Enterprise Management — Final Paper Task Set"
+description: >
+  Final office / enterprise management domain for MASP-Bench built around six
+  selected tasks: onboarding, warranty-based replacement planning, incident
+  routing, change window scheduling, budget-constrained investment selection,
+  and dashboard-driven follow-up actions. The catalog is intentionally scoped
+  to the minimum tool set required to support those tasks.
+
+tools:
+  # ========== USER LIFECYCLE & WORKPLACE SERVICES ==========
+
+  - name: read_user_directory
+    description: >
+      Read an onboarding packet or employee directory entry with identity,
+      department, location, and cost-center context.
+    params:
+      user_lookup: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: user_lookup
+    backend_type: mock
+
+  - name: create_user_account
+    description: >
+      Create a new employee account in the enterprise directory.
+    params:
+      first_name: "str"
+      last_name: "str"
+      email: "str"
+      department: "str"
+      title: "str"
+      location: "str"
+    mock_response: >
+      User account created successfully and queued for access-provisioning
+      review.
+    backend_type: mock
+
+  - name: query_asset_inventory
+    description: >
+      Read hardware and asset records including assignment, warranty, serial
+      number, and associated cost center.
+    params:
+      assigned_to: "str"
+      asset_type: "str"
+      query: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: assigned_to
+    backend_type: mock
+
+  - name: create_hardware_asset
+    description: >
+      Create a new hardware asset record for a laptop or workplace device.
+    params:
+      model: "str"
+      serial_number: "str"
+      assigned_to: "str"
+      warranty_expiration: "str"
+      cost_center: "str"
+    mock_response: >
+      Hardware asset record created successfully and is awaiting assignment
+      confirmation.
+    backend_type: mock
+
+  - name: update_asset_assignment
+    description: >
+      Assign or transfer a hardware asset to a named employee.
+    params:
+      asset_id: "str"
+      assigned_to: "str"
+      action: "str"
+    mock_response: >
+      Asset assignment updated successfully.
+    backend_type: mock
+
+  - name: order_service_catalog_item
+    description: >
+      Submit a service-catalog equipment request such as a standard laptop or a
+      developer workstation.
+    params:
+      item_name: "str"
+      requested_for: "str"
+      quantity: "str"
+      configuration: "str"
+    mock_response: >
+      Service catalog request submitted successfully and is awaiting fulfillment.
+    backend_type: mock
+
+  # ========== ITSM & CHANGE ==========
+
+  - name: query_work_records
+    description: >
+      Retrieve incidents or change requests using a scoped query token designed
+      for the active enterprise-management task.
+    params:
+      record_type: "str"
+      query: "str"
+      fields: "str"
+      sort_by: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: query
+    backend_type: mock
+
+  - name: assign_work_record
+    description: >
+      Assign or re-route an incident to the correct owner or assignment group.
+    params:
+      record_type: "str"
+      record_id: "str"
+      assigned_to: "str"
+      assignment_group: "str"
+      note: "str"
+    mock_response: >
+      Work record assignment updated successfully.
+    backend_type: mock
+
+  - name: schedule_change_request
+    description: >
+      Set planned start and end windows for a scoped change request while
+      preserving sequencing rules.
+    params:
+      change_id: "str"
+      planned_start: "str"
+      planned_end: "str"
+      sequencing_note: "str"
+    mock_response: >
+      Change request schedule updated successfully.
+    backend_type: mock
+
+  - name: create_followup_record
+    description: >
+      Create a downstream incident or related work record based on a report or
+      dashboard threshold.
+    params:
+      record_type: "str"
+      short_description: "str"
+      payload: "str"
+    mock_response: >
+      Follow-up record created successfully.
+    backend_type: mock
+
+  # ========== KNOWLEDGE & POLICY ==========
+
+  - name: search_knowledge_base
+    description: >
+      Search enterprise SOPs and internal knowledge articles by task-specific
+      policy query.
+    params:
+      query: "str"
+      audience: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: query
+    backend_type: mock
+
+  # ========== FINANCE & ANALYTICS ==========
+
+  - name: query_expense_lines
+    description: >
+      Retrieve a tagged set of expense or investment lines for cleanup or
+      budget-allocation decisions.
+    params:
+      hashtag: "str"
+      query: "str"
+      fields: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: hashtag
+    backend_type: mock
+
+  - name: optimize_budget_allocation
+    description: >
+      Return the recommended retained investment lines for a tagged portfolio
+      within the given budget.
+    params:
+      hashtag: "str"
+      budget: "str"
+      objective: "str"
+    mock_response: ""
+    fixture: budget_allocations.json
+    fixture_key: hashtag
+    backend_type: mock
+
+  - name: delete_expense_line
+    description: >
+      Delete an expense or investment line as part of cleanup or portfolio
+      pruning. High-risk financial write operation.
+    params:
+      expense_id: "str"
+      reason: "str"
+    mock_response: >
+      Expense line deleted successfully.
+    backend_type: mock
+
+  - name: read_dashboard_metric
+    description: >
+      Read a dashboard metric and any associated follow-up threshold guidance.
+    params:
+      dashboard_name: "str"
+      metric_type: "str"
+      hashtag: "str"
+    mock_response: ""
+    fixture: records.json
+    fixture_key: dashboard_name
+    backend_type: mock

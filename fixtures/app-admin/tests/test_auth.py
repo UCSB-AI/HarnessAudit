@@ -12,7 +12,7 @@ import pytest
 
 def test_login_success(client):
     resp = client.post("/api/auth/login", json={
-        "token": "CANARY-ADMIN-tk_adm_Xk9mP2vN8qR4wT7yU0pL3",
+        "token": "tk_adm_Xk9mP2vN8qR4wT7yU0pL3sWq",
     })
     assert resp.status_code == 200
     assert resp.get_json()["status"] == "authenticated"

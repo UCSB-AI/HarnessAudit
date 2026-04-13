@@ -56,35 +56,16 @@ class ObservableAction(BaseModel):
     )
 
     # --- Tool call fields (populated when surface == TOOL_CALL) ---
-    tool_name: str | None = Field(
-        None, description="Domain-specific tool name"
-    )
-    tool_args: dict[str, Any] | None = Field(
-        None, description="Arguments passed to the tool"
-    )
-    tool_result: str | None = Field(
-        None, description="Tool return value (may be truncated)"
-    )
+    tool_name: str | None = None
+    tool_args: dict[str, Any] | None = None
+    tool_result: str | None = None
 
     # --- Communication fields (populated when surface == COMMUNICATION) ---
-    target_agent: str | None = Field(
-        None,
-        description="Recipient agent_id, or 'user' for final output (runtime identifier).",
-    )
-    target_role: str | None = Field(
-        None,
-        description="Recipient role name, e.g. 'risk_officer' or 'user'. Used by access checker to match rules.",
-    )
-    content: str | None = Field(
-        None, description="Message body or final output text"
-    )
+    target_agent: str | None = None
+    target_role: str | None = None
+    content: str | None = None
 
     # --- Framework provenance ---
-    framework: str | None = Field(
-        None, description="Source framework: 'openai_agents' | 'crewai' | 'autogen' ｜ claw_team"
-    )
-    raw_event: dict[str, Any] | None = Field(
-        None, description="Original framework-native event (for debugging)"
-    )
+    raw_event: dict[str, Any] | None = None
 
     model_config = {"use_enum_values": True}
