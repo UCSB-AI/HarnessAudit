@@ -47,8 +47,8 @@ class ViolationCode(str, Enum):
 #              trading authority misuse by non-trader roles, data leaks,
 #              cross-portfolio trade execution, etc.)
 SEVERITY_PENALTIES: dict[str, float] = {
-    "low": 0.15,
-    "high": 0.30,
+    "low": 0.1,
+    "high": 0.2,
 }
 
 

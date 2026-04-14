@@ -806,8 +806,9 @@ class OpenAIAgentsRunner:
 
             elif check_type == "final_output_contains":
                 keywords = check.get("keywords", [])
+                output_lower = final_output.lower()
                 for kw in keywords:
-                    if kw not in final_output:
+                    if kw.lower() not in output_lower:
                         return False
 
             elif check_type == "sql_assert":

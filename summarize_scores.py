@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""汇总 5 个 domain 的 privacy / access / operation / information 分数。
+"""汇总 10 个 domain 的评测分数（与 cli 写入 results/*.json 字段一致）。
 
-支持的 domain:
-  - fin
-  - ec
-  - healthcare
-  - off
-  - sde
+metrics（Layer 1–3）:
+  - access_score
+  - op_privacy_score   (V-OT/V-OR；无 tool surface 时 JSON 可能为 null)
+  - info_privacy_score (V-ID/V-IC；无 comm surface 时可能为 null)
+  - tsr, pqsr
 
 文件名示例: sde2-t5_oai-gpt-5.4-37.json
   task_id    = sde2-t5
-  model_slug = gpt-5.4   (oai- 与末尾 -<run> 之间)
+  model_slug = gpt-5.4   (_oai- 与末尾 -<run> 之间)
   run        = 37
 """
 from __future__ import annotations
@@ -25,15 +24,29 @@ TASKS_DIR = ROOT_DIR / "tasks"
 if len(sys.argv) > 1:
     RESULTS_DIR = Path(sys.argv[1])
 
-KEYS = ["privacy_score", "access_score", "operation_score", "information_score"]
+# 与 masp_bench/cli.py report 一致
+KEYS = [
+    "access_score",
+    "op_privacy_score",
+    "info_privacy_score",
+    "tsr",
+    "pqsr",
+]
 DEFAULT_MODEL_SLUGS = ["gpt-5.4", "gpt-5.1"]
-DOMAIN_ORDER = ["fin", "ec", "healthcare", "off", "sde"]
-TASK_DIRS_BY_DOMAIN = {
+
+# 汇总用短名 -> tasks 子目录
+DOMAIN_ORDER = ["fin", "ec", "healthcare", "off", "sde", "dl", "jm", "lc", "si", "re"]
+TASK_DIRS_BY_DOMAIN: dict[str, list[str]] = {
     "fin": ["finance"],
     "ec": ["ecommerce"],
     "healthcare": ["healthcare"],
-    "off": ["office", "office_enterprise_management"],
+    "off": ["office"],
     "sde": ["sde"],
+    "dl": ["daily_life"],
+    "jm": ["journalism_media"],
+    "lc": ["legal_compliance"],
+    "si": ["social_interaction"],
+    "re": ["real_estate"],
 }
 
 
@@ -56,16 +69,22 @@ def infer_domain(task_id: str) -> str | None:
         return "fin"
     if task_id.startswith("ec-t"):
         return "ec"
-    if (
-        task_id.startswith("healthcare-t")
-        or task_id.startswith("health-t")
-        or task_id.startswith("hc-t")
-    ):
+    if task_id.startswith("hc-t"):
         return "healthcare"
     if task_id.startswith("off-t"):
         return "off"
     if task_id.startswith("sde"):
         return "sde"
+    if task_id.startswith("dl-t"):
+        return "dl"
+    if task_id.startswith("jm-t"):
+        return "jm"
+    if task_id.startswith("lc-t"):
+        return "lc"
+    if task_id.startswith("si-t"):
+        return "si"
+    if task_id.startswith("re-t"):
+        return "re"
     return None
 
 
@@ -124,16 +143,39 @@ def load_result(path: Path) -> dict[str, object]:
     return json.loads(path.read_text())
 
 
-def score_as_float(value: object, default: float = 0.0) -> float:
-    """将 JSON 中的分数字段转为 float；无法转换时用 default。"""
+def format_metric(value: object) -> str:
+    """access/tsr/pqsr 为 float；branch 分可能为 null。"""
+    if value is None:
+        return "n/a"
     if isinstance(value, (int, float)):
-        return float(value)
+        return f"{float(value):.4f}"
     if isinstance(value, str):
         try:
-            return float(value)
+            return f"{float(value):.4f}"
         except ValueError:
-            return default
-    return default
+            return "n/a"
+    return "n/a"
+
+
+def mean_non_na(values: list[float | None]) -> str:
+    xs = [v for v in values if v is not None]
+    if not xs:
+        return "n/a"
+    return f"{sum(xs) / len(xs):.4f}"
+
+
+def get_numeric(data: dict[str, object], name: str) -> float | None:
+    v = data.get(name)
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return None
+    return None
 
 
 def main() -> None:
@@ -141,11 +183,17 @@ def main() -> None:
         print(f"错误: results 目录不存在: {RESULTS_DIR}", file=sys.stderr)
         sys.exit(1)
 
+    matched = list(RESULTS_DIR.glob("*_oai-gpt-*.json"))
+    if not matched:
+        print(f"警告: 在 {RESULTS_DIR} 下未匹配到 *_oai-gpt-*.json", file=sys.stderr)
+
     expected_tasks = load_expected_tasks(TASKS_DIR)
-    latest_by_task_model, discovered_tasks, model_slugs = collect_latest_results(RESULTS_DIR)
+    latest_by_task_model, discovered_tasks, model_slugs = collect_latest_results(
+        RESULTS_DIR
+    )
 
     if not latest_by_task_model:
-        print(f"警告: 在 {RESULTS_DIR} 下未匹配到支持的结果文件", file=sys.stderr)
+        print(f"警告: 无支持的 domain 结果（检查 task_id 前缀）", file=sys.stderr)
 
     for domain in DOMAIN_ORDER:
         task_ids = sorted(
@@ -169,26 +217,26 @@ def main() -> None:
                         continue
                     _, path = latest_by_task_model[key]
                     data = load_result(path)
-                    llm = data.get("llm", "")
-                    vals = [f"{score_as_float(data.get(name, 0)):.4f}" for name in KEYS]
+                    llm = str(data.get("llm", ""))
+                    vals = [format_metric(data.get(name)) for name in KEYS]
                     print(f"{task_id}\t{model_slug}\t{llm}\t" + "\t".join(vals))
 
-        print("\n# 按 model_slug 平均（有缺失则只平均存在的 task）")
+        print("\n# 按 model_slug 平均（branch 分含 null 时仅对非 null 求平均；缺失 task 跳过）")
         for model_slug in model_slugs:
-            acc = {name: [] for name in KEYS}
+            acc: dict[str, list[float | None]] = {name: [] for name in KEYS}
             for task_id in task_ids:
                 key = (task_id, model_slug)
                 if key not in latest_by_task_model:
                     continue
                 data = load_result(latest_by_task_model[key][1])
                 for name in KEYS:
-                    acc[name].append(score_as_float(data.get(name, 0)))
-            if not acc["privacy_score"]:
+                    acc[name].append(get_numeric(data, name))
+            if not acc["access_score"] or all(v is None for v in acc["access_score"]):
                 print(f"{model_slug}: (无数据)")
                 continue
-            n = len(acc["privacy_score"])
-            parts = [f"{name}={sum(acc[name]) / n:.4f}" for name in KEYS]
-            print(f"{model_slug}  n={n}: " + "  ".join(parts))
+            n_tasks = len([v for v in acc["access_score"] if v is not None])
+            parts = [f"{name}={mean_non_na(acc[name])}" for name in KEYS]
+            print(f"{model_slug}  n={n_tasks}: " + "  ".join(parts))
         print()
 
 

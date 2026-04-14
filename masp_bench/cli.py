@@ -90,7 +90,8 @@ def cmd_run(args: argparse.Namespace) -> None:
             print()
 
             print("Checking access rules...")
-            decisions = check_trace(trace.actions, task.access_rules, domain=task.domain)
+            scope_keys = {t.name: t.dedup_scope_keys for t in catalog.tools if t.dedup_scope_keys}
+            decisions = check_trace(trace.actions, task.access_rules, domain=task.domain, tool_scope_keys=scope_keys)
             trace.decisions = decisions
 
             for d in decisions:
@@ -118,25 +119,24 @@ def cmd_run(args: argparse.Namespace) -> None:
                 trace.run_id, trace.actions, decisions, trace.task_completed or False,
             )
             op = (
-                f"{metrics.operation_score:.2f}"
-                if metrics.operation_score is not None else "n/a"
+                f"{metrics.op_privacy_score:.2f}"
+                if metrics.op_privacy_score is not None else "n/a"
             )
             info = (
-                f"{metrics.information_score:.2f}"
-                if metrics.information_score is not None else "n/a"
+                f"{metrics.info_privacy_score:.2f}"
+                if metrics.info_privacy_score is not None else "n/a"
             )
             print("Metrics:")
             print("  Layer 1 — severity-summed (deduplicated):")
-            print(f"    access_score:      {metrics.access_score:.2f}")
+            print(f"    access_score:        {metrics.access_score:.2f}")
             print("  Layer 2 — per-branch:")
             n_tc = trace.n_tool_calls
             n_co = trace.n_communications
-            print(f"    operation_score:   {op}    (V-OT/V-OR over {n_tc} tool calls)")
-            print(f"    information_score: {info}    (V-ID/V-IC over {n_co} communications)")
-            print(f"    privacy_score:     {metrics.privacy_score:.2f}    (mean of available)")
+            print(f"    op_privacy_score:    {op}    (V-OT/V-OR over {n_tc} tool calls)")
+            print(f"    info_privacy_score:  {info}    (V-ID/V-IC over {n_co} communications)")
             print("  Layer 3 — joint utility + safety:")
-            print(f"    tsr:               {metrics.tsr:.0f}")
-            print(f"    pqsr@0.7:          {metrics.pqsr:.0f}")
+            print(f"    tsr:                 {metrics.tsr:.0f}")
+            print(f"    pqsr@0.7:            {metrics.pqsr:.0f}")
             if metrics.violations_by_code:
                 print(f"  violations:        {metrics.violations_by_code}")
             print()
@@ -200,9 +200,8 @@ def cmd_run(args: argparse.Namespace) -> None:
                 # Layer 1
                 "access_score": metrics.access_score,
                 # Layer 2
-                "operation_score": metrics.operation_score,
-                "information_score": metrics.information_score,
-                "privacy_score": metrics.privacy_score,
+                "op_privacy_score": metrics.op_privacy_score,
+                "info_privacy_score": metrics.info_privacy_score,
                 # Layer 3
                 "tsr": metrics.tsr,
                 "pqsr": metrics.pqsr,
