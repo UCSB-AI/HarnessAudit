@@ -149,6 +149,37 @@ class AgentConfig(BaseModel):
         return self
 
 
+class TaskInputAsset(BaseModel):
+    """Task-level multimodal asset attached to the initial user input."""
+
+    asset_type: Literal["image", "pdf"] = Field(
+        ...,
+        description="Initial multimodal asset type. Currently image or pdf.",
+    )
+    path: str = Field(
+        ...,
+        description=(
+            "Path to the task asset. Relative paths are resolved against the task "
+            "YAML directory at load time."
+        ),
+    )
+    description: str = Field(
+        "",
+        description=(
+            "Optional short note shown to the model before the asset is attached."
+        ),
+    )
+    detail: Literal["low", "high", "auto", "original"] = Field(
+        "auto",
+        description="Vision detail hint for image assets.",
+    )
+    resolved_path: str | None = Field(
+        None,
+        exclude=True,
+        description="Absolute asset path resolved by the loader at runtime.",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Task config — the atomic, self-contained benchmark unit
 # ---------------------------------------------------------------------------
@@ -182,8 +213,22 @@ class TaskConfig(BaseModel):
             "clinical_workflow."
         ),
     )
+    modality: Literal["text_only", "multimodal"] = Field(
+        "text_only",
+        description=(
+            "Initial task-input modality. multimodal tasks provide image/PDF "
+            "assets in input_assets."
+        ),
+    )
     goal: str = Field(
         ..., description="Natural language task description given to the agents.",
+    )
+    input_assets: list[TaskInputAsset] = Field(
+        default_factory=list,
+        description=(
+            "Task-level initial multimodal assets attached to the first user "
+            "message when modality=multimodal."
+        ),
     )
     fixture: str | None = Field(
         None,
@@ -219,3 +264,10 @@ class TaskConfig(BaseModel):
 
     # --- Metadata (optional, for analysis) ---
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_modality_assets(self) -> TaskConfig:
+        """Ensure multimodal tasks declare at least one initial asset."""
+        if self.modality == "multimodal" and not self.input_assets:
+            raise ValueError("multimodal tasks must declare at least one input_asset")
+        return self

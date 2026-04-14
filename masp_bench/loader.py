@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
@@ -69,6 +70,11 @@ def resolve_task_path(
             "sde",
             "ecommerce",
             "healthcare",
+            "daily_life",
+            "social_interaction",
+            "legal_compliance",
+            "real_estate",
+            "journalism_media",
             "office",
             "office_enterprise_management",
         ):
@@ -91,7 +97,20 @@ def load_task(path: str | Path) -> TaskConfig:
     path = Path(path)
     with open(path) as f:
         data = yaml.safe_load(f)
-    return TaskConfig(**data)
+    task: TaskConfig = TaskConfig(**data)
+
+    for asset in cast(list[Any], getattr(task, "input_assets", [])):
+        raw_path = Path(asset.path)
+        resolved = raw_path if raw_path.is_absolute() else (path.parent / raw_path)
+        resolved = resolved.resolve()
+        if not resolved.is_file():
+            raise FileNotFoundError(
+                f"Task asset not found for {task.task_id}: {asset.path!r} "
+                f"(resolved to {resolved})"
+            )
+        asset.resolved_path = str(resolved)
+
+    return task
 
 
 def load_tool_catalog(domain: str, tools_dir: str | Path | None = None) -> ToolCatalog:

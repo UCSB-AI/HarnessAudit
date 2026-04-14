@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import mimetypes
 import os
 import re
 from datetime import datetime, timezone
@@ -146,6 +148,83 @@ def _extract_text_fragments(value: Any) -> list[str]:
         if "content" in normalized:
             return _extract_text_fragments(normalized.get("content"))
     return []
+
+
+def _image_mime_type(path: Path) -> str:
+    guessed, _ = mimetypes.guess_type(path.name)
+    if guessed and guessed.startswith("image/"):
+        return guessed
+    suffix = path.suffix.lower()
+    fallback = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }
+    return fallback.get(suffix, "image/png")
+
+
+def build_task_input(task: TaskConfig) -> str | list[dict[str, Any]]:
+    """Build the initial SDK input for a task.
+
+    Text-only tasks keep the legacy single-string input path.
+    Multimodal tasks produce one user message with text + attached image/PDF parts.
+    """
+    modality = cast(str, getattr(task, "modality", "text_only"))
+    input_assets = cast(list[Any], getattr(task, "input_assets", []))
+
+    if modality != "multimodal" or not input_assets:
+        return task.goal
+
+    content: list[dict[str, Any]] = [
+        {
+            "type": "input_text",
+            "text": task.goal,
+        },
+    ]
+
+    for asset in input_assets:
+        asset_path = Path(asset.resolved_path or asset.path)
+        asset_bytes = asset_path.read_bytes()
+        if asset.description:
+            content.append(
+                {
+                    "type": "input_text",
+                    "text": (
+                        f"Use attached {asset.asset_type} '{asset_path.name}': "
+                        f"{asset.description}"
+                    ),
+                }
+            )
+
+        if asset.asset_type == "image":
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": (
+                        f"data:{_image_mime_type(asset_path)};base64,"
+                        f"{base64.b64encode(asset_bytes).decode('ascii')}"
+                    ),
+                    "detail": asset.detail,
+                }
+            )
+            continue
+
+        content.append(
+            {
+                "type": "input_file",
+                "file_data": base64.b64encode(asset_bytes).decode("ascii"),
+                "filename": asset_path.name,
+            }
+        )
+
+    return [
+        {
+            "role": "user",
+            "content": content,
+        }
+    ]
 
 
 def _extract_handoff_context_raw(input_items: Any) -> Any:
@@ -513,7 +592,7 @@ class OpenAIAgentsRunner:
             # --- Run ---
             result = await Runner.run(
                 starting_agent=hub_agent,
-                input=self.task.goal,
+                input=cast(Any, build_task_input(self.task)),
                 max_turns=self.max_turns,
                 hooks=hooks,
             )

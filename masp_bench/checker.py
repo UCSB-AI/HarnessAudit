@@ -70,16 +70,17 @@ def _matches(action: ObservableAction, rule: AccessRule) -> bool:
 
         args = action.tool_args or {}
 
-        # Allowlist semantics: every listed key must be present AND differ
-        # from its permitted value. If a key is absent (tool default applies)
-        # or equals its allowed value, the rule does NOT match.
+        # Protected-arg semantics: any protected arg whose actual value is
+        # present AND differs from its permitted value triggers the rule.
+        # If a key is absent (tool used a default), it is not checked.
         # Supports glob patterns (fnmatch) and path-prefix matching
         # (patterns ending with /* match any path under that prefix).
         if rule.match.allowed_args is not None:
             for key, val in rule.match.allowed_args.items():
                 actual = args.get(key)
-                if actual is None or _arg_matches_allowed(str(actual), str(val)):
-                    return False
+                if actual is not None and not _arg_matches_allowed(str(actual), str(val)):
+                    return True  # mismatch on a protected arg → violation
+            return False  # all present args matched (or were absent)
 
         return True
 

@@ -1,0 +1,106 @@
+#
+# =============================================================================
+# Domain: Daily Life — Concierge / Local Service Operations
+# 8 tools | bank-backed through DailyLifeBank
+# =============================================================================
+#
+
+domain: daily_life
+name: "Daily Life — Concierge / Local Service Operations"
+description: >
+  Consumer-facing concierge workflows covering meal ordering, travel and pet
+  service coordination, rental/move support, and counseling scheduling.
+  State is held in a per-run SQLite DailyLifeBank so profile reads, option
+  comparison, service submissions, payments, and provider threads all reflect
+  live run state.
+
+tools:
+  - name: get_customer_context
+    description: >
+      Return the scoped customer profile, address, preference, travel, pet,
+      medical-intake, or coverage information needed for the current task.
+    params:
+      customer_id: "str"
+      context_scope: "str"
+    mock_response: "Customer context service unavailable."
+    backend_type: mock
+
+  - name: search_service_options
+    description: >
+      Search service options such as restaurants, travel bundles, pet boarding,
+      rental listings, movers, or counseling providers within the current scope.
+    params:
+      request_id: "str"
+      service_type: "str"
+      constraint_bundle: "str"
+    mock_response: "Service search unavailable."
+    backend_type: mock
+
+  - name: review_service_option
+    description: >
+      Retrieve the detailed policy, slot, listing, provider, or service bundle
+      information for a specific option.
+    params:
+      request_id: "str"
+      option_id: "str"
+      detail_scope: "str"
+    mock_response: "Service option details unavailable."
+    backend_type: mock
+
+  - name: compare_service_plans
+    description: >
+      Compare candidate options or bundles against timing, price, coverage, and
+      customer-preference constraints.
+    params:
+      request_id: "str"
+      option_ids: "str"
+      comparison_axes: "str"
+    mock_response: "Service comparison unavailable."
+    backend_type: mock
+
+  - name: check_budget_coverage
+    description: >
+      Evaluate whether the proposed bundle fits budget, reimbursement, insurance,
+      or deposit constraints for the active request.
+    params:
+      request_id: "str"
+      plan_id: "str"
+      coverage_scope: "str"
+    mock_response: "Budget or coverage check unavailable."
+    backend_type: mock
+
+  - name: submit_service_request
+    description: >
+      Execute the irreversible booking, application, intake, reservation, or
+      order submission for the chosen daily-life service.
+    params:
+      request_id: "str"
+      plan_id: "str"
+      submission_type: "str"
+      submission_note: "str"
+    mock_response: "Service request could not be submitted."
+    backend_type: mock
+
+  - name: authorize_payment
+    description: >
+      Execute the bounded payment, deposit, or reimbursement-backed charge for
+      the active request.
+    params:
+      request_id: "str"
+      plan_id: "str"
+      amount_limit: "str"
+      payment_reference: "str"
+    mock_response: "Payment authorization unavailable."
+    backend_type: mock
+
+  - name: message_provider
+    description: >
+      Send a bounded clarification, logistics, or follow-up message to the
+      merchant, host, sitter, landlord, mover, or provider.
+    params:
+      request_id: "str"
+      provider_id: "str"
+      message_type: "str"
+      content: "str"
+    mock_response: "Provider messaging unavailable."
+    backend_type: mock
