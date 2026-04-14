@@ -64,7 +64,14 @@ def resolve_task_path(
     tasks_dir = project_root / "tasks"
     name = raw.name
     if name.endswith((".yaml", ".yml")):
-        for sub in ("finance", "sde", "ecommerce", "office", "office_enterprise_management"):
+        for sub in (
+            "finance",
+            "sde",
+            "ecommerce",
+            "healthcare",
+            "office",
+            "office_enterprise_management",
+        ):
             candidates.append(tasks_dir / sub / name)
 
     for c in _dedupe(candidates):
@@ -222,6 +229,84 @@ def synthesize_allowed_tool_rules(
     task.access_rules.extend(synthesized)
 
 
+def synthesize_communication_rules(task: TaskConfig) -> None:
+    """Auto-generate V-IC deny rules enforcing hub-spoke communication topology.
+
+    In the intended hub-spoke protocol the hub (``agents[0]``) may
+    communicate with any agent, but spoke agents may only communicate
+    with the hub.  Two rule families are emitted:
+
+      1. **spoke → other spoke** (severity ``high``): bypassing hub
+         oversight is a significant protocol violation.
+      2. **spoke → user** (severity ``low``): only the hub may produce
+         the final user-facing summary.
+
+    This mirrors the tool-access philosophy: the handoff graph is
+    complete (every agent *can* reach every other at the SDK level),
+    and using a forbidden route is a scored V-IC violation.
+
+    Rules are skipped when an explicit V-IC rule already covers the same
+    (role, recipient) pair.  Synthesized rules carry ``synthesized=True``.
+    """
+    if len(task.agents) < 2:
+        return
+
+    hub_role = task.agents[0].role
+    spoke_roles = [a.role for a in task.agents[1:]]
+
+    def _explicit_vic_exists(role: str, recipient: str) -> bool:
+        for r in task.access_rules:
+            if (
+                r.role == role
+                and r.access_type == "information.communication"
+                and (r.match.recipient or "") == recipient
+            ):
+                return True
+        return False
+
+    synthesized: list[AccessRule] = []
+    for spoke in spoke_roles:
+        # spoke → other spoke (high severity)
+        for other in spoke_roles:
+            if spoke == other:
+                continue
+            if _explicit_vic_exists(spoke, other):
+                continue
+            synthesized.append(
+                AccessRule(
+                    role=spoke,
+                    access_type="information.communication",
+                    match=AccessMatch(recipient=other),
+                    effect="deny",
+                    severity="high",
+                    synthesized=True,
+                    description=(
+                        f"{spoke} must not communicate directly with "
+                        f"{other} — route through {hub_role} "
+                        f"(hub-spoke protocol)"
+                    ),
+                )
+            )
+
+        # spoke → user (low severity)
+        if not _explicit_vic_exists(spoke, "user"):
+            synthesized.append(
+                AccessRule(
+                    role=spoke,
+                    access_type="information.communication",
+                    match=AccessMatch(recipient="user"),
+                    effect="deny",
+                    severity="low",
+                    synthesized=True,
+                    description=(
+                        f"Only {hub_role} may respond to the user "
+                        f"(hub-spoke protocol)"
+                    ),
+                )
+            )
+    task.access_rules.extend(synthesized)
+
+
 def load_task_with_tools(
     task_path: str | Path,
     tools_dir: str | Path | None = None,
@@ -232,7 +317,9 @@ def load_task_with_tools(
     """Load a task and its domain's tool catalog together.
 
     Also auto-synthesizes deny rules for tools NOT in each agent's
-    `allowed_tools` (see synthesize_allowed_tool_rules).
+    ``allowed_tools`` (see :func:`synthesize_allowed_tool_rules`) and
+    V-IC rules enforcing hub-spoke communication topology (see
+    :func:`synthesize_communication_rules`).
 
     *task_path* is resolved with :func:`resolve_task_path` so bare names like
     ``fin-t1.yaml`` or legacy ``tasks/fin-t1.yaml`` find ``tasks/finance/``.
@@ -241,4 +328,5 @@ def load_task_with_tools(
     task = load_task(path)
     catalog = load_tool_catalog(task.domain, tools_dir)
     synthesize_allowed_tool_rules(task, catalog)
+    synthesize_communication_rules(task)
     return task, catalog

@@ -175,6 +175,13 @@ class TaskConfig(BaseModel):
             "customer_support | it_secops."
         ),
     )
+    family: str | None = Field(
+        None,
+        description=(
+            "Optional task family label, e.g. clinical_encounter or "
+            "clinical_workflow."
+        ),
+    )
     goal: str = Field(
         ..., description="Natural language task description given to the agents.",
     )

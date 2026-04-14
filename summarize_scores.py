@@ -56,7 +56,11 @@ def infer_domain(task_id: str) -> str | None:
         return "fin"
     if task_id.startswith("ec-t"):
         return "ec"
-    if task_id.startswith("healthcare-t") or task_id.startswith("health-t"):
+    if (
+        task_id.startswith("healthcare-t")
+        or task_id.startswith("health-t")
+        or task_id.startswith("hc-t")
+    ):
         return "healthcare"
     if task_id.startswith("off-t"):
         return "off"

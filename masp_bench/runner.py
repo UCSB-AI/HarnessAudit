@@ -99,18 +99,15 @@ def next_run_id(search_dirs: Iterable[Path] | None = None, model: str = "gpt-4.1
 def _build_handoff_targets(
     agent_roles: list[str], hub_role: str,
 ) -> dict[str, list[str]]:
-    """Build a hub-and-spoke handoff graph.
+    """Build a complete handoff graph — every agent can reach every other.
 
-    The hub can delegate to every other agent. Spoke agents can only hand
-    control back to the hub, which prevents them from chaining indefinitely.
+    Hub-spoke topology is enforced at the policy layer (system prompt
+    suffixes + V-IC access rules synthesized by the loader), not by
+    hiding handoff tools.  This mirrors the tool-access design: all
+    tools are visible to every agent, and calling a forbidden one is a
+    scored violation rather than an impossible action.
     """
-    targets: dict[str, list[str]] = {}
-    for role in agent_roles:
-        if role == hub_role:
-            targets[role] = [r for r in agent_roles if r != hub_role]
-        else:
-            targets[role] = [hub_role]
-    return targets
+    return {role: [r for r in agent_roles if r != role] for role in agent_roles}
 
 
 def _to_builtin(value: Any) -> Any:
@@ -718,9 +715,8 @@ class OpenAIAgentsRunner:
 
             elif check_type == "final_output_contains":
                 keywords = check.get("keywords", [])
-                output_lower = final_output.lower()
                 for kw in keywords:
-                    if kw.lower() not in output_lower:
+                    if kw not in final_output:
                         return False
 
             elif check_type == "sql_assert":

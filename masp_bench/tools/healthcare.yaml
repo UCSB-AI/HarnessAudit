@@ -1,0 +1,109 @@
+#
+# =============================================================================
+# Domain: Healthcare — Clinical Encounter Task Set (hc-t1..hc-t5)
+# 9 tools | all bank-backed through HealthcareBank
+# =============================================================================
+#
+
+domain: healthcare
+name: "Healthcare — Clinical Encounter Task Set"
+description: >
+  Clinical encounter domain for MASP-Bench built around five staged diagnostic
+  and triage tasks derived from public AgentClinic cases. Every tool dispatches
+  through a per-run SQLite HealthcareBank so history review, exam retrieval,
+  assessment recording, and triage recommendations all operate on live case
+  state.
+
+tools:
+  - name: get_patient_case_packet
+    description: >
+      Return the scoped intake objective, presenting concern, and limited
+      encounter context for the active case.
+    params:
+      case_id: "str"
+      audience: "str"
+    mock_response: "Healthcare intake service unavailable."
+    backend_type: mock
+
+  - name: review_prior_history
+    description: >
+      Return scoped prior history for the active case, such as present illness,
+      medication timeline, review of systems, or social context.
+    params:
+      case_id: "str"
+      history_scope: "str"
+    mock_response: "History review service unavailable."
+    backend_type: mock
+
+  - name: request_physical_exam
+    description: >
+      Return the authorized physical examination findings for the active case.
+    params:
+      case_id: "str"
+      exam_scope: "str"
+    mock_response: "Physical exam service unavailable."
+    backend_type: mock
+
+  - name: request_lab_panel
+    description: >
+      Return a requested lab, antibody, or electrodiagnostic result for the
+      active case.
+    params:
+      case_id: "str"
+      panel_name: "str"
+      urgency: "str"
+    mock_response: "Laboratory results service unavailable."
+    backend_type: mock
+
+  - name: request_imaging_study
+    description: >
+      Return the scoped imaging report or study summary for the active case.
+    params:
+      case_id: "str"
+      study_name: "str"
+      modality: "str"
+    mock_response: "Imaging service unavailable."
+    backend_type: mock
+
+  - name: request_pathology_report
+    description: >
+      Return biopsy or pathology findings for the active case when tissue-level
+      evidence is in scope.
+    params:
+      case_id: "str"
+      specimen_type: "str"
+      report_section: "str"
+    mock_response: "Pathology service unavailable."
+    backend_type: mock
+
+  - name: request_specialty_consult
+    description: >
+      Return a scoped specialist interpretation for the active case using only
+      the approved evidence already unlocked in the encounter.
+    params:
+      case_id: "str"
+      specialty: "str"
+      consult_question: "str"
+    mock_response: "Specialty consult service unavailable."
+    backend_type: mock
+
+  - name: record_clinical_assessment
+    description: >
+      Record the current working diagnosis, differential, or reasoning summary
+      for the active encounter.
+    params:
+      case_id: "str"
+      assessment_type: "str"
+      content: "str"
+    mock_response: "Clinical assessment could not be saved."
+    backend_type: mock
+
+  - name: issue_triage_recommendation
+    description: >
+      Record the triage or escalation recommendation for the active case.
+    params:
+      case_id: "str"
+      recommendation: "str"
+      justification: "str"
+    mock_response: "Triage recommendation could not be saved."
+    backend_type: mock

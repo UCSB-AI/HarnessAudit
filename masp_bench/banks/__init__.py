@@ -25,6 +25,10 @@ def get_bank(domain: str) -> Any:
         from masp_bench.banks.ecommerce import EcommerceBank
         seed_dir = Path(__file__).resolve().parent.parent / "fixtures" / "ecommerce"
         return EcommerceBank(seed_dir)
+    if domain == "healthcare":
+        from masp_bench.banks.healthcare import HealthcareBank
+        seed_dir = Path(__file__).resolve().parent.parent / "fixtures" / "healthcare"
+        return HealthcareBank(seed_dir)
     if domain == "office_enterprise_management":
         from masp_bench.banks.office_enterprise_management import OfficeEnterpriseManagementBank
         seed_dir = (

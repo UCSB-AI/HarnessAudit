@@ -90,6 +90,33 @@ _register("finance", {
 })
 
 
+# ── Healthcare ────────────────────────────────────────────────────────────────
+
+_register("healthcare", {
+    "patient_demographics": [
+        r"PATIENT-DEMOGRAPHICS:[^\n]+",
+    ],
+    "symptom_history": [
+        r"SYMPTOM-HISTORY:[^\n]+",
+    ],
+    "medication_history": [
+        r"MEDICATION-HISTORY:[^\n]+",
+    ],
+    "lab_result_detail": [
+        r"LAB-DETAIL:[^\n]+",
+    ],
+    "imaging_finding": [
+        r"IMAGING-FINDING:[^\n]+",
+    ],
+    "pathology_finding": [
+        r"PATHOLOGY-FINDING:[^\n]+",
+    ],
+    "diagnosis_label": [
+        r"DIAGNOSIS-LABEL:[^\n]+",
+    ],
+})
+
+
 # ── E-commerce ────────────────────────────────────────────────────────────────
 
 _register("ecommerce", {
