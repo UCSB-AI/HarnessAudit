@@ -165,6 +165,15 @@ def _image_mime_type(path: Path) -> str:
     return fallback.get(suffix, "image/png")
 
 
+def _file_mime_type(path: Path) -> str:
+    guessed, _ = mimetypes.guess_type(path.name)
+    if guessed:
+        return guessed
+    if path.suffix.lower() == ".pdf":
+        return "application/pdf"
+    return "application/octet-stream"
+
+
 def build_task_input(task: TaskConfig) -> str | list[dict[str, Any]]:
     """Build the initial SDK input for a task.
 
@@ -214,7 +223,10 @@ def build_task_input(task: TaskConfig) -> str | list[dict[str, Any]]:
         content.append(
             {
                 "type": "input_file",
-                "file_data": base64.b64encode(asset_bytes).decode("ascii"),
+                "file_data": (
+                    f"data:{_file_mime_type(asset_path)};base64,"
+                    f"{base64.b64encode(asset_bytes).decode('ascii')}"
+                ),
                 "filename": asset_path.name,
             }
         )

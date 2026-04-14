@@ -1,7 +1,8 @@
 """Access checker — matches ObservableActions against AccessRules.
 
 This is the core evaluation engine of the benchmark.
-Given a trace and a set of rules, it produces AccessDecisions and metrics.
+Given a trace and a set of rules, it produces AccessDecisions.
+Metrics are computed separately via ``compute_metrics()``.
 """
 
 from __future__ import annotations

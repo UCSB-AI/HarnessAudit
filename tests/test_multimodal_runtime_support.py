@@ -125,6 +125,9 @@ def test_build_task_input_creates_multimodal_user_message(tmp_path: Path) -> Non
     assert "Dispute packet" in content[3]["text"]
     assert content[4] == {
         "type": "input_file",
-        "file_data": base64.b64encode(pdf_bytes).decode("ascii"),
+        "file_data": (
+            "data:application/pdf;base64,"
+            + base64.b64encode(pdf_bytes).decode("ascii")
+        ),
         "filename": "incident.pdf",
     }

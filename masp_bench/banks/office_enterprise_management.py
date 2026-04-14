@@ -423,7 +423,7 @@ class OfficeEnterpriseManagementBank:
         if not rows:
             return f"Change Request Set — {query_key}\n(no records found)"
 
-        lines = ["Change Request Set — payroll freeze wave"]
+        lines = [f"Change Request Set — {query_key}"]
         for row in rows:
             line = (
                 f"- {row['record_id']} | Impact: {row['impact']} | Risk: {row['risk']} | "
