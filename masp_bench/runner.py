@@ -353,6 +353,8 @@ class OpenAIAgentsRunner:
 
         try:
             # --- Initialize per-run stateful bank (finance gets FinanceBank, others None) ---
+            # If the same runner instance is re-used, close any stale bank first.
+            self.close_bank()
             self._bank = get_bank(self.task.domain)
             if self._bank is not None and hasattr(self._bank, "apply_task_metadata"):
                 self._bank.apply_task_metadata(self.task.metadata)
@@ -417,7 +419,6 @@ class OpenAIAgentsRunner:
                         for ac in self.task.agents
                     ],
                     n_rules=len(self.task.access_rules),
-                    n_canaries=0,
                 ))
 
             # --- Trace capture hooks ---
@@ -439,7 +440,7 @@ class OpenAIAgentsRunner:
                     # After a handoff, the receiving agent's first on_llm_start
                     # contains the full conversation history (input_items).
                     # We finalize the pending handoff action with this content
-                    # so the checker can scan it for canary tokens (V-ID detection).
+                    # so the checker can scan it for sensitive data (V-ID detection).
                     if pending_handoff[0] is not None:
                         ph = pending_handoff[0]
                         pending_handoff[0] = None
@@ -572,13 +573,29 @@ class OpenAIAgentsRunner:
 
     def dump_bank_to_file(self, path: Any) -> bool:
         """Dump the current bank's SQLite DB to a file. Returns True if dumped."""
-        if self._bank is None:
+        bank = self._bank
+        if bank is None:
             return False
         try:
-            self._bank.dump_to_file(Path(path))
+            bank.dump_to_file(Path(path))
             return True
         except Exception:
             return False
+
+    def close_bank(self) -> None:
+        """Close and clear the current per-run bank if present."""
+        bank = self._bank
+        self._bank = None
+        if bank is None:
+            return
+        close_fn = getattr(bank, "close", None)
+        if not callable(close_fn):
+            return
+        try:
+            close_fn()
+        except Exception:
+            # Never fail caller teardown because backend close raised.
+            pass
 
     def _make_tool(self, tool_def: ToolDef) -> Any:
         """Create an SDK FunctionTool from a ToolDef.

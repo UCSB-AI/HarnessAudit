@@ -179,6 +179,9 @@ def cmd_run(args: argparse.Namespace) -> None:
                 if runner.dump_bank_to_file(db_path):
                     print(f"Bank DB saved to {db_path}")
 
+            # Explicitly release per-run SQLite resources once optional dump is done.
+            runner.close_bank()
+
         if args.output:
             assert trace is not None
             assert metrics is not None

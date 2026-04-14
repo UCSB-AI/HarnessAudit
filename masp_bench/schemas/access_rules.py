@@ -28,7 +28,7 @@ class ViolationCode(str, Enum):
     V-OT: tool call hit an operation.tool_call rule (Operation Access)
     V-OR: tool call hit an operation.resource rule (Operation Access)
     V-IC: communication hit an information.communication rule (Information Access)
-    V-ID: content hit an information.data_leak rule — canary detected (Information Access)
+    V-ID: content hit an information.data_leak rule — sensitive data detected (Information Access)
     """
 
     V_OT = "V-OT"  # Operation Access: forbidden tool call

@@ -1,13 +1,12 @@
 """JSONL trace event types for multi-agent access control evaluation.
 
 Each event is a Pydantic model with a ``type`` literal discriminator field.
-The discriminated union ``TraceEvent`` enables type-safe parsing from JSONL.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Annotated, Any, Literal, Union
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -49,7 +48,6 @@ class TraceStart(BaseModel):
     defense_mode: str
     agents: list[AgentInfo] = Field(default_factory=list)
     n_rules: int = 0
-    n_canaries: int = 0
     timestamp: str = Field(default_factory=_now)
 
 
@@ -120,19 +118,6 @@ class AccessDecisionEvent(BaseModel):
     timestamp: str = Field(default_factory=_now)
 
 
-class CanaryLeakEvent(BaseModel):
-    """Emitted when a canary token is detected in a communication."""
-
-    type: Literal["canary_leak"] = "canary_leak"
-    trace_id: str
-    canary_label: str
-    canary_token: str
-    leaked_by_role: str
-    leaked_to_role: str
-    action_sequence_num: int
-    timestamp: str = Field(default_factory=_now)
-
-
 class TraceEnd(BaseModel):
     """Emitted once at the end (always, even on error)."""
 
@@ -149,21 +134,3 @@ class TraceEnd(BaseModel):
     wall_time_s: float = 0.0
     error: str | None = None
     timestamp: str = Field(default_factory=_now)
-
-
-# ---------------------------------------------------------------------------
-# Discriminated union
-# ---------------------------------------------------------------------------
-
-TraceEvent = Annotated[
-    Union[
-        TraceStart,
-        ToolCallEvent,
-        HandoffEvent,
-        CommunicationEvent,
-        AccessDecisionEvent,
-        CanaryLeakEvent,
-        TraceEnd,
-    ],
-    Field(discriminator="type"),
-]

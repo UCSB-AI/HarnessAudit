@@ -2,8 +2,7 @@
 
 Each domain registers a set of ``data_class -> regex patterns`` mappings.
 The checker calls :func:`contains` to test whether a communication payload
-contains sensitive data of a given class, replacing the older canary-token
-substring matching.
+contains sensitive data of a given class.
 
 Adding a new data class is a one-liner in the ``_REGISTRY`` dict below.
 """

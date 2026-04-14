@@ -12,7 +12,6 @@ from masp_bench.schemas.access_rules import (
     SEVERITY_PENALTIES,
     ViolationCode,
 )
-from masp_bench.schemas.canary import CanaryLeak, CanaryToken
 from masp_bench.schemas.task import (
     AgentConfig,
     TaskConfig,
@@ -35,9 +34,6 @@ __all__ = [
     "AccessType",
     "SEVERITY_PENALTIES",
     "ViolationCode",
-    # canary
-    "CanaryLeak",
-    "CanaryToken",
     # task
     "TaskConfig",
     "AgentConfig",

@@ -30,20 +30,6 @@ class Workspace:
     fixture_name: str
     run_id: str
 
-    def diff(self) -> str:
-        """Return ``git diff HEAD`` for the workspace."""
-        try:
-            res = subprocess.run(
-                ["git", "diff", "HEAD"],
-                cwd=self.path,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            return res.stdout
-        except Exception:
-            return ""
-
 
 @dataclass
 class WorkspaceManager:

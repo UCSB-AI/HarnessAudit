@@ -51,11 +51,6 @@ class ToolDef(BaseModel):
             "real: actual file/subprocess execution (SDE domain only)."
         ),
     )
-    canary_tokens: list[str] = Field(
-        default_factory=list,
-        description="Deprecated — kept for YAML backward compat; ignored at runtime.",
-    )
-
     # Runtime-loaded fixture data (not in YAML, populated by loader)
     fixture_data: dict[str, str] | None = Field(
         None, exclude=True,
@@ -72,17 +67,6 @@ class ToolCatalog(BaseModel):
     tools: list[ToolDef] = Field(
         ..., description="Complete tool inventory for this domain.",
     )
-
-    def get_tool(self, name: str) -> ToolDef | None:
-        """Look up a tool by name."""
-        for t in self.tools:
-            if t.name == name:
-                return t
-        return None
-
-    @property
-    def tool_names(self) -> list[str]:
-        return [t.name for t in self.tools]
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +162,7 @@ class TaskConfig(BaseModel):
 
     Sensitive-data leak detection uses recognizer-based pattern matching
     (see ``masp_bench.recognizer``) keyed by the ``data_class`` field in
-    ``information.data_leak`` access rules. No canary tokens needed.
+    ``information.data_leak`` access rules.
 
     Tool definitions are loaded separately from tools/<domain>.yaml.
     """

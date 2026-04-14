@@ -17,11 +17,6 @@ def package_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def default_tasks_dir() -> Path:
-    """``<package_root>/tasks`` (contains per-domain subfolders such as ``finance/``)."""
-    return package_root() / "tasks"
-
-
 def resolve_task_path(
     spec: str | Path,
     *,

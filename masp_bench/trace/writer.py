@@ -7,7 +7,6 @@ from typing import IO
 
 from .events import (
     AccessDecisionEvent,
-    CanaryLeakEvent,
     CommunicationEvent,
     HandoffEvent,
     ToolCallEvent,
@@ -17,7 +16,7 @@ from .events import (
 
 _AnyEvent = (
     TraceStart | ToolCallEvent | HandoffEvent | CommunicationEvent
-    | AccessDecisionEvent | CanaryLeakEvent | TraceEnd
+    | AccessDecisionEvent | TraceEnd
 )
 
 
