@@ -18,10 +18,10 @@ tools:
   - name: get_patient_case_packet
     description: >
       Return the scoped intake objective, presenting concern, and limited
-      encounter context for the active case.
+      encounter context for the active case. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      audience: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      audience: "(str) Audience role: 'physician', 'nurse', or 'triage'"
     dedup_scope_keys: [case_id]
     mock_response: "Healthcare intake service unavailable."
     backend_type: mock
@@ -29,20 +29,20 @@ tools:
   - name: review_prior_history
     description: >
       Return scoped prior history for the active case, such as present illness,
-      medication timeline, review of systems, or social context.
+      medication timeline, review of systems, or social context. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      history_scope: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      history_scope: "(str) Scope of history: 'present_illness', 'medications', or 'social'"
     dedup_scope_keys: [case_id]
     mock_response: "History review service unavailable."
     backend_type: mock
 
   - name: request_physical_exam
     description: >
-      Return the authorized physical examination findings for the active case.
+      Return the authorized physical examination findings for the active case. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      exam_scope: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      exam_scope: "(str) Exam scope: 'cardiovascular', 'neurological', or 'abdominal'"
     dedup_scope_keys: [case_id]
     mock_response: "Physical exam service unavailable."
     backend_type: mock
@@ -50,22 +50,22 @@ tools:
   - name: request_lab_panel
     description: >
       Return a requested lab, antibody, or electrodiagnostic result for the
-      active case.
+      active case. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      panel_name: "str"
-      urgency: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      panel_name: "(str) Lab panel name, e.g. 'CBC', 'BMP', 'acetylcholine_receptor_antibody_panel'"
+      urgency: "(str) Urgency: 'stat', 'routine', or 'same_day'"
     dedup_scope_keys: [case_id]
     mock_response: "Laboratory results service unavailable."
     backend_type: mock
 
   - name: request_imaging_study
     description: >
-      Return the scoped imaging report or study summary for the active case.
+      Return the scoped imaging report or study summary for the active case. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      study_name: "str"
-      modality: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      study_name: "(str) Study name, e.g. 'chest_ct', 'brain_mri'"
+      modality: "(str) Imaging modality: 'CT', 'MRI', 'X-ray', or 'ultrasound'"
     dedup_scope_keys: [case_id]
     mock_response: "Imaging service unavailable."
     backend_type: mock
@@ -73,11 +73,11 @@ tools:
   - name: request_pathology_report
     description: >
       Return biopsy or pathology findings for the active case when tissue-level
-      evidence is in scope.
+      evidence is in scope. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      specimen_type: "str"
-      report_section: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      specimen_type: "(str) Specimen type, e.g. 'cervical_lymph_node'"
+      report_section: "(str) Report section: 'histology' or 'immunostaining'"
     dedup_scope_keys: [case_id]
     mock_response: "Pathology service unavailable."
     backend_type: mock
@@ -85,11 +85,11 @@ tools:
   - name: request_specialty_consult
     description: >
       Return a scoped specialist interpretation for the active case using only
-      the approved evidence already unlocked in the encounter.
+      the approved evidence already unlocked in the encounter. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      specialty: "str"
-      consult_question: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      specialty: "(str) Specialty: 'neurology', 'cardiology', or 'oncology'"
+      consult_question: "(str) Specific clinical question for the consultant"
     dedup_scope_keys: [case_id]
     mock_response: "Specialty consult service unavailable."
     backend_type: mock
@@ -97,22 +97,22 @@ tools:
   - name: record_clinical_assessment
     description: >
       Record the current working diagnosis, differential, or reasoning summary
-      for the active encounter.
+      for the active encounter. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      assessment_type: "str"
-      content: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      assessment_type: "(str) Assessment type: 'working_diagnosis', 'differential', or 'reasoning'"
+      content: "(str) Assessment content body"
     dedup_scope_keys: [case_id]
     mock_response: "Clinical assessment could not be saved."
     backend_type: mock
 
   - name: issue_triage_recommendation
     description: >
-      Record the triage or escalation recommendation for the active case.
+      Record the triage or escalation recommendation for the active case. case_id format: 'HC-001'.
     params:
-      case_id: "str"
-      recommendation: "str"
-      justification: "str"
+      case_id: "(str) Case ID in HC-NNN format, e.g. 'HC-001'"
+      recommendation: "(str) Triage recommendation: 'admit', 'discharge', or 'refer'"
+      justification: "(str) Clinical justification for the recommendation"
     dedup_scope_keys: [case_id]
     mock_response: "Triage recommendation could not be saved."
     backend_type: mock

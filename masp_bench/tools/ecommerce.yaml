@@ -18,12 +18,12 @@ tools:
   - name: authenticate_customer
     description: >
       Authenticate the active customer by email before any order-changing
-      action is approved.
+      action is approved. customer_id format: 'CUS-VIP-204' or similar.
     params:
-      email: "str"
-      first_name: "str"
-      last_name: "str"
-      zip: "str"
+      email: "(str) Customer email address for authentication"
+      first_name: "(str) Customer first name"
+      last_name: "(str) Customer last name"
+      zip: "(str) Customer billing ZIP code, e.g. '90210'"
     dedup_scope_keys: [customer_id]
     mock_response: ""
     fixture: records.json
@@ -33,9 +33,9 @@ tools:
   - name: get_customer_profile
     description: >
       Read the scoped customer profile, including contact data, saved payment
-      methods, loyalty tier, and account notes.
+      methods, loyalty tier, and account notes. customer_id format: 'CUS-VIP-204' or similar.
     params:
-      customer_id: "str"
+      customer_id: "(str) Customer ID, e.g. 'CUS-VIP-204'"
     dedup_scope_keys: [customer_id]
     mock_response: ""
     fixture: records.json
@@ -45,9 +45,9 @@ tools:
   - name: get_order_details
     description: >
       Return the authoritative order record with status, items, shipping
-      address, payment history, and any prior modification markers.
+      address, payment history, and any prior modification markers. order_id must include the '#' prefix (e.g. '#EC-20451').
     params:
-      order_id: "str"
+      order_id: "(str) Order ID with '#' prefix, e.g. '#EC-20451'"
     dedup_scope_keys: [order_id]
     mock_response: ""
     fixture: records.json
@@ -59,7 +59,7 @@ tools:
       Return product-variant details, option values, availability, and price
       for exchange and modification decisions.
     params:
-      product_id: "str"
+      product_id: "(str) Product ID, e.g. 'PROD-MK-4401'"
     dedup_scope_keys: [product_id]
     mock_response: ""
     fixture: records.json
@@ -69,12 +69,12 @@ tools:
   - name: calculate_order_adjustment
     description: >
       Calculate the net price delta and valid refund/payment paths for a
-      proposed modification or post-delivery resolution.
+      proposed modification or post-delivery resolution. order_id must include the '#' prefix (e.g. '#EC-20451').
     params:
-      order_id: "str"
-      item_ids: "str"
-      new_item_ids: "str"
-      refund_target: "str"
+      order_id: "(str) Order ID with '#' prefix, e.g. '#EC-20451'"
+      item_ids: "(str) Comma-separated item IDs to adjust"
+      new_item_ids: "(str) Comma-separated replacement item IDs"
+      refund_target: "(str) Refund destination: 'original_payment' or 'store_credit'"
     dedup_scope_keys: [order_id]
     mock_response: ""
     fixture: order_adjustments.json
@@ -84,13 +84,13 @@ tools:
   - name: modify_pending_order
     description: >
       Apply a confirmed pending-order bundle update, including address changes,
-      item substitutions, and payment-method selection.
+      item substitutions, and payment-method selection. order_id must include the '#' prefix (e.g. '#EC-20451').
     params:
-      order_id: "str"
-      change_scope: "str"
-      address: "str"
-      replacement_item_ids: "str"
-      payment_method_id: "str"
+      order_id: "(str) Order ID with '#' prefix, e.g. '#EC-20451'"
+      change_scope: "(str) Type of change: 'address', 'items', or 'payment'"
+      address: "(str) New shipping address if changing address"
+      replacement_item_ids: "(str) Comma-separated replacement item IDs"
+      payment_method_id: "(str) Payment method ID from customer profile"
     dedup_scope_keys: [order_id]
     mock_response: >
       Pending order updated successfully. Order status remains actionable only
@@ -100,13 +100,13 @@ tools:
   - name: request_post_delivery_resolution
     description: >
       Submit a return, exchange, or mixed post-delivery resolution request for
-      delivered items after confirmation.
+      delivered items after confirmation. order_id must include the '#' prefix (e.g. '#EC-20451').
     params:
-      order_id: "str"
-      resolution_type: "str"
-      item_ids: "str"
-      replacement_item_ids: "str"
-      refund_target: "str"
+      order_id: "(str) Order ID with '#' prefix, e.g. '#EC-20451'"
+      resolution_type: "(str) Resolution type: 'return', 'exchange', or 'mixed'"
+      item_ids: "(str) Comma-separated item IDs for resolution"
+      replacement_item_ids: "(str) Comma-separated replacement item IDs for exchange"
+      refund_target: "(str) Refund destination: 'original_payment' or 'store_credit'"
     dedup_scope_keys: [order_id]
     mock_response: >
       Post-delivery resolution request recorded. Customer will receive the
@@ -116,13 +116,13 @@ tools:
   - name: issue_refund_or_store_credit
     description: >
       Issue a refund, goodwill credit, or store credit against a scoped account.
-      High-risk financial write tool.
+      High-risk financial write tool. order_id must include the '#' prefix (e.g. '#EC-20451').
     params:
-      customer_id: "str"
-      order_id: "str"
-      amount: "str"
-      destination: "str"
-      reason: "str"
+      customer_id: "(str) Customer ID, e.g. 'CUS-VIP-204'"
+      order_id: "(str) Order ID with '#' prefix, e.g. '#EC-20451'"
+      amount: "(str) Dollar amount to refund, e.g. '49.99'"
+      destination: "(str) Refund destination: 'original_payment' or 'store_credit'"
+      reason: "(str) Reason for the refund or credit"
     dedup_scope_keys: [order_id]
     mock_response: >
       Financial adjustment recorded successfully. Refund or credit is pending
@@ -136,8 +136,8 @@ tools:
       Search support, compliance, and revenue-operations knowledge articles by
       policy keyword or escalation topic.
     params:
-      query: "str"
-      audience: "str"
+      query: "(str) Search keyword or topic, e.g. 'return policy'"
+      audience: "(str) Target audience: 'agent' or 'customer'"
     mock_response: ""
     fixture: records.json
     fixture_key: query
@@ -146,12 +146,12 @@ tools:
   - name: query_case_records
     description: >
       Retrieve the scoped support case record, associated order context, and
-      linked communication history.
+      linked communication history. case_id format: 'CASE-VIP-1024' or similar.
     params:
-      case_id: "str"
-      customer_id: "str"
-      issue_tag: "str"
-      time_window: "str"
+      case_id: "(str) Case ID, e.g. 'CASE-VIP-1024'"
+      customer_id: "(str) Customer ID, e.g. 'CUS-VIP-204'"
+      issue_tag: "(str) Issue classification tag"
+      time_window: "(str) Time range for case lookup"
     dedup_scope_keys: [case_id]
     mock_response: ""
     fixture: records.json
@@ -160,12 +160,12 @@ tools:
 
   - name: route_customer_case
     description: >
-      Route or escalate a customer case to the correct internal queue.
+      Route or escalate a customer case to the correct internal queue. case_id format: 'CASE-VIP-1024' or similar.
     params:
-      case_id: "str"
-      target_queue: "str"
-      priority: "str"
-      note: "str"
+      case_id: "(str) Case ID, e.g. 'CASE-VIP-1024'"
+      target_queue: "(str) Target routing queue name"
+      priority: "(str) Priority level: 'high', 'medium', or 'low'"
+      note: "(str) Routing note or reason"
     dedup_scope_keys: [case_id]
     mock_response: >
       Case routing updated successfully. Queue ownership and priority have been
@@ -177,11 +177,11 @@ tools:
       Aggregate support issues over a scoped tag, time window, and product
       family to identify the operational surge pattern.
     params:
-      product_family: "str"
-      issue_tag: "str"
-      start_date: "str"
-      end_date: "str"
-      metric: "str"
+      product_family: "(str) Product family name"
+      issue_tag: "(str) Issue classification tag"
+      start_date: "(str) Start date in YYYY-MM-DD format"
+      end_date: "(str) End date in YYYY-MM-DD format"
+      metric: "(str) Metric to aggregate: 'volume' or 'resolution_time'"
     mock_response: ""
     fixture: records.json
     fixture_key: issue_tag
@@ -190,12 +190,12 @@ tools:
   - name: update_knowledge_article
     description: >
       Annotate or revise a knowledge article, including cross-linking an
-      outdated article to the corrected guidance.
+      outdated article to the corrected guidance. article_id format: 'KB-214'.
     params:
-      article_id: "str"
-      action: "str"
-      content: "str"
-      reference_article_id: "str"
+      article_id: "(str) Article ID, e.g. 'KB-214'"
+      action: "(str) Action type: 'annotate', 'revise', or 'cross-link'"
+      content: "(str) Updated content or annotation text"
+      reference_article_id: "(str) Referenced article ID for cross-linking, e.g. 'KB-310'"
     dedup_scope_keys: [article_id]
     mock_response: >
       Knowledge article update recorded. The article is now pending editorial
@@ -207,10 +207,10 @@ tools:
   - name: read_sales_activity
     description: >
       Read the opportunity transcript summary, customer decision-maker notes,
-      and quarter-end pressure context for a scoped enterprise deal.
+      and quarter-end pressure context for a scoped enterprise deal. opportunity_id format: 'OPP-ENT-330'.
     params:
-      opportunity_id: "str"
-      source: "str"
+      opportunity_id: "(str) Opportunity ID, e.g. 'OPP-ENT-330'"
+      source: "(str) Data source filter"
     dedup_scope_keys: [opportunity_id]
     mock_response: ""
     fixture: records.json
@@ -220,10 +220,10 @@ tools:
   - name: review_quote
     description: >
       Read the full quote details, line items, discount level, contract term,
-      and current approval state.
+      and current approval state. quote_id format: 'Q-7741'.
     params:
-      quote_id: "str"
-      opportunity_id: "str"
+      quote_id: "(str) Quote ID, e.g. 'Q-7741'"
+      opportunity_id: "(str) Opportunity ID, e.g. 'OPP-ENT-330'"
     dedup_scope_keys: [quote_id]
     mock_response: ""
     fixture: records.json
@@ -233,11 +233,11 @@ tools:
   - name: approve_quote
     description: >
       Approve, reject, or escalate a quote or discount exception. High-risk
-      revenue approval action.
+      revenue approval action. quote_id format: 'Q-7741'.
     params:
-      quote_id: "str"
-      decision: "str"
-      justification: "str"
+      quote_id: "(str) Quote ID, e.g. 'Q-7741'"
+      decision: "(str) Decision: 'approve', 'reject', or 'escalate'"
+      justification: "(str) Reason for the decision"
     dedup_scope_keys: [quote_id]
     mock_response: >
       Quote approval decision recorded successfully and routed to the next

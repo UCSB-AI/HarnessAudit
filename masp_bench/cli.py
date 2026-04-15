@@ -3,7 +3,7 @@
 Usage:
     python -m masp_bench run tasks/finance/fin-t1.yaml
     python -m masp_bench run fin-t1.yaml
-    python -m masp_bench run tasks/finance/fin-t1.yaml --model gpt-4.1 --output results/
+    python -m masp_bench run tasks/finance/fin-t1.yaml --model gpt-5.4 --output results/
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
 from masp_bench.loader import load_task_with_tools, resolve_task_path
-from masp_bench.runner import OpenAIAgentsRunner, next_run_id
+from masp_bench.runner import BenchmarkRunner, framework_run_id_slug, next_run_id
 from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
 
@@ -54,7 +54,11 @@ def cmd_run(args: argparse.Namespace) -> None:
             if args.output
             else Path(__file__).resolve().parent.parent / "results"
         )
-        run_id = next_run_id([trace_dir, output_dir], args.model)
+        run_id = next_run_id(
+            [trace_dir, output_dir],
+            args.model,
+            framework_slug=framework_run_id_slug(args.framework),
+        )
         trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
 
@@ -68,9 +72,9 @@ def cmd_run(args: argparse.Namespace) -> None:
             workspaces_root=workspaces_root,
         )
 
-        print(f"Running (OpenAI Agents SDK, model={args.model})...")
-        runner = OpenAIAgentsRunner(
-            task, catalog, model=args.model, trace_writer=writer,
+        print(f"Running (framework={args.framework}, model={args.model})...")
+        runner = BenchmarkRunner(
+            task, catalog, model=args.model, framework=args.framework, trace_writer=writer,
             max_turns=args.max_turns,
             workspace_manager=workspace_manager,
         )
@@ -91,7 +95,12 @@ def cmd_run(args: argparse.Namespace) -> None:
 
             print("Checking access rules...")
             scope_keys = {t.name: t.dedup_scope_keys for t in catalog.tools if t.dedup_scope_keys}
-            decisions = check_trace(trace.actions, task.access_rules, domain=task.domain, tool_scope_keys=scope_keys)
+            decisions = check_trace(
+                trace.actions,
+                task.access_rules,
+                domain=task.domain,
+                tool_scope_keys=scope_keys,
+            )
             trace.decisions = decisions
 
             for d in decisions:
@@ -240,15 +249,21 @@ def main() -> None:
             "or shorthand fin-t1.yaml / tasks/fin-t1.yaml)"
         ),
     )
-    run_p.add_argument("--model", default="gpt-4.1-mini",
-                       help="LLM model (default: gpt-4.1-mini)")
+    run_p.add_argument("--model", default="gpt-5.4",
+                       help="LLM model (default: gpt-5.4)")
+    run_p.add_argument(
+        "--framework",
+        default="openai_agents",
+        choices=["openai_agents", "autogen"],
+        help="MAS framework adapter (default: openai_agents)",
+    )
     run_p.add_argument("--defense", default="monitor",
                        choices=["monitor", "declared", "enforced"])
     run_p.add_argument("--output", "-o", help="Output directory for results JSON")
     run_p.add_argument("--trace-dir", default="traces",
                        help="Directory for JSONL trace files (default: traces/)")
     run_p.add_argument("--max-turns", type=int, default=30,
-                       help="Maximum OpenAI Agents SDK turns per run (default: 30)")
+                       help="Maximum framework turns per run (default: 30)")
     run_p.add_argument("--repeat", type=int, default=1,
                        help="Repeat the same task sequentially (default: 1)")
 

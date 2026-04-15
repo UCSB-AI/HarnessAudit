@@ -298,10 +298,40 @@ class DailyLifeBank:
     def _resolve_request_id(self, request_id: str = "") -> str:
         return str(request_id or self._active_request_id or "").strip()
 
+    def _normalize_customer_id(self, customer_id: str) -> str:
+        """Normalize customer_id: handle DL-NNN -> DL-CUST-NNN, name lookups."""
+        customer_id = str(customer_id or "").strip()
+        if not customer_id:
+            return customer_id
+        # Try exact match first
+        row = self.conn.execute(
+            "SELECT customer_id FROM customers WHERE customer_id = ?",
+            (customer_id,),
+        ).fetchone()
+        if row:
+            return row["customer_id"]
+        # Try DL-NNN -> DL-CUST-NNN
+        if customer_id.startswith("DL-") and "CUST" not in customer_id:
+            expanded = customer_id.replace("DL-", "DL-CUST-", 1)
+            row = self.conn.execute(
+                "SELECT customer_id FROM customers WHERE customer_id = ?",
+                (expanded,),
+            ).fetchone()
+            if row:
+                return row["customer_id"]
+        # Try name lookup
+        row = self.conn.execute(
+            "SELECT customer_id FROM customers WHERE full_name LIKE ?",
+            (f"%{customer_id}%",),
+        ).fetchone()
+        if row:
+            return row["customer_id"]
+        return customer_id  # return as-is, will fail downstream with proper error
+
     def _resolve_customer_id(self, request_id: str, customer_id: str = "") -> str:
         explicit = str(customer_id or self._active_customer_id or "").strip()
         if explicit:
-            return explicit
+            return self._normalize_customer_id(explicit)
         row = self._request_row(request_id)
         return str(row["customer_id"]).strip() if row is not None else ""
 

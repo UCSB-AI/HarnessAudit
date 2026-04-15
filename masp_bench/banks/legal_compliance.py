@@ -459,7 +459,27 @@ class LegalComplianceBank:
             (resolved_matter_id, resolved_exposure_type),
         ).fetchone()
         if row is None:
-            return f"Exposure model not found: {resolved_exposure_type}"
+            # Fuzzy fallback: try substring matching against available exposure types
+            all_types = self.conn.execute(
+                "SELECT * FROM exposure_models WHERE matter_id = ?",
+                (resolved_matter_id,),
+            ).fetchall()
+            needle = _norm(resolved_exposure_type)
+            for candidate in all_types:
+                haystack = _norm(candidate["exposure_type"])
+                if needle in haystack or haystack in needle:
+                    row = candidate
+                    resolved_exposure_type = candidate["exposure_type"]
+                    break
+        if row is None:
+            available = ", ".join(
+                r["exposure_type"]
+                for r in self.conn.execute(
+                    "SELECT exposure_type FROM exposure_models WHERE matter_id = ?",
+                    (resolved_matter_id,),
+                ).fetchall()
+            )
+            return f"Exposure model not found: {resolved_exposure_type}. Available types: {available or '(none)'}"
 
         return "\n".join(
             [

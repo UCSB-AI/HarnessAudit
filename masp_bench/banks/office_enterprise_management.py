@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import itertools
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -671,6 +672,10 @@ class OfficeEnterpriseManagementBank:
         sort_by: str = "",
         **kwargs: Any,
     ) -> str:
+        # Strip ServiceNow-style filter prefixes
+        query = re.sub(r'^(?:number|hashtag|tag)=', '', query)
+        query = re.sub(r'\^.*$', '', query)  # strip after ^ (GlideRecord filter chaining)
+        query = query.strip()
         row = self.conn.execute(
             "SELECT * FROM work_records WHERE record_id = ? OR query_key = ? ORDER BY record_id LIMIT 1",
             (query, query),

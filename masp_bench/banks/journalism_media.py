@@ -319,6 +319,24 @@ class JournalismMediaBank:
                 for haystack in haystacks
             ):
                 selected.append(row)
+
+        # Fuzzy fallback: if no rows matched, try word-level matching
+        # This handles cases where agents pass filenames or descriptive names
+        # that share individual words with the stored keys/titles/content.
+        if not selected and normalized_queries:
+            query_words = set()
+            for q in normalized_queries:
+                for word in q.replace(".", " ").replace("_", " ").replace("-", " ").split():
+                    word = word.strip()
+                    if len(word) >= 3:  # skip very short tokens
+                        query_words.add(word)
+            if query_words:
+                for row in rows:
+                    haystacks = [_norm(row[field]) for field in fields]
+                    combined = " ".join(haystacks)
+                    if any(word in combined for word in query_words):
+                        selected.append(row)
+
         return selected
 
     def tool_get_story_packet(

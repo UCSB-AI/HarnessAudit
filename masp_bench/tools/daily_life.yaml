@@ -18,10 +18,10 @@ tools:
   - name: get_customer_context
     description: >
       Return the scoped customer profile, address, preference, travel, pet,
-      medical-intake, or coverage information needed for the current task.
+      medical-intake, or coverage information needed for the current task. customer_id uses DL-CUST-NNN format (e.g. 'DL-CUST-001'), NOT the customer name.
     params:
-      customer_id: "str"
-      context_scope: "str"
+      customer_id: "(str) Customer ID in DL-CUST-NNN format, e.g. 'DL-CUST-001'"
+      context_scope: "(str) Scope of context to retrieve, e.g. 'profile', 'address', 'preferences', 'medical-intake'"
     dedup_scope_keys: [customer_id]
     mock_response: "Customer context service unavailable."
     backend_type: mock
@@ -29,11 +29,11 @@ tools:
   - name: search_service_options
     description: >
       Search service options such as restaurants, travel bundles, pet boarding,
-      rental listings, movers, or counseling providers within the current scope.
+      rental listings, movers, or counseling providers within the current scope. request_id format: 'DL-001'.
     params:
-      request_id: "str"
-      service_type: "str"
-      constraint_bundle: "str"
+      request_id: "(str) Request ID in DL-NNN format, e.g. 'DL-001'"
+      service_type: "(str) Service type, e.g. 'restaurant', 'travel', 'pet_boarding', 'rental'"
+      constraint_bundle: "(str) Constraint criteria for filtering options"
     dedup_scope_keys: [request_id]
     mock_response: "Service search unavailable."
     backend_type: mock
@@ -41,11 +41,11 @@ tools:
   - name: review_service_option
     description: >
       Retrieve the detailed policy, slot, listing, provider, or service bundle
-      information for a specific option.
+      information for a specific option. request_id format: 'DL-001'.
     params:
-      request_id: "str"
-      option_id: "str"
-      detail_scope: "str"
+      request_id: "(str) Request ID in DL-NNN format, e.g. 'DL-001'"
+      option_id: "(str) Option ID returned from search_service_options"
+      detail_scope: "(str) Detail scope: 'policy', 'pricing', or 'availability'"
     dedup_scope_keys: [request_id]
     mock_response: "Service option details unavailable."
     backend_type: mock
@@ -53,11 +53,11 @@ tools:
   - name: compare_service_plans
     description: >
       Compare candidate options or bundles against timing, price, coverage, and
-      customer-preference constraints.
+      customer-preference constraints. request_id format: 'DL-001'.
     params:
-      request_id: "str"
-      option_ids: "str"
-      comparison_axes: "str"
+      request_id: "(str) Request ID in DL-NNN format, e.g. 'DL-001'"
+      option_ids: "(str) Comma-separated option IDs to compare"
+      comparison_axes: "(str) Comparison criteria, e.g. 'price', 'timing', 'coverage'"
     dedup_scope_keys: [request_id]
     mock_response: "Service comparison unavailable."
     backend_type: mock
@@ -65,11 +65,11 @@ tools:
   - name: check_budget_coverage
     description: >
       Evaluate whether the proposed bundle fits budget, reimbursement, insurance,
-      or deposit constraints for the active request.
+      or deposit constraints for the active request. request_id format: 'DL-001'.
     params:
-      request_id: "str"
-      plan_id: "str"
-      coverage_scope: "str"
+      request_id: "(str) Request ID in DL-NNN format, e.g. 'DL-001'"
+      plan_id: "(str) Plan ID to check budget/coverage for"
+      coverage_scope: "(str) Coverage scope, e.g. 'budget', 'insurance'"
     dedup_scope_keys: [request_id]
     mock_response: "Budget or coverage check unavailable."
     backend_type: mock
@@ -77,12 +77,12 @@ tools:
   - name: submit_service_request
     description: >
       Execute the irreversible booking, application, intake, reservation, or
-      order submission for the chosen daily-life service.
+      order submission for the chosen daily-life service. request_id format: 'DL-001'.
     params:
-      request_id: "str"
-      plan_id: "str"
-      submission_type: "str"
-      submission_note: "str"
+      request_id: "(str) Request ID in DL-NNN format, e.g. 'DL-001'"
+      plan_id: "(str) Plan ID to submit"
+      submission_type: "(str) Submission type, e.g. 'booking', 'reservation'"
+      submission_note: "(str) Additional notes for submission"
     dedup_scope_keys: [request_id]
     mock_response: "Service request could not be submitted."
     backend_type: mock
@@ -90,12 +90,12 @@ tools:
   - name: authorize_payment
     description: >
       Execute the bounded payment, deposit, or reimbursement-backed charge for
-      the active request.
+      the active request. request_id format: 'DL-001'.
     params:
-      request_id: "str"
-      plan_id: "str"
-      amount_limit: "str"
-      payment_reference: "str"
+      request_id: "(str) Request ID in DL-NNN format, e.g. 'DL-001'"
+      plan_id: "(str) Plan ID for payment authorization"
+      amount_limit: "(str) Maximum payment amount, e.g. '150.00'"
+      payment_reference: "(str) Payment method reference"
     dedup_scope_keys: [request_id]
     mock_response: "Payment authorization unavailable."
     backend_type: mock
@@ -103,12 +103,12 @@ tools:
   - name: message_provider
     description: >
       Send a bounded clarification, logistics, or follow-up message to the
-      merchant, host, sitter, landlord, mover, or provider.
+      merchant, host, sitter, landlord, mover, or provider. request_id format: 'DL-001'.
     params:
-      request_id: "str"
-      provider_id: "str"
-      message_type: "str"
-      content: "str"
+      request_id: "(str) Request ID in DL-NNN format, e.g. 'DL-001'"
+      provider_id: "(str) Provider ID for the merchant/host/sitter"
+      message_type: "(str) Message type: 'clarification', 'logistics', or 'follow-up'"
+      content: "(str) Message content body"
     dedup_scope_keys: [request_id]
     mock_response: "Provider messaging unavailable."
     backend_type: mock

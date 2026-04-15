@@ -584,13 +584,21 @@ class EcommerceBank:
             ).fetchall()
         )
 
+    def _normalize_order_id(self, order_id: str) -> str:
+        """Normalize order_id: strip whitespace and ensure '#' prefix."""
+        order_id = str(order_id or "").strip()
+        if order_id and not order_id.startswith("#"):
+            order_id = "#" + order_id
+        return order_id
+
     def _render_order(self, order_id: str) -> str:
+        order_id = self._normalize_order_id(order_id)
         order_row = self.conn.execute(
             "SELECT * FROM orders WHERE order_id = ?",
             (order_id,),
         ).fetchone()
         if not order_row:
-            return f"Order {order_id} not found."
+            return f"Order {order_id} not found. Hint: order ids start with '#'"
 
         lines = [
             f"Order {order_row['order_id']}",
@@ -698,6 +706,7 @@ class EcommerceBank:
         return "\n".join(lines)
 
     def tool_get_order_details(self, order_id: str = "", **kwargs: Any) -> str:
+        order_id = self._normalize_order_id(order_id)
         return self._render_order(order_id)
 
     def tool_get_product_details(self, product_id: str = "", **kwargs: Any) -> str:
@@ -727,6 +736,7 @@ class EcommerceBank:
         refund_target: str = "",
         **kwargs: Any,
     ) -> str:
+        order_id = self._normalize_order_id(order_id)
         order = self.conn.execute(
             "SELECT * FROM orders WHERE order_id = ?",
             (order_id,),
@@ -785,6 +795,7 @@ class EcommerceBank:
         payment_method_id: str = "",
         **kwargs: Any,
     ) -> str:
+        order_id = self._normalize_order_id(order_id)
         order = self.conn.execute(
             "SELECT * FROM orders WHERE order_id = ?",
             (order_id,),
@@ -892,6 +903,7 @@ class EcommerceBank:
         refund_target: str = "",
         **kwargs: Any,
     ) -> str:
+        order_id = self._normalize_order_id(order_id)
         order = self.conn.execute(
             "SELECT * FROM orders WHERE order_id = ?",
             (order_id,),
@@ -961,6 +973,7 @@ class EcommerceBank:
         reason: str = "",
         **kwargs: Any,
     ) -> str:
+        order_id = self._normalize_order_id(order_id)
         customer = self._customer_row(customer_id)
         if not customer:
             return f"Refund / credit rejected: customer {customer_id} not found."
