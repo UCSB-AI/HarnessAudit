@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field, create_model
 
@@ -111,9 +111,19 @@ def _autogen_model_info_for_alias(model: str) -> dict[str, Any] | None:
     }
 
 
+def _normalize_autogen_model_alias(model: str) -> str:
+    """Map local aliases to dated model names that AutoGen/OpenAI will actually return."""
+    if model == "gpt-5.4":
+        return "gpt-5.4-2026-03-05"
+    if model == "gpt-5.1":
+        return "gpt-5.1-2025-11-13"
+    return model
+
+
 def _openai_client_kwargs(model: str) -> dict[str, Any]:
     """Build OpenAIChatCompletionClient kwargs with optional alias model_info."""
-    kwargs: dict[str, Any] = {"model": model}
+    normalized_model = _normalize_autogen_model_alias(model)
+    kwargs: dict[str, Any] = {"model": normalized_model}
     model_info = _autogen_model_info_for_alias(model)
     if model_info is not None:
         kwargs["model_info"] = model_info
@@ -146,7 +156,10 @@ class AutoGenAdapter(MASFrameworkAdapter):
         core_logger.addHandler(collector)
         chat_logger.addHandler(collector)
 
-        class CatalogTool(BaseTool[BaseModel, str]):
+        class ToolResultModel(BaseModel):
+            content: str
+
+        class CatalogTool(BaseTool[BaseModel, ToolResultModel]):
             """Dynamic AutoGen tool wrapper bound to one benchmark agent role."""
 
             def __init__(self, agent_role: str, tool_def: Any) -> None:
@@ -155,10 +168,13 @@ class AutoGenAdapter(MASFrameworkAdapter):
                     for pname, pdesc in tool_def.params.items()
                 }
                 model_name = _safe_model_name(f"{agent_role}_{tool_def.name}_args")
-                args_model = create_model(model_name, **fields)
+                args_model = cast(
+                    type[BaseModel],
+                    create_model(model_name, **cast(dict[str, Any], fields)),
+                )
                 super().__init__(
                     args_type=args_model,
-                    return_type=str,
+                    return_type=ToolResultModel,
                     name=tool_def.name,
                     description=tool_def.description or tool_def.name,
                     strict=False,
@@ -166,14 +182,17 @@ class AutoGenAdapter(MASFrameworkAdapter):
                 self._agent_role = agent_role
                 self._tool_def = tool_def
 
-            async def run(self, args: BaseModel, cancellation_token: Any) -> str:
+            def return_value_as_string(self, value: ToolResultModel) -> str:
+                return value.content
+
+            async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> ToolResultModel:
                 tool_args = args.model_dump()
                 outcome = await ctx.tool_runtime.invoke(
                     tool_def=self._tool_def,
                     tool_args=tool_args,
                     caller_role=self._agent_role,
                 )
-                raw_event = {
+                raw_event: dict[str, Any] = {
                     "framework": "autogen",
                     "tool_source": "catalog_dispatch",
                     "agent_runtime": "assistant_agent",
@@ -192,7 +211,7 @@ class AutoGenAdapter(MASFrameworkAdapter):
                     tool_result=outcome.output,
                     raw_event=raw_event,
                 )
-                return outcome.output
+                return ToolResultModel(content=outcome.output)
 
         model_client = OpenAIChatCompletionClient(**_openai_client_kwargs(ctx.model))
         final_text = ""
@@ -207,8 +226,12 @@ class AutoGenAdapter(MASFrameworkAdapter):
                     if idx == 0
                     else build_spoke_suffix(hub_role)
                 )
-                handoffs = [a.role for a in ctx.task.agents if a.role != agent_cfg.role]
-                tools = [CatalogTool(agent_cfg.role, tool_def) for tool_def in ctx.catalog.tools]
+                handoffs: list[Any] = [
+                    a.role for a in ctx.task.agents if a.role != agent_cfg.role
+                ]
+                tools: list[BaseTool[Any, Any]] = [
+                    CatalogTool(agent_cfg.role, tool_def) for tool_def in ctx.catalog.tools
+                ]
                 participants.append(
                     AssistantAgent(
                         name=agent_cfg.role,

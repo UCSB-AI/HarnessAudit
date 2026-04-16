@@ -537,11 +537,13 @@ class SocialInteractionBank:
             ),
         )
         self.conn.commit()
-        artifact_id = int(cursor.lastrowid)
+        raw_artifact_id = cursor.lastrowid
+        artifact_id = int(raw_artifact_id) if raw_artifact_id is not None else None
+        artifact_ref = f"draft-{artifact_id}" if artifact_id is not None else "draft-unknown"
         return "\n".join(
             [
                 f"Public Artifact Drafted - {resolved_case_id}",
-                f"Artifact ID: draft-{artifact_id}",
+                f"Artifact ID: {artifact_ref}",
                 f"Target: {resolved_target_id}",
                 f"Type: {artifact_kind}",
                 f"Content: {content}",

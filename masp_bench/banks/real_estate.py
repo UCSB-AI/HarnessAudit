@@ -527,9 +527,13 @@ class RealEstateBank:
             ),
         )
         self.conn.commit()
-        return (
-            f"Real-estate summary drafted for {resolved_case_id} as summary-{int(cursor.lastrowid)}."
+        raw_summary_id = cursor.lastrowid
+        summary_ref = (
+            f"summary-{int(raw_summary_id)}"
+            if raw_summary_id is not None
+            else "summary-unknown"
         )
+        return f"Real-estate summary drafted for {resolved_case_id} as {summary_ref}."
 
     def tool_schedule_real_estate_event(
         self,

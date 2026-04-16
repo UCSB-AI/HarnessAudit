@@ -9,6 +9,7 @@ metrics（Layer 1–3）:
 
 文件名示例: sde2-t5_oai-gpt-5.4-37.json
   task_id    = sde2-t5
+  framework  = oai / ag
   model_slug = gpt-5.4   (_oai- 与末尾 -<run> 之间)
   run        = 37
 """
@@ -33,6 +34,7 @@ KEYS = [
     "pqsr",
 ]
 DEFAULT_MODEL_SLUGS = ["gpt-5.4", "gpt-5.1"]
+DEFAULT_FRAMEWORK_TAGS = ["oai", "ag"]
 
 # 汇总用短名 -> tasks 子目录
 DOMAIN_ORDER = ["fin", "ec", "healthcare", "off", "sde", "dl", "jm", "lc", "si", "re"]
@@ -50,18 +52,24 @@ TASK_DIRS_BY_DOMAIN: dict[str, list[str]] = {
 }
 
 
-def parse_result_name(path: Path) -> tuple[str, str, int] | None:
+def parse_result_name(path: Path) -> tuple[str, str, str, int] | None:
     stem = path.stem
-    if "_oai-" not in stem:
+    if "_" not in stem or "-" not in stem:
         return None
-    task, rest = stem.split("_oai-", 1)
-    run_str = rest.rsplit("-", 1)[-1]
+    prefix, run_str = stem.rsplit("-", 1)
     if not run_str.isdigit():
         return None
-    model_slug = rest[: -(len(run_str) + 1)]
-    if not model_slug:
+    if "_" not in prefix:
         return None
-    return task, model_slug, int(run_str)
+    task, fw_and_model = prefix.split("_", 1)
+    if "-" not in fw_and_model:
+        return None
+    framework_tag, model_slug = fw_and_model.split("-", 1)
+    if not framework_tag or not model_slug:
+        return None
+    if not task:
+        return None
+    return task, framework_tag, model_slug, int(run_str)
 
 
 def infer_domain(task_id: str) -> str | None:
@@ -112,31 +120,36 @@ def load_expected_tasks(tasks_dir: Path) -> dict[str, list[str]]:
 def collect_latest_results(
     results_dir: Path,
 ) -> tuple[
-    dict[tuple[str, str], tuple[int, Path]],
+    dict[tuple[str, str, str], tuple[int, Path]],
     dict[str, set[str]],
     list[str],
+    list[str],
 ]:
-    latest_by_task_model: dict[tuple[str, str], tuple[int, Path]] = {}
+    latest_by_task_fw_model: dict[tuple[str, str, str], tuple[int, Path]] = {}
     discovered_tasks: dict[str, set[str]] = {domain: set() for domain in DOMAIN_ORDER}
+    seen_frameworks: set[str] = set()
     seen_models: set[str] = set()
 
-    for path in sorted(results_dir.glob("*_oai-gpt-*.json")):
+    for path in sorted(results_dir.glob("*.json")):
         parsed = parse_result_name(path)
         if not parsed:
             continue
-        task_id, model_slug, run_id = parsed
+        task_id, framework_tag, model_slug, run_id = parsed
         domain = infer_domain(task_id)
         if domain is None:
             continue
+        seen_frameworks.add(framework_tag)
         seen_models.add(model_slug)
         discovered_tasks[domain].add(task_id)
-        key = (task_id, model_slug)
-        if key not in latest_by_task_model or run_id > latest_by_task_model[key][0]:
-            latest_by_task_model[key] = (run_id, path)
+        key = (task_id, framework_tag, model_slug)
+        if key not in latest_by_task_fw_model or run_id > latest_by_task_fw_model[key][0]:
+            latest_by_task_fw_model[key] = (run_id, path)
 
+    extra_frameworks = sorted(seen_frameworks.difference(DEFAULT_FRAMEWORK_TAGS))
+    framework_tags = DEFAULT_FRAMEWORK_TAGS + extra_frameworks
     extra_models = sorted(seen_models.difference(DEFAULT_MODEL_SLUGS))
     model_slugs = DEFAULT_MODEL_SLUGS + extra_models
-    return latest_by_task_model, discovered_tasks, model_slugs
+    return latest_by_task_fw_model, discovered_tasks, framework_tags, model_slugs
 
 
 def load_result(path: Path) -> dict[str, object]:
@@ -183,16 +196,16 @@ def main() -> None:
         print(f"错误: results 目录不存在: {RESULTS_DIR}", file=sys.stderr)
         sys.exit(1)
 
-    matched = list(RESULTS_DIR.glob("*_oai-gpt-*.json"))
+    matched = list(RESULTS_DIR.glob("*.json"))
     if not matched:
-        print(f"警告: 在 {RESULTS_DIR} 下未匹配到 *_oai-gpt-*.json", file=sys.stderr)
+        print(f"警告: 在 {RESULTS_DIR} 下未匹配到 *.json", file=sys.stderr)
 
     expected_tasks = load_expected_tasks(TASKS_DIR)
-    latest_by_task_model, discovered_tasks, model_slugs = collect_latest_results(
+    latest_by_task_fw_model, discovered_tasks, framework_tags, model_slugs = collect_latest_results(
         RESULTS_DIR
     )
 
-    if not latest_by_task_model:
+    if not latest_by_task_fw_model:
         print(f"警告: 无支持的 domain 结果（检查 task_id 前缀）", file=sys.stderr)
 
     for domain in DOMAIN_ORDER:
@@ -202,41 +215,51 @@ def main() -> None:
         )
 
         print(f"## {domain}")
-        print("task\tmodel_slug\tllm\t" + "\t".join(KEYS))
+        print("task\tframework\tmodel_slug\tllm\t" + "\t".join(KEYS))
         if not task_ids:
             print("(暂无 task / result)")
         else:
             for task_id in task_ids:
-                for model_slug in model_slugs:
-                    key = (task_id, model_slug)
-                    if key not in latest_by_task_model:
+                for framework_tag in framework_tags:
+                    for model_slug in model_slugs:
+                        key = (task_id, framework_tag, model_slug)
+                        if key not in latest_by_task_fw_model:
+                            print(
+                                f"{task_id}\t{framework_tag}\t{model_slug}\tMISSING\t"
+                                + "\t".join(["-"] * len(KEYS))
+                            )
+                            continue
+                        _, path = latest_by_task_fw_model[key]
+                        data = load_result(path)
+                        llm = str(data.get("llm", ""))
+                        vals = [format_metric(data.get(name)) for name in KEYS]
                         print(
-                            f"{task_id}\t{model_slug}\tMISSING\t"
-                            + "\t".join(["-"] * len(KEYS))
+                            f"{task_id}\t{framework_tag}\t{model_slug}\t{llm}\t"
+                            + "\t".join(vals)
                         )
-                        continue
-                    _, path = latest_by_task_model[key]
-                    data = load_result(path)
-                    llm = str(data.get("llm", ""))
-                    vals = [format_metric(data.get(name)) for name in KEYS]
-                    print(f"{task_id}\t{model_slug}\t{llm}\t" + "\t".join(vals))
 
-        print("\n# 按 model_slug 平均（branch 分含 null 时仅对非 null 求平均；缺失 task 跳过）")
-        for model_slug in model_slugs:
-            acc: dict[str, list[float | None]] = {name: [] for name in KEYS}
-            for task_id in task_ids:
-                key = (task_id, model_slug)
-                if key not in latest_by_task_model:
+        print(
+            "\n# 按 framework + model 平均"
+            "（branch 分含 null 时仅对非 null 求平均；缺失 task 跳过）"
+        )
+        for framework_tag in framework_tags:
+            for model_slug in model_slugs:
+                acc: dict[str, list[float | None]] = {name: [] for name in KEYS}
+                for task_id in task_ids:
+                    key = (task_id, framework_tag, model_slug)
+                    if key not in latest_by_task_fw_model:
+                        continue
+                    data = load_result(latest_by_task_fw_model[key][1])
+                    for name in KEYS:
+                        acc[name].append(get_numeric(data, name))
+                if not acc["access_score"] or all(
+                    v is None for v in acc["access_score"]
+                ):
+                    print(f"{framework_tag}/{model_slug}: (无数据)")
                     continue
-                data = load_result(latest_by_task_model[key][1])
-                for name in KEYS:
-                    acc[name].append(get_numeric(data, name))
-            if not acc["access_score"] or all(v is None for v in acc["access_score"]):
-                print(f"{model_slug}: (无数据)")
-                continue
-            n_tasks = len([v for v in acc["access_score"] if v is not None])
-            parts = [f"{name}={mean_non_na(acc[name])}" for name in KEYS]
-            print(f"{model_slug}  n={n_tasks}: " + "  ".join(parts))
+                n_tasks = len([v for v in acc["access_score"] if v is not None])
+                parts = [f"{name}={mean_non_na(acc[name])}" for name in KEYS]
+                print(f"{framework_tag}/{model_slug}  n={n_tasks}: " + "  ".join(parts))
         print()
 
 
