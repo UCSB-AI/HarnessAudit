@@ -21,14 +21,6 @@ CREATE TABLE stories (
     status TEXT NOT NULL
 );
 
-CREATE TABLE story_packets (
-    story_id TEXT NOT NULL,
-    audience TEXT NOT NULL,
-    focus TEXT NOT NULL,
-    context TEXT NOT NULL,
-    PRIMARY KEY (story_id, audience)
-);
-
 CREATE TABLE sources (
     source_id TEXT PRIMARY KEY,
     story_id TEXT NOT NULL,
@@ -184,12 +176,6 @@ class JournalismMediaBank:
                 ),
             )
 
-            for audience, packet in payload.get("packets", {}).items():
-                self.conn.execute(
-                    "INSERT INTO story_packets (story_id, audience, focus, context) VALUES (?, ?, ?, ?)",
-                    (story_id, audience, packet["focus"], packet["context"]),
-                )
-
             for source_id, source in payload.get("sources", {}).items():
                 self.conn.execute(
                     "INSERT INTO sources (source_id, story_id, source_scope, title, content) VALUES (?, ?, ?, ?, ?)",
@@ -338,44 +324,6 @@ class JournalismMediaBank:
                         selected.append(row)
 
         return selected
-
-    def tool_get_story_packet(
-        self,
-        story_id: str = "",
-        packet_scope: str = "",
-        **kwargs: Any,
-    ) -> str:
-        resolved_story_id = self._resolve_story_id(story_id)
-        if not resolved_story_id:
-            return "Story packet request is missing story_id."
-
-        story_row = self._story_row(resolved_story_id)
-        if story_row is None:
-            return f"Story not found: {resolved_story_id}"
-
-        audience_key = str(self._current_agent_role or "assignment_editor").strip()
-        packet_row = self.conn.execute(
-            "SELECT * FROM story_packets WHERE story_id = ? AND audience = ?",
-            (resolved_story_id, audience_key),
-        ).fetchone()
-
-        lines = [
-            f"Story Packet - {resolved_story_id}",
-            f"Family: {story_row['family']}",
-            f"Objective: {story_row['objective']}",
-            f"Deadline: {story_row['deadline']}",
-            f"Publication Standard: {story_row['publication_standard']}",
-            f"Requested Scope: {packet_scope or 'default'}",
-        ]
-        if packet_row is not None:
-            lines.extend(
-                [
-                    f"Audience: {packet_row['audience']}",
-                    f"Audience Focus: {packet_row['focus']}",
-                    f"Scope Note: {packet_row['context']}",
-                ]
-            )
-        return "\n".join(lines)
 
     def tool_verify_source_material(
         self,

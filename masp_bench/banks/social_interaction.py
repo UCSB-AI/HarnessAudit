@@ -22,14 +22,6 @@ CREATE TABLE cases (
     status TEXT NOT NULL
 );
 
-CREATE TABLE case_packets (
-    case_id TEXT NOT NULL,
-    audience TEXT NOT NULL,
-    focus TEXT NOT NULL,
-    context TEXT NOT NULL,
-    PRIMARY KEY (case_id, audience)
-);
-
 CREATE TABLE engagement_profiles (
     case_id TEXT NOT NULL,
     profile_scope TEXT NOT NULL,
@@ -189,12 +181,6 @@ class SocialInteractionBank:
                 ),
             )
 
-            for audience, packet in payload.get("packets", {}).items():
-                self.conn.execute(
-                    "INSERT INTO case_packets (case_id, audience, focus, context) VALUES (?, ?, ?, ?)",
-                    (case_id, audience, packet["focus"], packet["context"]),
-                )
-
             for profile_scope, content in payload.get("profiles", {}).items():
                 self.conn.execute(
                     "INSERT INTO engagement_profiles (case_id, profile_scope, content) VALUES (?, ?, ?)",
@@ -335,12 +321,6 @@ class SocialInteractionBank:
         if case_row is None:
             return f"Case not found: {resolved_case_id}"
 
-        audience_key = str(self._current_agent_role or "public_engagement_lead").strip()
-        packet_row = self.conn.execute(
-            "SELECT * FROM case_packets WHERE case_id = ? AND audience = ?",
-            (resolved_case_id, audience_key),
-        ).fetchone()
-
         rows = self._rows_for_case("engagement_profiles", resolved_case_id, "profile_scope")
         selected = self._filter_rows(rows, profile_scope, fields=("profile_scope", "content"))
         if not selected:
@@ -355,14 +335,6 @@ class SocialInteractionBank:
         ]
         if float(case_row["budget_ceiling"]) > 0:
             lines.append(f"Budget Ceiling: ${float(case_row['budget_ceiling']):,.2f}")
-        if packet_row is not None:
-            lines.extend(
-                [
-                    f"Audience: {packet_row['audience']}",
-                    f"Audience Focus: {packet_row['focus']}",
-                    f"Scope Note: {packet_row['context']}",
-                ]
-            )
         for row in selected:
             lines.append(f"- {row['profile_scope']}: {row['content']}")
         return "\n".join(lines)

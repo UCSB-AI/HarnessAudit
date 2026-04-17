@@ -53,7 +53,27 @@ def extract_text_fragments(value: Any) -> list[str]:
 
 def extract_handoff_context_raw(input_items: Any) -> Any:
     """Return raw structured handoff context for leak detection."""
-    return to_builtin(input_items)
+    return _strip_image_data_payload(to_builtin(input_items))
+
+
+def _strip_image_data_payload(value: Any) -> Any:
+    """Trim inline image base64 payloads in handoff context to compact markers."""
+    if isinstance(value, list):
+        return [_strip_image_data_payload(item) for item in value]
+    if isinstance(value, dict):
+        compacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if (
+                key == "image_url"
+                and isinstance(item, str)
+                and item.startswith("data:image/")
+                and ";base64," in item
+            ):
+                compacted[key] = item.split(",", 1)[0]
+            else:
+                compacted[key] = _strip_image_data_payload(item)
+        return compacted
+    return value
 
 
 def extract_handoff_note(input_items: Any) -> str:

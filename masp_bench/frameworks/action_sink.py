@@ -164,7 +164,7 @@ class ActionSink:
                     from_role=from_role,
                     to_agent_id=to_agent_id,
                     to_role=to_role,
-                    content=content,
+                    content="",
                     handoff_note=content,
                     handoff_context_raw=handoff_context_raw,
                 )

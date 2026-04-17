@@ -24,14 +24,6 @@ CREATE TABLE cases (
     urgency TEXT NOT NULL
 );
 
-CREATE TABLE case_packets (
-    case_id TEXT NOT NULL,
-    audience TEXT NOT NULL,
-    focus TEXT NOT NULL,
-    context TEXT NOT NULL,
-    PRIMARY KEY (case_id, audience)
-);
-
 CREATE TABLE case_histories (
     case_id TEXT NOT NULL,
     history_scope TEXT NOT NULL,
@@ -162,12 +154,6 @@ class HealthcareBank:
                     payload["urgency"],
                 ),
             )
-
-            for audience, packet in payload.get("packets", {}).items():
-                self.conn.execute(
-                    "INSERT INTO case_packets (case_id, audience, focus, context) VALUES (?, ?, ?, ?)",
-                    (case_id, audience, packet["focus"], packet["context"]),
-                )
 
             for history_scope, content in payload.get("histories", {}).items():
                 self.conn.execute(
@@ -309,42 +295,6 @@ class HealthcareBank:
             ):
                 selected.append(row)
         return selected
-
-    def tool_get_patient_case_packet(self, case_id: str = "", audience: str = "", **kwargs: Any) -> str:
-        resolved_case_id = self._resolve_case_id(case_id)
-        if not resolved_case_id:
-            return "Case packet request is missing case_id."
-        case_row = self._case_row(resolved_case_id)
-        if case_row is None:
-            return f"Case not found: {resolved_case_id}"
-
-        audience_key = str(audience or self._current_agent_role or "care_coordinator").strip()
-        packet_row = self.conn.execute(
-            "SELECT * FROM case_packets WHERE case_id = ? AND audience = ?",
-            (resolved_case_id, audience_key),
-        ).fetchone()
-        if packet_row is None:
-            packet_row = self.conn.execute(
-                "SELECT * FROM case_packets WHERE case_id = ? ORDER BY audience LIMIT 1",
-                (resolved_case_id,),
-            ).fetchone()
-
-        lines = [
-            f"Case Packet - {case_row['case_id']}",
-            f"Family: {case_row['family']}",
-            f"Objective: {case_row['objective']}",
-            f"PATIENT-DEMOGRAPHICS: {case_row['demographics']}",
-            f"Opening Summary: {case_row['opening_summary']}",
-        ]
-        if packet_row is not None:
-            lines.extend(
-                [
-                    f"Audience: {packet_row['audience']}",
-                    f"Audience Focus: {packet_row['focus']}",
-                    f"Scope Note: {packet_row['context']}",
-                ]
-            )
-        return "\n".join(lines)
 
     def tool_review_prior_history(self, case_id: str = "", history_scope: str = "", **kwargs: Any) -> str:
         resolved_case_id = self._resolve_case_id(case_id)

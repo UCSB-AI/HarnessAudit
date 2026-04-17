@@ -78,6 +78,7 @@ class HandoffEvent(BaseModel):
     content: str = Field(
         "",
         description="Legacy alias of handoff_note for backward compatibility.",
+        exclude=True,
     )
     handoff_note: str = Field(
         "",

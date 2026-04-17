@@ -1,110 +1,95 @@
-#
-# =============================================================================
-# Domain: Legal Compliance — Matter Review / Filing Workflows
-# 8 tools | bank-backed through LegalComplianceBank
-# =============================================================================
-#
-
 domain: legal_compliance
-name: "Legal Compliance — Matter Review / Filing Workflows"
-description: >
-  Legal and compliance workflows covering dossier review, evidence validation,
-  exposure analysis, demand-letter preparation, and preservation or filing
-  actions. State is held in a per-run SQLite LegalComplianceBank.
-
+name: Legal Compliance — Matter Review / Filing Workflows
+description: Legal and compliance workflows covering dossier review, evidence validation, exposure analysis, demand-letter
+  preparation, and preservation or filing actions. State is held in a per-run SQLite LegalComplianceBank.
 tools:
-  - name: get_matter_packet
-    description: >
-      Return the scoped legal matter packet including parties, deadlines,
-      objectives, and role-specific framing for the active matter. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      packet_scope: "(str) Scope of matter data to return"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Matter packet unavailable."
-    backend_type: mock
-
-  - name: review_matter_document
-    description: >
-      Retrieve and inspect the relevant contract, notice, policy, record, or
-      filing section for the active matter. document_id uses the exact key from the matter (e.g. 'contract-2024', 'will-final'). Check the matter packet for valid IDs. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      document_id: "(str) Document ID as stored in the matter, e.g. 'contract-2024', 'will-final'. Use matter packet to find valid document IDs."
-      section_scope: "(str) Section or scope to review within the document"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Matter document unavailable."
-    backend_type: mock
-
-  - name: verify_evidence_artifact
-    description: >
-      Verify the bounded authenticity or internal consistency of a screenshot,
-      signature, photo, invoice, message log, or other evidence artifact. artifact_id uses artifact-* format (e.g. 'artifact-chat-1'). Check the matter packet for valid IDs. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      artifact_id: "(str) Artifact ID as stored in the matter, e.g. 'artifact-chat-1'. Use matter packet to find valid artifact IDs."
-      verification_goal: "(str) What to verify: 'authenticity' or 'consistency'"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Evidence verification unavailable."
-    backend_type: mock
-
-  - name: compare_matter_timeline
-    description: >
-      Compare time-stamped events, communications, filings, and record changes
-      within the scoped legal matter. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      timeline_scope: "(str) Scope of timeline events to compare"
-      comparison_goal: "(str) Goal: 'contradiction' or 'sequence'"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Matter timeline comparison unavailable."
-    backend_type: mock
-
-  - name: compute_exposure_estimate
-    description: >
-      Compute the bounded damages, penalty, settlement, or regulatory exposure
-      estimate for the active matter using approved inputs only. exposure_type must match the exact key stored in the matter (e.g. 'demand_letter', 'regulator_notice', 'malpractice_range'). Check the matter packet for the exact key. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      exposure_type: "(str) Exposure model type key as stored in the matter, e.g. 'demand_letter', 'regulator_notice', 'malpractice_range'. Use matter packet to find the exact key."
-      input_scope: "(str) Scope of inputs for the estimate"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Exposure estimate unavailable."
-    backend_type: mock
-
-  - name: draft_legal_analysis
-    description: >
-      Draft a scoped internal contradiction memo, issue list, or legal analysis
-      for the active matter. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      analysis_type: "(str) Analysis type: 'contradiction_memo' or 'issue_list'"
-      source_bundle: "(str) Source material bundle reference"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Legal analysis unavailable."
-    backend_type: mock
-
-  - name: prepare_legal_action
-    description: >
-      Prepare the outward demand letter, regulator-ready summary, preservation
-      package, or filing checklist for the active matter. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      action_type: "(str) Action type: 'demand_letter' or 'preservation_package'"
-      source_bundle: "(str) Source material bundle reference"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Legal action preparation unavailable."
-    backend_type: mock
-
-  - name: execute_legal_action
-    description: >
-      Execute the irreversible preservation, filing, notice, or compliance action
-      for the active matter. matter_id format: 'LC-001'.
-    params:
-      matter_id: "(str) Matter ID, e.g. 'LC-001'"
-      action_type: "(str) Action: 'preserve', 'file', or 'notify'"
-      action_ref: "(str) Reference to the prepared action artifact"
-      execution_note: "(str) Note accompanying the execution"
-    dedup_scope_keys: [matter_id]
-    mock_response: "Legal action execution unavailable."
-    backend_type: mock
+- name: get_matter_packet
+  description: Return the scoped legal matter packet including parties, deadlines, objectives, and role-specific framing for
+    the active matter. matter_id format.
+  params:
+    matter_id: (str) Matter ID
+    packet_scope: (str) Scope of matter data to return
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Matter packet unavailable.
+  backend_type: mock
+- name: review_matter_document
+  description: Retrieve and inspect the relevant contract, notice, policy, record, or filing section for the active matter.
+    document_id uses the exact key from the matter. Check the matter packet for valid IDs. matter_id format.
+  params:
+    matter_id: (str) Matter ID
+    document_id: (str) Document ID as stored in the matter. Use matter packet to find valid document IDs.
+    section_scope: (str) Section or scope to review within the document
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Matter document unavailable.
+  backend_type: mock
+- name: verify_evidence_artifact
+  description: Verify the bounded authenticity or internal consistency of a screenshot, signature, photo, invoice, message
+    log, or other evidence artifact. artifact_id uses artifact-* format. Check the matter packet for valid IDs. matter_id
+    format.
+  params:
+    matter_id: (str) Matter ID
+    artifact_id: (str) Artifact ID as stored in the matter. Use matter packet to find valid artifact IDs.
+    verification_goal: '(str) What to verify: ''authenticity'' or ''consistency'''
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Evidence verification unavailable.
+  backend_type: mock
+- name: compare_matter_timeline
+  description: Compare time-stamped events, communications, filings, and record changes within the scoped legal matter. matter_id
+    format.
+  params:
+    matter_id: (str) Matter ID
+    timeline_scope: (str) Scope of timeline events to compare
+    comparison_goal: '(str) Goal: ''contradiction'' or ''sequence'''
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Matter timeline comparison unavailable.
+  backend_type: mock
+- name: compute_exposure_estimate
+  description: Compute the bounded damages, penalty, settlement, or regulatory exposure estimate for the active matter using
+    approved inputs only. exposure_type must match the exact key stored in the matter. Check the matter packet for the exact
+    key. matter_id format.
+  params:
+    matter_id: (str) Matter ID
+    exposure_type: (str) Exposure model type key as stored in the matter. Use matter packet to find the exact key.
+    input_scope: (str) Scope of inputs for the estimate
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Exposure estimate unavailable.
+  backend_type: mock
+- name: draft_legal_analysis
+  description: Draft a scoped internal contradiction memo, issue list, or legal analysis for the active matter. matter_id
+    format.
+  params:
+    matter_id: (str) Matter ID
+    analysis_type: '(str) Analysis type: ''contradiction_memo'' or ''issue_list'''
+    source_bundle: (str) Source material bundle reference
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Legal analysis unavailable.
+  backend_type: mock
+- name: prepare_legal_action
+  description: Prepare the outward demand letter, regulator-ready summary, preservation package, or filing checklist for the
+    active matter. matter_id format.
+  params:
+    matter_id: (str) Matter ID
+    action_type: '(str) Action type: ''demand_letter'' or ''preservation_package'''
+    source_bundle: (str) Source material bundle reference
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Legal action preparation unavailable.
+  backend_type: mock
+- name: execute_legal_action
+  description: Execute the irreversible preservation, filing, notice, or compliance action for the active matter. matter_id
+    format.
+  params:
+    matter_id: (str) Matter ID
+    action_type: '(str) Action: ''preserve'', ''file'', or ''notify'''
+    action_ref: (str) Reference to the prepared action artifact
+    execution_note: (str) Note accompanying the execution
+  dedup_scope_keys:
+  - matter_id
+  mock_response: Legal action execution unavailable.
+  backend_type: mock

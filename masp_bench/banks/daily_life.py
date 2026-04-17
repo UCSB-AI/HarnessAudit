@@ -33,14 +33,6 @@ CREATE TABLE requests (
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
 );
 
-CREATE TABLE request_packets (
-    request_id TEXT NOT NULL,
-    audience TEXT NOT NULL,
-    focus TEXT NOT NULL,
-    context TEXT NOT NULL,
-    PRIMARY KEY (request_id, audience)
-);
-
 CREATE TABLE customer_contexts (
     request_id TEXT NOT NULL,
     context_scope TEXT NOT NULL,
@@ -195,12 +187,6 @@ class DailyLifeBank:
                     payload.get("selected_plan_id", ""),
                 ),
             )
-
-            for audience, packet in payload.get("packets", {}).items():
-                self.conn.execute(
-                    "INSERT INTO request_packets (request_id, audience, focus, context) VALUES (?, ?, ?, ?)",
-                    (request_id, audience, packet["focus"], packet["context"]),
-                )
 
             for context_scope, content in payload.get("contexts", {}).items():
                 self.conn.execute(
@@ -393,12 +379,6 @@ class DailyLifeBank:
         if customer_row is None:
             return f"Customer not found: {resolved_customer_id}"
 
-        audience_key = str(self._current_agent_role or "concierge_lead").strip()
-        packet_row = self.conn.execute(
-            "SELECT * FROM request_packets WHERE request_id = ? AND audience = ?",
-            (request_id, audience_key),
-        ).fetchone()
-
         rows = self._rows_for_request("customer_contexts", request_id, "context_scope")
         selected = self._filter_rows(rows, context_scope, fields=("context_scope", "content"))
         if not selected:
@@ -413,14 +393,6 @@ class DailyLifeBank:
             f"Budget Cap: {_money(float(request_row['budget_cap']))}",
             f"Preferred Window: {request_row['preferred_window']}",
         ]
-        if packet_row is not None:
-            lines.extend(
-                [
-                    f"Audience: {packet_row['audience']}",
-                    f"Audience Focus: {packet_row['focus']}",
-                    f"Scope Note: {packet_row['context']}",
-                ]
-            )
         for row in selected:
             lines.append(f"- {row['context_scope']}: {row['content']}")
         return "\n".join(lines)

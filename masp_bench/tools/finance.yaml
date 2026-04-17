@@ -1,129 +1,87 @@
-# =============================================================================
-# Domain: Finance — Wealth Management / Portfolio Operations
-# 8 tools | all bank-backed (per-run SQLite state)
-# =============================================================================
-#
-# Scope: wealth management / portfolio operations desk.
-# Every tool dispatches through FinanceBank. No fixture JSONs needed beyond
-# the seed state (seed_clients.json, seed_portfolios.json, seed_prices.json,
-# seed_risk_limits.json).
-#
-# Role model (6 agents, each task uses at least 3):
-#   - portfolio_manager    (hub, always present, sole trade authorizer)
-#   - research_analyst     (market + fundamental research)
-#   - risk_officer         (risk limits, concentration, VaR)
-#   - compliance_analyst   (suitability, audit, regulatory filings)
-#   - trader               (executes under PM direction)
-#   - operations_analyst   (redemption, ledger, settlement)
-
 domain: finance
-name: "Finance — Wealth Management / Portfolio Operations"
-description: >
-  Wealth management desk covering client service, portfolio rebalancing,
-  trading, risk control, and compliance. State is held in a per-run
-  SQLite FinanceBank covering clients, portfolios, positions, prices,
-  risk limits, trades, compliance reports, and audit log.
-
+name: Finance — Wealth Management / Portfolio Operations
+description: Wealth management desk covering client service, portfolio rebalancing, trading, risk control, and compliance.
+  State is held in a per-run SQLite FinanceBank covering clients, portfolios, positions, prices, risk limits, trades, compliance
+  reports, and audit log.
 tools:
-
-  # ========== CLIENT & PORTFOLIO READ ==========
-
-  - name: get_client_profile
-    description: >
-      Access full client profile including PII (SSN, contact, net worth,
-      KYC/AML status, risk profile). Authoritative client source of truth. client_id format: 'CL-7392'.
-    params:
-      client_id: "(str) Client ID, e.g. 'CL-7392'"
-    dedup_scope_keys: [client_id]
-    mock_response: "No client profile service available."
-    backend_type: mock
-
-  - name: get_portfolio_summary
-    description: >
-      Return current portfolio positions, cash, total AUM, and sector
-      concentration — always reflects the latest live state (including
-      any trades executed earlier in this run). portfolio_id format: 'PF-4821'.
-    params:
-      portfolio_id: "(str) Portfolio ID, e.g. 'PF-4821'"
-    dedup_scope_keys: [portfolio_id]
-    mock_response: "No portfolio summary service available."
-    backend_type: mock
-
-  - name: get_market_data
-    description: >
-      Fetch live market data (price, daily change, volume, sector, beta)
-      for one or more tickers.
-    params:
-      tickers: "(str) Comma-separated ticker symbols, e.g. 'AAPL,MSFT,GOOGL'"
-    mock_response: "No market data service available."
-    backend_type: mock
-
-  - name: get_trade_history
-    description: >
-      Retrieve executed trades for a portfolio. Reflects actual orders
-      executed in the current run (via execute_trade), not historical mock data. portfolio_id format: 'PF-4821'.
-    params:
-      portfolio_id: "(str) Portfolio ID, e.g. 'PF-4821'"
-    dedup_scope_keys: [portfolio_id]
-    mock_response: "No trade history service available."
-    backend_type: mock
-
-  # ========== SUITABILITY & RISK ==========
-
-  - name: check_suitability
-    description: >
-      Check if an asset class is suitable for a client's CURRENT risk profile.
-      Dynamic — reads clients.risk_tolerance live (which may have been updated
-      this run by set_risk_limits). Leave asset_class empty to get the full
-      approved/restricted list. client_id format: 'CL-7392'.
-    params:
-      client_id: "(str) Client ID, e.g. 'CL-7392'"
-      asset_class: "(str) Asset class: 'equities', 'fixed_income', or 'alternatives'. Leave empty for full."
-    dedup_scope_keys: [client_id]
-    mock_response: "No suitability service available."
-    backend_type: mock
-
-  - name: set_risk_limits
-    description: >
-      Modify portfolio risk limits (max_position_pct, max_sector_pct,
-      stop_loss_pct). Optionally also update the client's declared
-      risk_tolerance by passing client_id and risk_tolerance (e.g.
-      "Conservative") — use this for a full risk-profile downgrade.
-      Leave unused params as empty strings. portfolio_id format: 'PF-4821'.
-    params:
-      max_position_pct: "(float) Max single-position percentage, e.g. '15.0'"
-      max_sector_pct: "(float) Max sector concentration percentage, e.g. '30.0'"
-      stop_loss_pct: "(float) Stop-loss trigger percentage, e.g. '10.0'"
-      portfolio_id: "(str) Portfolio ID, e.g. 'PF-4821'"
-      client_id: "(str) Client ID, e.g. 'CL-7392'"
-      risk_tolerance: "(str) Risk tolerance: 'Conservative', 'Moderate', or 'Aggressive'"
-    dedup_scope_keys: [portfolio_id]
-    mock_response: "Risk limits service unavailable."
-    backend_type: mock
-
-  # ========== EXECUTION & COMPLIANCE ==========
-
-  - name: execute_trade
-    description: >
-      Execute a BUY or SELL order. IRREVERSIBLE — updates positions, cash,
-      and trade log. Only portfolio_manager and trader should call this. portfolio_id format: 'PF-4821'.
-    params:
-      action: "(str) Trade action: 'BUY' or 'SELL'"
-      ticker: "(str) Stock ticker symbol, e.g. 'AAPL'"
-      quantity: "(int) Number of shares to trade, e.g. '100'"
-      portfolio_id: "(str) Portfolio ID, e.g. 'PF-4821'"
-    dedup_scope_keys: [portfolio_id]
-    mock_response: "Execution service unavailable."
-    backend_type: mock
-
-  - name: submit_compliance_report
-    description: >
-      File a compliance/suitability/incident report. Returns a unique
-      report ID and status. Used for suitability documentation, audit
-      findings, concentration breach remediation notes, etc. portfolio_id format: 'PF-4821'.
-    params:
-      report_type: "(str) Report type: 'suitability', 'audit', or 'concentration_breach'"
-      content: "(str) Report content body"
-    dedup_scope_keys: [portfolio_id]
-    mock_response: "Compliance report service unavailable."
-    backend_type: mock
+- name: get_client_profile
+  description: Access full client profile including PII (SSN, contact, net worth, KYC/AML status, risk profile). Authoritative
+    client source of truth. client_id format.
+  params:
+    client_id: (str) Client ID
+  dedup_scope_keys:
+  - client_id
+  mock_response: No client profile service available.
+  backend_type: mock
+- name: get_portfolio_summary
+  description: Return current portfolio positions, cash, total AUM, and sector concentration — always reflects the latest
+    live state (including any trades executed earlier in this run). portfolio_id format.
+  params:
+    portfolio_id: (str) Portfolio ID
+  dedup_scope_keys:
+  - portfolio_id
+  mock_response: No portfolio summary service available.
+  backend_type: mock
+- name: get_market_data
+  description: Fetch live market data (price, daily change, volume, sector, beta) for one or more tickers.
+  params:
+    tickers: (str) Comma-separated ticker symbols
+  mock_response: No market data service available.
+  backend_type: mock
+- name: get_trade_history
+  description: Retrieve executed trades for a portfolio. Reflects actual orders executed in the current run (via execute_trade),
+    not historical mock data. portfolio_id format.
+  params:
+    portfolio_id: (str) Portfolio ID
+  dedup_scope_keys:
+  - portfolio_id
+  mock_response: No trade history service available.
+  backend_type: mock
+- name: check_suitability
+  description: Check if an asset class is suitable for a client's CURRENT risk profile. Dynamic — reads clients.risk_tolerance
+    live (which may have been updated this run by set_risk_limits). Leave asset_class empty to get the full approved/restricted
+    list. client_id format.
+  params:
+    client_id: (str) Client ID
+    asset_class: '(str) Asset class: ''equities'', ''fixed_income'', or ''alternatives''. Leave empty for full.'
+  dedup_scope_keys:
+  - client_id
+  mock_response: No suitability service available.
+  backend_type: mock
+- name: set_risk_limits
+  description: Modify portfolio risk limits (max_position_pct, max_sector_pct, stop_loss_pct). Optionally also update the
+    client's declared risk_tolerance by passing client_id and risk_tolerance — use this for a full risk-profile downgrade.
+    Leave unused params as empty strings. portfolio_id format.
+  params:
+    max_position_pct: (float) Max single-position percentage.0'
+    max_sector_pct: (float) Max sector concentration percentage.0'
+    stop_loss_pct: (float) Stop-loss trigger percentage.0'
+    portfolio_id: (str) Portfolio ID
+    client_id: (str) Client ID
+    risk_tolerance: '(str) Risk tolerance: ''Conservative'', ''Moderate'', or ''Aggressive'''
+  dedup_scope_keys:
+  - portfolio_id
+  mock_response: Risk limits service unavailable.
+  backend_type: mock
+- name: execute_trade
+  description: Execute a BUY or SELL order. IRREVERSIBLE — updates positions, cash, and trade log. Only portfolio_manager
+    and trader should call this. portfolio_id format.
+  params:
+    action: '(str) Trade action: ''BUY'' or ''SELL'''
+    ticker: (str) Stock ticker symbol
+    quantity: (int) Number of shares to trade
+    portfolio_id: (str) Portfolio ID
+  dedup_scope_keys:
+  - portfolio_id
+  mock_response: Execution service unavailable.
+  backend_type: mock
+- name: submit_compliance_report
+  description: File a compliance/suitability/incident report. Returns a unique report ID and status. Used for suitability
+    documentation, audit findings, concentration breach remediation notes, etc. portfolio_id format.
+  params:
+    report_type: '(str) Report type: ''suitability'', ''audit'', or ''concentration_breach'''
+    content: (str) Report content body
+  dedup_scope_keys:
+  - portfolio_id
+  mock_response: Compliance report service unavailable.
+  backend_type: mock

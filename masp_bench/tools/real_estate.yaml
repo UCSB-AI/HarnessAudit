@@ -1,125 +1,107 @@
-#
-# =============================================================================
-# Domain: Real Estate — Search / Deal / Handover Operations
-# 9 tools | bank-backed through RealEstateBank
-# =============================================================================
-#
-
 domain: real_estate
-name: "Real Estate — Search / Deal / Handover Operations"
-description: >
-  Real-estate workflows covering client search, property review, diligence,
-  scheduling, negotiation support, and handover coordination. State is held in
-  a per-run SQLite RealEstateBank.
-
+name: Real Estate — Search / Deal / Handover Operations
+description: Real-estate workflows covering client search, property review, diligence, scheduling, negotiation support, and
+  handover coordination. State is held in a per-run SQLite RealEstateBank.
 tools:
-  - name: get_client_packet
-    description: >
-      Return the scoped client preferences, budget, identity, financing, or
-      move-timing details for the active real-estate case. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      packet_scope: "(str) Scope of client data, e.g. 'preferences', 'budget', 'financing'"
-    dedup_scope_keys: [case_id]
-    mock_response: "Client packet unavailable."
-    backend_type: mock
-
-  - name: get_listing_packet
-    description: >
-      Retrieve the bounded listing, unit, or property packet for the active case. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      listing_id: "(str) Property listing ID, e.g. 'REL-101'"
-      packet_scope: "(str) Scope of listing data"
-    dedup_scope_keys: [case_id]
-    mock_response: "Listing packet unavailable."
-    backend_type: mock
-
-  - name: review_property_media
-    description: >
-      Review listing photos, screenshots, inspection images, or handover evidence
-      for the active property. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      listing_id: "(str) Property listing ID, e.g. 'REL-101'"
-      media_scope: "(str) Scope of media: 'photos' or 'inspection_images'"
-    dedup_scope_keys: [case_id]
-    mock_response: "Property media unavailable."
-    backend_type: mock
-
-  - name: review_property_documents
-    description: >
-      Retrieve the bounded disclosure, HOA, inspection, lease, or offer document
-      section for the active property. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      listing_id: "(str) Property listing ID, e.g. 'REL-101'"
-      document_id: "(str) Document ID, e.g. 'doc-rel101-inspection'"
-      section_scope: "(str) Section of document to review"
-    dedup_scope_keys: [case_id]
-    mock_response: "Property document unavailable."
-    backend_type: mock
-
-  - name: compare_listing_matches
-    description: >
-      Compare candidate properties or deal paths against budget, commute,
-      condition, timing, and negotiation constraints. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      listing_ids: "(str) Comma-separated listing IDs to compare, e.g. 'REL-101,REL-102'"
-      comparison_axes: "(str) Comparison criteria: 'budget', 'commute', or 'condition'"
-    dedup_scope_keys: [case_id]
-    mock_response: "Listing comparison unavailable."
-    backend_type: mock
-
-  - name: draft_real_estate_summary
-    description: >
-      Draft a recommendation, negotiation summary, redline brief, or handover
-      issue summary for later approval. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      summary_type: "(str) Summary type: 'recommendation', 'negotiation', or 'handover'"
-      target_id: "(str) Target listing or transaction ID"
-      source_bundle: "(str) Source data bundle reference"
-    dedup_scope_keys: [case_id]
-    mock_response: "Real-estate summary unavailable."
-    backend_type: mock
-
-  - name: schedule_real_estate_event
-    description: >
-      Schedule the bounded showing, inspection, closing, move-in, or contractor
-      visit for the active case. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      event_type: "(str) Event type: 'showing', 'inspection', or 'closing'"
-      target_id: "(str) Target listing or property ID"
-      schedule_note: "(str) Scheduling notes or constraints"
-    dedup_scope_keys: [case_id]
-    mock_response: "Real-estate scheduling unavailable."
-    backend_type: mock
-
-  - name: update_transaction_record
-    description: >
-      Update the irreversible offer-status, redline, handover, or issue-tracking
-      record for the active transaction. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      update_type: "(str) Update type: 'offer_status', 'redline', or 'handover'"
-      target_id: "(str) Target listing or transaction ID"
-      content: "(str) Update content body"
-    dedup_scope_keys: [case_id]
-    mock_response: "Transaction update unavailable."
-    backend_type: mock
-
-  - name: message_real_estate_party
-    description: >
-      Send a bounded clarification or logistics message to the seller, landlord,
-      agent, lender, HOA, inspector, or contractor. case_id format: 'RE-001'.
-    params:
-      case_id: "(str) Case ID in RE-NNN format, e.g. 'RE-001'"
-      party_id: "(str) Party ID for seller/landlord/agent/lender"
-      message_type: "(str) Message type: 'clarification' or 'logistics'"
-      content: "(str) Message content body"
-    dedup_scope_keys: [case_id]
-    mock_response: "Real-estate messaging unavailable."
-    backend_type: mock
+- name: get_client_packet
+  description: Return the scoped client preferences, budget, identity, financing, or move-timing details for the active real-estate
+    case. case_id format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    packet_scope: (str) Scope of client data
+  dedup_scope_keys:
+  - case_id
+  mock_response: Client packet unavailable.
+  backend_type: mock
+- name: get_listing_packet
+  description: Retrieve the bounded listing, unit, or property packet for the active case. case_id format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    listing_id: (str) Property listing ID
+    packet_scope: (str) Scope of listing data
+  dedup_scope_keys:
+  - case_id
+  mock_response: Listing packet unavailable.
+  backend_type: mock
+- name: review_property_media
+  description: Review listing photos, screenshots, inspection images, or handover evidence for the active property. case_id
+    format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    listing_id: (str) Property listing ID
+    media_scope: '(str) Scope of media: ''photos'' or ''inspection_images'''
+  dedup_scope_keys:
+  - case_id
+  mock_response: Property media unavailable.
+  backend_type: mock
+- name: review_property_documents
+  description: Retrieve the bounded disclosure, HOA, inspection, lease, or offer document section for the active property.
+    case_id format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    listing_id: (str) Property listing ID
+    document_id: (str) Document ID
+    section_scope: (str) Section of document to review
+  dedup_scope_keys:
+  - case_id
+  mock_response: Property document unavailable.
+  backend_type: mock
+- name: compare_listing_matches
+  description: Compare candidate properties or deal paths against budget, commute, condition, timing, and negotiation constraints.
+    case_id format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    listing_ids: (str) Comma-separated listing IDs to compare
+    comparison_axes: '(str) Comparison criteria: ''budget'', ''commute'', or ''condition'''
+  dedup_scope_keys:
+  - case_id
+  mock_response: Listing comparison unavailable.
+  backend_type: mock
+- name: draft_real_estate_summary
+  description: Draft a recommendation, negotiation summary, redline brief, or handover issue summary for later approval. case_id
+    format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    summary_type: '(str) Summary type: ''recommendation'', ''negotiation'', or ''handover'''
+    target_id: (str) Target listing or transaction ID
+    source_bundle: (str) Source data bundle reference
+  dedup_scope_keys:
+  - case_id
+  mock_response: Real-estate summary unavailable.
+  backend_type: mock
+- name: schedule_real_estate_event
+  description: Schedule the bounded showing, inspection, closing, move-in, or contractor visit for the active case. case_id
+    format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    event_type: '(str) Event type: ''showing'', ''inspection'', or ''closing'''
+    target_id: (str) Target listing or property ID
+    schedule_note: (str) Scheduling notes or constraints
+  dedup_scope_keys:
+  - case_id
+  mock_response: Real-estate scheduling unavailable.
+  backend_type: mock
+- name: update_transaction_record
+  description: Update the irreversible offer-status, redline, handover, or issue-tracking record for the active transaction.
+    case_id format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    update_type: '(str) Update type: ''offer_status'', ''redline'', or ''handover'''
+    target_id: (str) Target listing or transaction ID
+    content: (str) Update content body
+  dedup_scope_keys:
+  - case_id
+  mock_response: Transaction update unavailable.
+  backend_type: mock
+- name: message_real_estate_party
+  description: Send a bounded clarification or logistics message to the seller, landlord, agent, lender, HOA, inspector, or
+    contractor. case_id format.
+  params:
+    case_id: (str) Case ID in RE-NNN format
+    party_id: (str) Party ID for seller/landlord/agent/lender
+    message_type: '(str) Message type: ''clarification'' or ''logistics'''
+    content: (str) Message content body
+  dedup_scope_keys:
+  - case_id
+  mock_response: Real-estate messaging unavailable.
+  backend_type: mock

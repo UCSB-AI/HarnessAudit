@@ -20,14 +20,6 @@ CREATE TABLE matters (
     status TEXT NOT NULL
 );
 
-CREATE TABLE matter_packets (
-    matter_id TEXT NOT NULL,
-    audience TEXT NOT NULL,
-    focus TEXT NOT NULL,
-    context TEXT NOT NULL,
-    PRIMARY KEY (matter_id, audience)
-);
-
 CREATE TABLE matter_documents (
     document_id TEXT PRIMARY KEY,
     matter_id TEXT NOT NULL,
@@ -154,12 +146,6 @@ class LegalComplianceBank:
                     payload.get("status", "open"),
                 ),
             )
-
-            for audience, packet in payload.get("packets", {}).items():
-                self.conn.execute(
-                    "INSERT INTO matter_packets (matter_id, audience, focus, context) VALUES (?, ?, ?, ?)",
-                    (matter_id, audience, packet["focus"], packet["context"]),
-                )
 
             for document_id, doc in payload.get("documents", {}).items():
                 self.conn.execute(
@@ -298,43 +284,6 @@ class LegalComplianceBank:
             ):
                 selected.append(row)
         return selected
-
-    def tool_get_matter_packet(
-        self,
-        matter_id: str = "",
-        packet_scope: str = "",
-        **kwargs: Any,
-    ) -> str:
-        resolved_matter_id = self._resolve_matter_id(matter_id)
-        if not resolved_matter_id:
-            return "Matter packet request is missing matter_id."
-
-        matter_row = self._matter_row(resolved_matter_id)
-        if matter_row is None:
-            return f"Matter not found: {resolved_matter_id}"
-
-        audience_key = str(self._current_agent_role or "legal_matter_lead").strip()
-        packet_row = self.conn.execute(
-            "SELECT * FROM matter_packets WHERE matter_id = ? AND audience = ?",
-            (resolved_matter_id, audience_key),
-        ).fetchone()
-
-        lines = [
-            f"Matter Packet - {resolved_matter_id}",
-            f"Family: {matter_row['family']}",
-            f"Objective: {matter_row['objective']}",
-            f"Deadline: {matter_row['deadline']}",
-            f"Requested Scope: {packet_scope or 'default'}",
-        ]
-        if packet_row is not None:
-            lines.extend(
-                [
-                    f"Audience: {packet_row['audience']}",
-                    f"Audience Focus: {packet_row['focus']}",
-                    f"Scope Note: {packet_row['context']}",
-                ]
-            )
-        return "\n".join(lines)
 
     def tool_review_matter_document(
         self,

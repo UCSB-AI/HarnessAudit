@@ -1,123 +1,104 @@
-#
-# =============================================================================
-# Domain: Journalism & Media — Reporting / Verification / Publication
-# 9 tools | bank-backed through JournalismMediaBank
-# =============================================================================
-#
-
 domain: journalism_media
-name: "Journalism & Media — Reporting / Verification / Publication"
-description: >
-  Journalism workflows covering source handling, media verification, public
-  records, comment requests, draft preparation, and publication decisions.
-  State is held in a per-run SQLite JournalismMediaBank.
-
+name: Journalism & Media — Reporting / Verification / Publication
+description: Journalism workflows covering source handling, media verification, public records, comment requests, draft preparation,
+  and publication decisions. State is held in a per-run SQLite JournalismMediaBank.
 tools:
-  - name: get_story_packet
-    description: >
-      Return the scoped story objective, editorial angle, deadline, and
-      role-specific briefing for the active reporting case. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      packet_scope: "(str) Scope of packet data to return"
-    dedup_scope_keys: [story_id]
-    mock_response: "Story packet unavailable."
-    backend_type: mock
-
-  - name: verify_source_material
-    description: >
-      Retrieve and verify the bounded source background, transcript, statement,
-      or protected-source note for the active story. source_id uses src-* format (e.g. 'src-tipster'). Consult the story packet for valid IDs. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      source_id: "(str) Source ID in src-* format, e.g. 'src-tipster'. Use story packet to find valid source IDs."
-      source_scope: "(str) Scope of source verification"
-    dedup_scope_keys: [story_id]
-    mock_response: "Source material unavailable."
-    backend_type: mock
-
-  - name: inspect_media_evidence
-    description: >
-      Review photos, screenshots, PDFs, captions, or other media evidence for the
-      active story. asset_id uses asset-* format (e.g. 'asset-kitchen-stills'). Consult the story packet for valid IDs. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      asset_id: "(str) Asset ID in asset-* format, e.g. 'asset-kitchen-stills'. Use story packet to find valid asset IDs."
-      inspection_scope: "(str) Scope of media inspection"
-    dedup_scope_keys: [story_id]
-    mock_response: "Media evidence unavailable."
-    backend_type: mock
-
-  - name: query_public_records
-    description: >
-      Query the bounded public-record, filing, registry, or report data needed for
-      the active story. record_ref uses rec-* format (e.g. 'rec-fire-board'). Consult the story packet for valid refs. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      query_scope: "(str) Scope of public records query"
-      record_ref: "(str) Record reference in rec-* format, e.g. 'rec-fire-board'. Use story packet to find valid record refs."
-    dedup_scope_keys: [story_id]
-    mock_response: "Public records unavailable."
-    backend_type: mock
-
-  - name: compare_story_claims
-    description: >
-      Compare claims across sources, records, drafts, and media evidence for the
-      active story. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      claim_scope: "(str) Scope of claims to compare"
-      source_bundle: "(str) Source/evidence bundle reference"
-    dedup_scope_keys: [story_id]
-    mock_response: "Story claim comparison unavailable."
-    backend_type: mock
-
-  - name: draft_story_update
-    description: >
-      Draft the internal story memo, public copy, headline package, or correction
-      note for later editorial approval. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      draft_type: "(str) Draft type: 'memo', 'public_copy', 'headline', or 'correction'"
-      source_bundle: "(str) Source material bundle reference"
-    dedup_scope_keys: [story_id]
-    mock_response: "Story drafting unavailable."
-    backend_type: mock
-
-  - name: review_publication_risk
-    description: >
-      Review the current story draft for sourcing, privacy, casualty, legal, or
-      embargo risks before publication. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      artifact_id: "(str) Artifact ID of the draft to review"
-      review_scope: "(str) Risk scope: 'sourcing', 'privacy', 'legal', or 'embargo'"
-    dedup_scope_keys: [story_id]
-    mock_response: "Publication risk review unavailable."
-    backend_type: mock
-
-  - name: request_subject_comment
-    description: >
-      Send a bounded request for comment to the subject, agency, company, or
-      spokesperson connected to the active story. subject_id uses subj-* format (e.g. 'subj-city-official'). Consult the story packet for valid IDs. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      subject_id: "(str) Subject ID in subj-* format, e.g. 'subj-city-official'"
-      request_scope: "(str) Scope of comment request"
-      content: "(str) Content of the comment request"
-    dedup_scope_keys: [story_id]
-    mock_response: "Comment request unavailable."
-    backend_type: mock
-
-  - name: publish_story
-    description: >
-      Execute the irreversible publish, hold, correction, or embargo-state update
-      for the active story. story_id format: 'JM-001'.
-    params:
-      story_id: "(str) Story ID, e.g. 'JM-001'"
-      action_type: "(str) Action: 'publish', 'hold', 'correction', or 'embargo'"
-      draft_id: "(str) Draft ID to publish"
-      action_note: "(str) Note accompanying the action"
-    dedup_scope_keys: [story_id]
-    mock_response: "Story publication unavailable."
-    backend_type: mock
+- name: get_story_packet
+  description: Return the scoped story objective, editorial angle, deadline, and role-specific briefing for the active reporting
+    case. story_id format.
+  params:
+    story_id: (str) Story ID
+    packet_scope: (str) Scope of packet data to return
+  dedup_scope_keys:
+  - story_id
+  mock_response: Story packet unavailable.
+  backend_type: mock
+- name: verify_source_material
+  description: Retrieve and verify the bounded source background, transcript, statement, or protected-source note for the
+    active story. source_id uses src-* format. Consult the story packet for valid IDs. story_id format.
+  params:
+    story_id: (str) Story ID
+    source_id: (str) Source ID in src-* format. Use story packet to find valid source IDs.
+    source_scope: (str) Scope of source verification
+  dedup_scope_keys:
+  - story_id
+  mock_response: Source material unavailable.
+  backend_type: mock
+- name: inspect_media_evidence
+  description: Review photos, screenshots, PDFs, captions, or other media evidence for the active story. asset_id uses asset-*
+    format. Consult the story packet for valid IDs. story_id format.
+  params:
+    story_id: (str) Story ID
+    asset_id: (str) Asset ID in asset-* format. Use story packet to find valid asset IDs.
+    inspection_scope: (str) Scope of media inspection
+  dedup_scope_keys:
+  - story_id
+  mock_response: Media evidence unavailable.
+  backend_type: mock
+- name: query_public_records
+  description: Query the bounded public-record, filing, registry, or report data needed for the active story. record_ref uses
+    rec-* format. Consult the story packet for valid refs. story_id format.
+  params:
+    story_id: (str) Story ID
+    query_scope: (str) Scope of public records query
+    record_ref: (str) Record reference in rec-* format. Use story packet to find valid record refs.
+  dedup_scope_keys:
+  - story_id
+  mock_response: Public records unavailable.
+  backend_type: mock
+- name: compare_story_claims
+  description: Compare claims across sources, records, drafts, and media evidence for the active story. story_id format.
+  params:
+    story_id: (str) Story ID
+    claim_scope: (str) Scope of claims to compare
+    source_bundle: (str) Source/evidence bundle reference
+  dedup_scope_keys:
+  - story_id
+  mock_response: Story claim comparison unavailable.
+  backend_type: mock
+- name: draft_story_update
+  description: Draft the internal story memo, public copy, headline package, or correction note for later editorial approval.
+    story_id format.
+  params:
+    story_id: (str) Story ID
+    draft_type: '(str) Draft type: ''memo'', ''public_copy'', ''headline'', or ''correction'''
+    source_bundle: (str) Source material bundle reference
+  dedup_scope_keys:
+  - story_id
+  mock_response: Story drafting unavailable.
+  backend_type: mock
+- name: review_publication_risk
+  description: Review the current story draft for sourcing, privacy, casualty, legal, or embargo risks before publication.
+    story_id format.
+  params:
+    story_id: (str) Story ID
+    artifact_id: (str) Artifact ID of the draft to review
+    review_scope: '(str) Risk scope: ''sourcing'', ''privacy'', ''legal'', or ''embargo'''
+  dedup_scope_keys:
+  - story_id
+  mock_response: Publication risk review unavailable.
+  backend_type: mock
+- name: request_subject_comment
+  description: Send a bounded request for comment to the subject, agency, company, or spokesperson connected to the active
+    story. subject_id uses subj-* format. Consult the story packet for valid IDs. story_id format.
+  params:
+    story_id: (str) Story ID
+    subject_id: (str) Subject ID in subj-* format
+    request_scope: (str) Scope of comment request
+    content: (str) Content of the comment request
+  dedup_scope_keys:
+  - story_id
+  mock_response: Comment request unavailable.
+  backend_type: mock
+- name: publish_story
+  description: Execute the irreversible publish, hold, correction, or embargo-state update for the active story. story_id
+    format.
+  params:
+    story_id: (str) Story ID
+    action_type: '(str) Action: ''publish'', ''hold'', ''correction'', or ''embargo'''
+    draft_id: (str) Draft ID to publish
+    action_note: (str) Note accompanying the action
+  dedup_scope_keys:
+  - story_id
+  mock_response: Story publication unavailable.
+  backend_type: mock

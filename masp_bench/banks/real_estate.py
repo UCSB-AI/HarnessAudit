@@ -20,14 +20,6 @@ CREATE TABLE cases (
     status TEXT NOT NULL
 );
 
-CREATE TABLE case_packets (
-    case_id TEXT NOT NULL,
-    audience TEXT NOT NULL,
-    focus TEXT NOT NULL,
-    context TEXT NOT NULL,
-    PRIMARY KEY (case_id, audience)
-);
-
 CREATE TABLE client_profiles (
     case_id TEXT NOT NULL,
     profile_scope TEXT NOT NULL,
@@ -173,12 +165,6 @@ class RealEstateBank:
                 ),
             )
 
-            for audience, packet in payload.get("packets", {}).items():
-                self.conn.execute(
-                    "INSERT INTO case_packets (case_id, audience, focus, context) VALUES (?, ?, ?, ?)",
-                    (case_id, audience, packet["focus"], packet["context"]),
-                )
-
             for profile_scope, content in payload.get("client_profiles", {}).items():
                 self.conn.execute(
                     "INSERT INTO client_profiles (case_id, profile_scope, content) VALUES (?, ?, ?)",
@@ -314,62 +300,48 @@ class RealEstateBank:
                 selected.append(row)
         return selected
 
-    def tool_get_client_packet(
+    def tool_get_client_profile(
         self,
         case_id: str = "",
-        packet_scope: str = "",
+        profile_scope: str = "",
         **kwargs: Any,
     ) -> str:
         resolved_case_id = self._resolve_case_id(case_id)
         if not resolved_case_id:
-            return "Client packet request is missing case_id."
+            return "Client profile request is missing case_id."
 
         case_row = self._case_row(resolved_case_id)
         if case_row is None:
             return f"Case not found: {resolved_case_id}"
 
-        audience_key = str(self._current_agent_role or "real_estate_lead").strip()
-        packet_row = self.conn.execute(
-            "SELECT * FROM case_packets WHERE case_id = ? AND audience = ?",
-            (resolved_case_id, audience_key),
-        ).fetchone()
-
         rows = self._rows_for_case("client_profiles", resolved_case_id, "profile_scope")
-        selected = self._filter_rows(rows, packet_scope, fields=("profile_scope", "content"))
+        selected = self._filter_rows(rows, profile_scope, fields=("profile_scope", "content"))
         if not selected:
             selected = rows
 
         lines = [
-            f"Client Packet - {resolved_case_id}",
+            f"Client Profile - {resolved_case_id}",
             f"Family: {case_row['family']}",
             f"Objective: {case_row['objective']}",
             f"Deadline: {case_row['deadline']}",
         ]
-        if packet_row is not None:
-            lines.extend(
-                [
-                    f"Audience: {packet_row['audience']}",
-                    f"Audience Focus: {packet_row['focus']}",
-                    f"Scope Note: {packet_row['context']}",
-                ]
-            )
         for row in selected:
             lines.append(f"- {row['profile_scope']}: {row['content']}")
         return "\n".join(lines)
 
-    def tool_get_listing_packet(
+    def tool_get_listing_overview(
         self,
         case_id: str = "",
         listing_id: str = "",
-        packet_scope: str = "",
+        listing_scope: str = "",
         **kwargs: Any,
     ) -> str:
         resolved_case_id = self._resolve_case_id(case_id)
         if not resolved_case_id:
-            return "Listing packet request is missing case_id."
+            return "Listing overview request is missing case_id."
 
         rows = self._rows_for_case("listings", resolved_case_id, "price ASC, listing_id")
-        query = ",".join(part for part in [listing_id, packet_scope] if str(part).strip())
+        query = ",".join(part for part in [listing_id, listing_scope] if str(part).strip())
         selected = self._filter_rows(
             rows,
             query,
@@ -378,13 +350,13 @@ class RealEstateBank:
         if not selected:
             available = ", ".join(row["listing_id"] for row in rows) if rows else "(none)"
             return (
-                f"Listing Packet - {resolved_case_id}\n"
+                f"Listing Overview - {resolved_case_id}\n"
                 f"No listing matched '{query}'. Available listings: {available}"
             )
 
         lines = [
-            f"Listing Packet - {resolved_case_id}",
-            f"Requested Scope: {packet_scope or listing_id or 'all'}",
+            f"Listing Overview - {resolved_case_id}",
+            f"Requested Scope: {listing_scope or listing_id or 'all'}",
         ]
         for row in selected:
             lines.append(
