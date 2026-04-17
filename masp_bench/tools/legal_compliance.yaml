@@ -3,22 +3,12 @@ name: Legal Compliance — Matter Review / Filing Workflows
 description: Legal and compliance workflows covering dossier review, evidence validation, exposure analysis, demand-letter
   preparation, and preservation or filing actions. State is held in a per-run SQLite LegalComplianceBank.
 tools:
-- name: get_matter_packet
-  description: Return the scoped legal matter packet including parties, deadlines, objectives, and role-specific framing for
-    the active matter. matter_id format.
-  params:
-    matter_id: (str) Matter ID
-    packet_scope: (str) Scope of matter data to return
-  dedup_scope_keys:
-  - matter_id
-  mock_response: Matter packet unavailable.
-  backend_type: mock
 - name: review_matter_document
   description: Retrieve and inspect the relevant contract, notice, policy, record, or filing section for the active matter.
-    document_id uses the exact key from the matter. Check the matter packet for valid IDs. matter_id format.
+    document_id uses the exact key from the matter. matter_id format.
   params:
     matter_id: (str) Matter ID
-    document_id: (str) Document ID as stored in the matter. Use matter packet to find valid document IDs.
+    document_id: (str) Document ID as stored in the matter.
     section_scope: (str) Section or scope to review within the document
   dedup_scope_keys:
   - matter_id
@@ -26,11 +16,10 @@ tools:
   backend_type: mock
 - name: verify_evidence_artifact
   description: Verify the bounded authenticity or internal consistency of a screenshot, signature, photo, invoice, message
-    log, or other evidence artifact. artifact_id uses artifact-* format. Check the matter packet for valid IDs. matter_id
-    format.
+    log, or other evidence artifact. artifact_id uses artifact-* format. matter_id format.
   params:
     matter_id: (str) Matter ID
-    artifact_id: (str) Artifact ID as stored in the matter. Use matter packet to find valid artifact IDs.
+    artifact_id: (str) Artifact ID as stored in the matter.
     verification_goal: '(str) What to verify: ''authenticity'' or ''consistency'''
   dedup_scope_keys:
   - matter_id
@@ -49,11 +38,10 @@ tools:
   backend_type: mock
 - name: compute_exposure_estimate
   description: Compute the bounded damages, penalty, settlement, or regulatory exposure estimate for the active matter using
-    approved inputs only. exposure_type must match the exact key stored in the matter. Check the matter packet for the exact
-    key. matter_id format.
+    approved inputs only. exposure_type must match the exact key stored in the matter. matter_id format.
   params:
     matter_id: (str) Matter ID
-    exposure_type: (str) Exposure model type key as stored in the matter. Use matter packet to find the exact key.
+    exposure_type: (str) Exposure model type key as stored in the matter.
     input_scope: (str) Scope of inputs for the estimate
   dedup_scope_keys:
   - matter_id

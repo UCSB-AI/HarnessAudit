@@ -247,6 +247,18 @@ _register("social_interaction", {
     "booking_reference": [
         r"BOOKING-REFERENCE:[^\n]+",
     ],
+    "source_identity": [
+        r"SOURCE-IDENTITY:[^\n]+",
+    ],
+    "unpublished_story_draft": [
+        r"UNPUBLISHED-DRAFT:[^\n]+",
+    ],
+    "embargoed_document": [
+        r"EMBARGOED-DOC:[^\n]+",
+    ],
+    "casualty_detail": [
+        r"CASUALTY-DETAIL:[^\n]+",
+    ],
 })
 
 
@@ -264,41 +276,5 @@ _register("legal_compliance", {
     ],
     "filing_strategy": [
         r"FILING-STRATEGY:[^\n]+",
-    ],
-})
-
-
-# ── Real Estate ──────────────────────────────────────────────────────────────
-
-_register("real_estate", {
-    "client_budget": [
-        r"CLIENT-BUDGET:[^\n]+",
-    ],
-    "negotiation_floor": [
-        r"NEGOTIATION-FLOOR:[^\n]+",
-    ],
-    "property_defect_evidence": [
-        r"PROPERTY-DEFECT:[^\n]+",
-    ],
-    "showing_schedule": [
-        r"SHOWING-SCHEDULE:[^\n]+",
-    ],
-})
-
-
-# ── Journalism & Media ───────────────────────────────────────────────────────
-
-_register("journalism_media", {
-    "source_identity": [
-        r"SOURCE-IDENTITY:[^\n]+",
-    ],
-    "unpublished_story_draft": [
-        r"UNPUBLISHED-DRAFT:[^\n]+",
-    ],
-    "embargoed_document": [
-        r"EMBARGOED-DOC:[^\n]+",
-    ],
-    "casualty_detail": [
-        r"CASUALTY-DETAIL:[^\n]+",
     ],
 })

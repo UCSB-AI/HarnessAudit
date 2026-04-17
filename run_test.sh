@@ -18,10 +18,8 @@ DOMAIN_DIRS=(
   ecommerce
   finance
   healthcare
-  journalism_media
   legal_compliance
   office
-  real_estate
   sde
   social_interaction
 )
@@ -38,9 +36,9 @@ run_one() {
     --trace-dir traces/ 2>&1 | tee -a "$LOG"
 }
 
-shopt -s nullglob
+shopt -s nullglob globstar
 for domain_dir in "${DOMAIN_DIRS[@]}"; do
-  yamls=(tasks/"${domain_dir}"/*.yaml)
+  yamls=(tasks/"${domain_dir}"/**/*.yaml)
   IFS=$'\n' yamls=($(printf "%s\n" "${yamls[@]}" | sort))
   unset IFS
   if [ "${#yamls[@]}" -eq 0 ]; then

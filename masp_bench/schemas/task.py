@@ -215,8 +215,7 @@ class TaskConfig(BaseModel):
         description=(
             "Domain tag: finance | software_engineering | healthcare | "
             "ecommerce | office_enterprise_management | daily_life | "
-            "social_interaction | legal_compliance | real_estate | "
-            "journalism_media."
+            "social_interaction | legal_compliance."
         ),
     )
     family: str | None = Field(

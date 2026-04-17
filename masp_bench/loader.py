@@ -65,20 +65,10 @@ def resolve_task_path(
     tasks_dir = project_root / "tasks"
     name = raw.name
     if name.endswith((".yaml", ".yml")):
-        for sub in (
-            "finance",
-            "sde",
-            "ecommerce",
-            "healthcare",
-            "daily_life",
-            "social_interaction",
-            "legal_compliance",
-            "real_estate",
-            "journalism_media",
-            "office",
-            "office_enterprise_management",
-        ):
-            candidates.append(tasks_dir / sub / name)
+        for domain_dir in sorted(tasks_dir.iterdir()):
+            if domain_dir.is_dir():
+                for match in domain_dir.rglob(name):
+                    candidates.append(match)
 
     for c in _dedupe(candidates):
         if c.is_file():

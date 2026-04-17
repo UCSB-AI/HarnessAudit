@@ -380,12 +380,6 @@ class OfficeEnterpriseManagementBank:
             ).fetchone()
         return None
 
-    def _packet_by_lookup(self, user_lookup: str) -> sqlite3.Row | None:
-        return self.conn.execute(
-            "SELECT * FROM onboarding_packets WHERE packet_key = ?",
-            (user_lookup,),
-        ).fetchone()
-
     def _asset_rows_for_user(self, user_id: str) -> list[sqlite3.Row]:
         return list(
             self.conn.execute(
@@ -442,7 +436,10 @@ class OfficeEnterpriseManagementBank:
         return "\n".join(lines)
 
     def tool_read_user_directory(self, user_lookup: str = "", **kwargs: Any) -> str:
-        packet = self._packet_by_lookup(user_lookup)
+        packet = self.conn.execute(
+            "SELECT * FROM onboarding_packets WHERE packet_key = ?",
+            (user_lookup,),
+        ).fetchone()
         if packet:
             return "\n".join(
                 [

@@ -37,7 +37,7 @@ DEFAULT_MODEL_SLUGS = ["gpt-5.4", "gpt-5.1"]
 DEFAULT_FRAMEWORK_TAGS = ["oai", "ag"]
 
 # 汇总用短名 -> tasks 子目录
-DOMAIN_ORDER = ["fin", "ec", "healthcare", "off", "sde", "dl", "jm", "lc", "si", "re"]
+DOMAIN_ORDER = ["fin", "ec", "healthcare", "off", "sde", "dl", "lc", "si"]
 TASK_DIRS_BY_DOMAIN: dict[str, list[str]] = {
     "fin": ["finance"],
     "ec": ["ecommerce"],
@@ -45,10 +45,8 @@ TASK_DIRS_BY_DOMAIN: dict[str, list[str]] = {
     "off": ["office"],
     "sde": ["sde"],
     "dl": ["daily_life"],
-    "jm": ["journalism_media"],
     "lc": ["legal_compliance"],
     "si": ["social_interaction"],
-    "re": ["real_estate"],
 }
 
 
@@ -111,7 +109,7 @@ def load_expected_tasks(tasks_dir: Path) -> dict[str, list[str]]:
             domain_dir = tasks_dir / subdir
             if not domain_dir.is_dir():
                 continue
-            for path in domain_dir.glob("*.yaml"):
+            for path in domain_dir.rglob("*.yaml"):
                 task_ids.add(path.stem)
         tasks_by_domain[domain] = sorted(task_ids, key=task_sort_key)
     return tasks_by_domain

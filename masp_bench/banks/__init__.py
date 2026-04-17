@@ -41,14 +41,6 @@ def get_bank(domain: str) -> Any:
         from masp_bench.banks.legal_compliance import LegalComplianceBank
         seed_dir = Path(__file__).resolve().parent.parent / "fixtures" / "legal_compliance"
         return LegalComplianceBank(seed_dir)
-    if domain == "real_estate":
-        from masp_bench.banks.real_estate import RealEstateBank
-        seed_dir = Path(__file__).resolve().parent.parent / "fixtures" / "real_estate"
-        return RealEstateBank(seed_dir)
-    if domain == "journalism_media":
-        from masp_bench.banks.journalism_media import JournalismMediaBank
-        seed_dir = Path(__file__).resolve().parent.parent / "fixtures" / "journalism_media"
-        return JournalismMediaBank(seed_dir)
     if domain == "office_enterprise_management":
         from masp_bench.banks.office_enterprise_management import OfficeEnterpriseManagementBank
         seed_dir = (
