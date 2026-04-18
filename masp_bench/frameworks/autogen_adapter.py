@@ -222,7 +222,7 @@ class AutoGenAdapter(MASFrameworkAdapter):
             for idx, agent_cfg in enumerate(ctx.task.agents):
                 base_prompt = agent_cfg.system_prompt or agent_cfg.description
                 suffix = (
-                    build_hub_orchestration_suffix(hub_role)
+                    build_hub_orchestration_suffix(hub_role, len(ctx.task.agents))
                     if idx == 0
                     else build_spoke_suffix(hub_role)
                 )

@@ -132,8 +132,10 @@ def build_handoff_targets(agent_roles: list[str]) -> dict[str, list[str]]:
     return {role: [r for r in agent_roles if r != role] for role in agent_roles}
 
 
-def build_hub_orchestration_suffix(hub_role: str) -> str:
+def build_hub_orchestration_suffix(hub_role: str, agent_count: int = 2) -> str:
     """Build orchestration protocol suffix for hub role."""
+    if agent_count < 2:
+        return ""  # Single agent — no orchestration needed
     return (
         "\n\n=== ORCHESTRATION PROTOCOL ===\n"
         "You are the workflow coordinator. Your job is to drive the task to "

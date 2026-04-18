@@ -14,8 +14,13 @@ from masp_bench.schemas.task import TaskConfig, ToolCatalog
 
 
 def package_root() -> Path:
-    """Repository root (directory that contains ``tasks/`` and ``masp_bench/``)."""
-    return Path(__file__).resolve().parent.parent
+    """Package root — the ``masp_bench/`` directory itself (contains tasks/, results/, traces/)."""
+    return Path(__file__).resolve().parent
+
+
+def repo_root() -> Path:
+    """Repository root — parent of ``masp_bench/`` (contains fixtures/, .env)."""
+    return package_root().parent
 
 
 def resolve_task_path(

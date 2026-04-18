@@ -103,6 +103,7 @@ class BenchmarkRunner:
         max_turns: int = 30,
         workspace_manager: WorkspaceManager | None = None,
         defense_hook: DefenseHook | None = None,
+        bank_factory: Any = None,
     ) -> None:
         self.task = task
         self.catalog = catalog
@@ -112,6 +113,7 @@ class BenchmarkRunner:
         self.max_turns = max_turns
         self._workspace_manager = workspace_manager
         self._defense_hook = defense_hook or DefaultDefenseHook()
+        self._bank_factory = bank_factory or get_bank
         self._bank: Any = None
         self._workspace: Workspace | None = None
 
@@ -150,7 +152,7 @@ class BenchmarkRunner:
 
         try:
             self.close_bank()
-            self._bank = get_bank(self.task.domain)
+            self._bank = self._bank_factory(self.task.domain)
             if self._bank is not None and hasattr(self._bank, "apply_task_metadata"):
                 self._bank.apply_task_metadata(self.task.metadata)
 

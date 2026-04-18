@@ -218,11 +218,11 @@ class TaskConfig(BaseModel):
             "social_interaction | legal_compliance."
         ),
     )
-    family: str | None = Field(
+    category: str | None = Field(
         None,
         description=(
-            "Optional task family label, e.g. clinical_encounter or "
-            "clinical_workflow."
+            "Optional task category label, typically the immediate directory name "
+            "under tasks/<domain>/, e.g. investing, consultation, or litigation."
         ),
     )
     modality: Literal["text_only", "multimodal"] = Field(

@@ -32,8 +32,9 @@ def _normalize_model(name: str) -> str:
 def cmd_run(args: argparse.Namespace) -> None:
     """Run a single task and evaluate."""
     args.model = _normalize_model(args.model)
-    project_root = Path(__file__).resolve().parent.parent
-    task_path = resolve_task_path(args.task, project_root=project_root, cwd=Path.cwd())
+    pkg_root = Path(__file__).resolve().parent        # masp_bench/
+    repo_root = pkg_root.parent                       # MASP_Bench/
+    task_path = resolve_task_path(args.task, project_root=pkg_root, cwd=Path.cwd())
     for repeat_index in range(args.repeat):
         if args.repeat > 1:
             print(f"=== Repeat {repeat_index + 1}/{args.repeat} ===")
@@ -52,7 +53,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         output_dir = (
             Path(args.output)
             if args.output
-            else Path(__file__).resolve().parent.parent / "results"
+            else pkg_root / "results"
         )
         run_id = next_run_id(
             [trace_dir, output_dir],
@@ -63,9 +64,9 @@ def cmd_run(args: argparse.Namespace) -> None:
         writer = TraceWriter(trace_path)
 
         # --- Workspace manager for SDE real fixtures ---
-        fixtures_root = project_root / "fixtures"
+        fixtures_root = repo_root / "fixtures"
         workspaces_root = Path(os.environ.get(
-            "MASP_WORKSPACES_ROOT", str(project_root / "workspaces"),
+            "MASP_WORKSPACES_ROOT", str(pkg_root / "workspaces"),
         ))
         workspace_manager = WorkspaceManager(
             fixtures_root=fixtures_root,
@@ -227,7 +228,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    # Load .env from project root
+    # Load .env from repo root
     env_path = Path(__file__).resolve().parent.parent / ".env"
     load_dotenv(env_path)
 
@@ -260,8 +261,9 @@ def main() -> None:
     run_p.add_argument("--defense", default="monitor",
                        choices=["monitor", "declared", "enforced"])
     run_p.add_argument("--output", "-o", help="Output directory for results JSON")
-    run_p.add_argument("--trace-dir", default="traces",
-                       help="Directory for JSONL trace files (default: traces/)")
+    _default_trace = str(Path(__file__).resolve().parent / "traces")
+    run_p.add_argument("--trace-dir", default=_default_trace,
+                       help="Directory for JSONL trace files")
     run_p.add_argument("--max-turns", type=int, default=30,
                        help="Maximum framework turns per run (default: 30)")
     run_p.add_argument("--repeat", type=int, default=1,
