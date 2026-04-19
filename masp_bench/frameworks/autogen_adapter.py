@@ -54,27 +54,100 @@ def _safe_model_name(name: str) -> str:
     return normalized
 
 
-def _autogen_task_from_input(initial_input: str | list[dict[str, Any]]) -> str:
-    """Convert benchmark input payload into AutoGen task text."""
+def _pdf_base64_to_images(b64_data: str, filename: str) -> list[Any]:
+    """Render PDF pages to AutoGen Image objects using PyMuPDF."""
+    import base64
+    import io
+
+    import fitz
+    from autogen_core import Image as AGImage
+    from PIL import Image as PILImage
+
+    pdf_bytes = base64.b64decode(b64_data)
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    parts: list[Any] = []
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        pix = page.get_pixmap(dpi=150)
+        pil_img = PILImage.open(io.BytesIO(pix.tobytes("png")))
+        parts.append(f"[Page {page_num + 1} of {filename}]")
+        parts.append(AGImage.from_pil(pil_img))
+    doc.close()
+    return parts
+
+
+def _autogen_task_from_input(initial_input: str | list[dict[str, Any]]) -> str | Any:
+    """Convert benchmark input payload into AutoGen task (str or MultiModalMessage).
+
+    For text-only tasks returns a plain string.  For multimodal tasks
+    (images / PDFs) returns a ``MultiModalMessage`` so AutoGen passes
+    real vision content to the model instead of text placeholders.
+    """
     if isinstance(initial_input, str):
         return initial_input
-    text_parts: list[str] = []
+
+    has_multimodal = False
     for message in initial_input:
         content = message.get("content", [])
         if isinstance(content, list):
             for item in content:
-                if not isinstance(item, dict):
-                    continue
-                if item.get("type") == "input_text":
-                    text = str(item.get("text", "")).strip()
-                    if text:
-                        text_parts.append(text)
-                elif item.get("type") == "input_image":
-                    text_parts.append("[image asset attached]")
-                elif item.get("type") == "input_file":
-                    filename = str(item.get("filename", "attached_file"))
-                    text_parts.append(f"[file asset attached: {filename}]")
-    return "\n".join(text_parts).strip()
+                if isinstance(item, dict) and item.get("type") in (
+                    "input_image",
+                    "input_file",
+                ):
+                    has_multimodal = True
+                    break
+
+    if not has_multimodal:
+        text_parts: list[str] = []
+        for message in initial_input:
+            content = message.get("content", [])
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "input_text":
+                        text = str(item.get("text", "")).strip()
+                        if text:
+                            text_parts.append(text)
+        return "\n".join(text_parts).strip()
+
+    # Build a MultiModalMessage with real image/PDF content.
+    from autogen_agentchat.messages import MultiModalMessage
+    from autogen_core import Image as AGImage
+
+    mm_content: list[Any] = []
+    for message in initial_input:
+        content = message.get("content", [])
+        if not isinstance(content, list):
+            continue
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+
+            if item_type == "input_text":
+                text = str(item.get("text", "")).strip()
+                if text:
+                    mm_content.append(text)
+
+            elif item_type == "input_image":
+                image_url = item.get("image_url", "")
+                if image_url and ";base64," in image_url:
+                    b64_data = image_url.split(";base64,", 1)[1]
+                    mm_content.append(AGImage.from_base64(b64_data))
+
+            elif item_type == "input_file":
+                file_data = item.get("file_data", "")
+                filename = str(item.get("filename", "file"))
+                if file_data and ";base64," in file_data:
+                    mime_prefix, b64_data = file_data.split(";base64,", 1)
+                    if "application/pdf" in mime_prefix:
+                        mm_content.extend(_pdf_base64_to_images(b64_data, filename))
+                    else:
+                        mm_content.append(f"[attached file: {filename}]")
+
+    if not mm_content:
+        return ""
+    return MultiModalMessage(content=mm_content, source="user")
 
 
 def _message_text(message: Any) -> str:

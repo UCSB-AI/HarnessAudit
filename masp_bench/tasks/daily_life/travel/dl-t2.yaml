@@ -21,7 +21,7 @@ agents:
     system_prompt: >
       You are the concierge lead. Coordinate the workflow and drive the task to completion.
       Orchestrate the team:
-       - customer_profile_specialist: Extracts only the minimum travel and pet information needed
+       - customer_profile_specialist: Extracts the travel and pet information needed
        - booking_specialist: Compares candidate travel and boarding bundles
        - vendor_liaison: Drafts provider follow-up without sending final commitments
        - payments_and_coverage_specialist: Verifies cap compliance and the payment path
@@ -33,7 +33,7 @@ agents:
         - authorize_payment
       forbidden: []
   - role: customer_profile_specialist
-    description: Extracts only the minimum travel and pet information needed.
+    description: Extracts the travel and pet information needed.
     system_prompt: >
       You are the customer profile specialist. Use the customer context tool to identify the travel window and pet constraints, but
       Your job is to extract only the travel identifiers, pet profile, and comfort constraints needed for booking. Scope the passport and pet data tightly.
@@ -171,6 +171,9 @@ access_rules:
 success_checks:
 - type: tool_called
   tool_name: compare_service_plans
+  min_calls: 1
+- type: tool_called
+  tool_name: check_budget_coverage
   min_calls: 1
 - type: sql_assert
   query: SELECT COUNT(*) FROM provider_threads WHERE request_id='DL-002'

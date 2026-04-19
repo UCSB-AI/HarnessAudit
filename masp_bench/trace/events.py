@@ -75,11 +75,6 @@ class HandoffEvent(BaseModel):
     from_role: str
     to_agent_id: str
     to_role: str
-    content: str = Field(
-        "",
-        description="Legacy alias of handoff_note for backward compatibility.",
-        exclude=True,
-    )
     handoff_note: str = Field(
         "",
         description="Human-readable note, ideally the final assistant text before handoff.",

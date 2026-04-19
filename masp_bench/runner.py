@@ -333,29 +333,6 @@ class BenchmarkRunner:
         return True
 
 
-class OpenAIAgentsRunner(BenchmarkRunner):
-    """Backward-compatible runner alias for OpenAI adapter."""
-
-    def __init__(
-        self,
-        task: TaskConfig,
-        catalog: ToolCatalog,
-        model: str = "gpt-5.4",
-        trace_writer: TraceWriter | None = None,
-        max_turns: int = 30,
-        workspace_manager: WorkspaceManager | None = None,
-    ) -> None:
-        super().__init__(
-            task=task,
-            catalog=catalog,
-            model=model,
-            framework="openai_agents",
-            trace_writer=trace_writer,
-            max_turns=max_turns,
-            workspace_manager=workspace_manager,
-        )
-
-
 def _eval_expect(actual: Any, expect: str) -> bool:
     """Evaluate scalar expectation expressions."""
     expect = expect.strip()
@@ -383,7 +360,6 @@ def _eval_expect(actual: Any, expect: str) -> bool:
 __all__ = [
     "BenchmarkRunner",
     "DefenseMode",
-    "OpenAIAgentsRunner",
     "build_task_input",
     "framework_run_id_slug",
     "next_run_id",
