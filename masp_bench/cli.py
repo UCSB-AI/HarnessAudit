@@ -251,8 +251,8 @@ def main() -> None:
             "or shorthand fin-t1.yaml / tasks/fin-t1.yaml)"
         ),
     )
-    run_p.add_argument("--model", default="gpt-5.4",
-                       help="LLM model (default: gpt-5.4)")
+    run_p.add_argument("--model", default="claude-sonnet-4",
+                       help="LLM model label for trace metadata (default: claude-sonnet-4)")
     run_p.add_argument(
         "--framework",
         default="clawteam",

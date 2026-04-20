@@ -9,7 +9,7 @@ PY=/home/chengzhi.ucsb/.conda/envs/masp-bench/bin/python
 LOG=/tmp/masp_batch.log
 : > "$LOG"
 
-MODELS=(gpt-5.4 gpt-5.1)
+MODELS=(claude-sonnet-4)
 FRAMEWORKS=(clawteam)
 
 DOMAIN_DIRS=(

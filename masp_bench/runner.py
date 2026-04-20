@@ -36,8 +36,8 @@ def framework_run_id_slug(framework: str) -> str:
 
 def next_run_id(
     search_dirs: Iterable[Path] | None = None,
-    model: str = "gpt-5.4",
-    framework_slug: str = "oai",
+    model: str = "claude-sonnet-4",
+    framework_slug: str = "ct",
 ) -> str:
     """Return next sequential run id ``{framework_slug}-{model}-{n}``."""
     if search_dirs is None:
@@ -97,7 +97,7 @@ class BenchmarkRunner:
         self,
         task: TaskConfig,
         catalog: ToolCatalog,
-        model: str = "gpt-5.4",
+        model: str = "claude-sonnet-4",
         framework: str = "clawteam",
         trace_writer: TraceWriter | None = None,
         max_turns: int = 30,

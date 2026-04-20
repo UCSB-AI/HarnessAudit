@@ -25,6 +25,44 @@ log = logging.getLogger(__name__)
 
 DEFAULT_AGENT_TIMEOUT = 600
 
+_CLAUDE_JSON = Path.home() / ".claude.json"
+
+
+def _register_mcp_for_project(
+    project_path: str, server_name: str, server_config: dict[str, Any]
+) -> None:
+    """Add an MCP server entry to ~/.claude.json for a specific project path.
+
+    Claude Code stores project-level MCP config at::
+
+        ~/.claude.json → projects → {abs_path} → mcpServers → {server_name}
+    """
+    cfg: dict[str, Any] = {}
+    if _CLAUDE_JSON.exists():
+        cfg = json.loads(_CLAUDE_JSON.read_text(encoding="utf-8"))
+
+    projects = cfg.setdefault("projects", {})
+    project = projects.setdefault(project_path, {})
+    mcp_servers = project.setdefault("mcpServers", {})
+    mcp_servers[server_name] = server_config
+
+    _CLAUDE_JSON.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+
+def _unregister_mcp_for_project(project_path: str, server_name: str) -> None:
+    """Remove an MCP server entry from ~/.claude.json for a specific project."""
+    if not _CLAUDE_JSON.exists():
+        return
+    try:
+        cfg = json.loads(_CLAUDE_JSON.read_text(encoding="utf-8"))
+        project = cfg.get("projects", {}).get(project_path, {})
+        mcp_servers = project.get("mcpServers", {})
+        if server_name in mcp_servers:
+            del mcp_servers[server_name]
+            _CLAUDE_JSON.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    except Exception:
+        log.debug("Failed to unregister MCP for %s", project_path, exc_info=True)
+
 
 class ClawTeamAdapter(MASFrameworkAdapter):
     """Run tasks by spawning ClawTeam-managed Claude Code agents."""
@@ -53,9 +91,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         mcp_proc: subprocess.Popen | None = None
         bank_dump_path = Path(f"/tmp/masp_bank_{ctx.run_id}.db")
         final_text = ""
+        worktrees: dict[str, Path] = {}
         expected_agent_count = len(ctx.task.agents)
 
         try:
+            # 0. Clean up stale team from previous failed run
+            if TeamManager.team_exists(team_name):
+                log.warning("Stale team %s found, cleaning up", team_name)
+                TeamManager.cleanup(team_name)
+
             # 1. Start domain MCP server (SSE transport)
             mcp_proc, mcp_port = await self._start_mcp_server(ctx, bank_dump_path)
             log.info("MCP server started on port %d", mcp_port)
@@ -70,8 +114,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 description=f"MASP run {ctx.run_id} — {ctx.task.task_id}",
             )
 
-            # 3. Setup working directories + .claude.json per agent
-            worktrees: dict[str, Path] = {}
+            # 3. Setup working directories + MCP config per agent
             for agent_cfg in ctx.task.agents:
                 wt_path = self._setup_agent_dir(team_name, agent_cfg.role, mcp_port)
                 worktrees[agent_cfg.role] = wt_path
@@ -171,8 +214,9 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             )
         finally:
             self._stop_mcp_server(mcp_proc)
+            # Remove MCP entries from ~/.claude.json
+            self._unregister_mcp_for_agents(worktrees)
             self._cleanup_team(team_name)
-            # Clean up dump file
             try:
                 bank_dump_path.unlink(missing_ok=True)
             except Exception:
@@ -204,11 +248,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         )
 
         # Read the PORT=<n> line from stdout.
-        loop = asyncio.get_running_loop()  # fix #9
+        loop = asyncio.get_running_loop()
         port = 0
+        stdout = proc.stdout
+        if stdout is None:
+            proc.kill()
+            raise RuntimeError("MCP server subprocess has no stdout pipe")
         try:
             line = await asyncio.wait_for(
-                loop.run_in_executor(None, proc.stdout.readline),
+                loop.run_in_executor(None, stdout.readline),
                 timeout=30,
             )
             if line and line.startswith("PORT="):
@@ -260,7 +308,12 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
     @staticmethod
     def _setup_agent_dir(team_name: str, agent_role: str, mcp_port: int) -> Path:
-        """Create a working directory for the agent with .claude.json MCP config."""
+        """Create a working directory and register MCP server for the agent.
+
+        Claude Code reads project-level MCP config from
+        ``~/.claude.json  →  projects.<abs-path>.mcpServers``,
+        NOT from a ``.claude.json`` file in the working directory.
+        """
         from clawteam.team.models import get_data_dir
 
         base = get_data_dir() / "workspaces" / team_name
@@ -268,19 +321,34 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         wt_path = base / agent_role
         wt_path.mkdir(parents=True, exist_ok=True)
 
-        # .claude.json = project-local MCP config (scope=local)
-        claude_json = {
-            "mcpServers": {
-                "masp_tools": {
-                    "type": "sse",
-                    "url": f"http://127.0.0.1:{mcp_port}/sse",
-                }
-            }
-        }
-        (wt_path / ".claude.json").write_text(
-            json.dumps(claude_json, indent=2), encoding="utf-8"
+        project = str(wt_path)
+
+        # 1. Domain tools (SSE — shared Bank)
+        _register_mcp_for_project(
+            project_path=project,
+            server_name="masp_tools",
+            server_config={"type": "sse", "url": f"http://127.0.0.1:{mcp_port}/sse"},
         )
+
+        # 2. ClawTeam coordination tools (stdio — mailbox_send, mailbox_receive, etc.)
+        import shutil
+
+        clawteam_mcp_bin = shutil.which("clawteam-mcp") or "clawteam-mcp"
+        _register_mcp_for_project(
+            project_path=project,
+            server_name="clawteam",
+            server_config={"type": "stdio", "command": clawteam_mcp_bin},
+        )
+
         return wt_path
+
+    @staticmethod
+    def _unregister_mcp_for_agents(worktrees: dict[str, Path]) -> None:
+        """Remove MCP entries from ~/.claude.json for all agent worktrees."""
+        for wt_path in worktrees.values():
+            project = str(wt_path)
+            _unregister_mcp_for_project(project, "masp_tools")
+            _unregister_mcp_for_project(project, "clawteam")
 
     # ------------------------------------------------------------------
     # Agent completion detection

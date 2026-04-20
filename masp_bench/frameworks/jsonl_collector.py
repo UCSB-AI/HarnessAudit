@@ -30,12 +30,18 @@ MCP_SERVER_NAME = "masp_tools"
 def _encode_project_path(worktree_path: Path) -> str:
     """Encode a filesystem path to Claude Code's project directory name.
 
-    Verified against real data::
+    Claude Code replaces ``/``, ``.``, and ``_`` with ``-``::
 
-        /home/chengzhi.ucsb/.clawteam/workspaces/demo/backend-dev
-        → -home-chengzhi-ucsb--clawteam-workspaces-demo-backend-dev
+        /home/chengzhi.ucsb/.clawteam/workspaces/team/concierge_lead
+        → -home-chengzhi-ucsb--clawteam-workspaces-team-concierge-lead
     """
-    return "-" + str(worktree_path).lstrip("/").replace("/", "-").replace(".", "-")
+    return "-" + (
+        str(worktree_path)
+        .lstrip("/")
+        .replace("/", "-")
+        .replace(".", "-")
+        .replace("_", "-")
+    )
 
 
 # ---------------------------------------------------------------------------

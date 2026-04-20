@@ -9,7 +9,7 @@ PY=/home/chengzhi.ucsb/.conda/envs/masp-bench/bin/python
 LOG=/tmp/masp_smoke.log
 : > "$LOG"
 
-MODEL=gpt-5.1
+MODEL=claude-sonnet-4
 FRAMEWORKS=(clawteam)
 
 DOMAIN_DIRS=(

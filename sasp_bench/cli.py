@@ -228,7 +228,7 @@ def main() -> None:
 
     run_p = sub.add_parser("run", help="Run a single SA task")
     run_p.add_argument("task", help="SA task YAML path")
-    run_p.add_argument("--model", default="gpt-5.1")
+    run_p.add_argument("--model", default="claude-sonnet-4")
     run_p.add_argument("--framework", default="clawteam",
                        choices=["clawteam"])
     run_p.add_argument("--defense", default="monitor",

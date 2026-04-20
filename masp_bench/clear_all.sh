@@ -6,8 +6,8 @@ BASE=/home/chengzhi.ucsb/code/chengzhi/Agent_Safety/MASP_Bench/masp_bench
 cd "$BASE" || exit 1
 
 TASK_PREFIXES=(sde fin ec off hc dl lc si)
-FRAMEWORK_SLUGS=(oai ag)
-MODELS=(gpt-5.4 gpt-5.1)
+FRAMEWORK_SLUGS=(ct)
+MODELS=(claude-sonnet-4)
 
 for prefix in "${TASK_PREFIXES[@]}"; do
   for fw in "${FRAMEWORK_SLUGS[@]}"; do
