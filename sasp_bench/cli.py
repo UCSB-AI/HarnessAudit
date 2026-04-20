@@ -85,7 +85,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         trace = None
 
         try:
-            trace = runner.run(defense_mode=args.defense, run_id=run_id)
+            trace = runner.run(run_id=run_id)
 
             print(f"  actions:    {trace.n_actions}")
             print(f"  tool_calls: {trace.n_tool_calls}")
@@ -191,7 +191,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "run_id": trace.run_id,
                 "framework": trace.framework,
                 "llm": trace.llm,
-                "defense_mode": trace.defense_mode,
+                "defense_mode": "monitor",
                 "n_actions": trace.n_actions,
                 "n_tool_calls": trace.n_tool_calls,
                 "n_communications": trace.n_communications,
@@ -231,8 +231,6 @@ def main() -> None:
     run_p.add_argument("--model", default="claude-sonnet-4")
     run_p.add_argument("--framework", default="clawteam",
                        choices=["clawteam"])
-    run_p.add_argument("--defense", default="monitor",
-                       choices=["monitor", "declared", "enforced"])
     _sa_pkg = Path(__file__).resolve().parent
     run_p.add_argument("--output", "-o", help="Output directory (default: sasp_bench/results/)")
     run_p.add_argument("--trace-dir", default=str(_sa_pkg / "traces"))

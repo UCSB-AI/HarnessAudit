@@ -3,7 +3,7 @@
 Usage:
     python -m masp_bench run tasks/finance/fin-t1.yaml
     python -m masp_bench run fin-t1.yaml
-    python -m masp_bench run tasks/finance/fin-t1.yaml --model gpt-5.4 --output results/
+    python -m masp_bench run tasks/finance/fin-t1.yaml --model claude-sonnet-4 --output results/
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -19,19 +18,13 @@ from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
 from masp_bench.loader import load_task_with_tools, resolve_task_path
-from masp_bench.runner import BenchmarkRunner, framework_run_id_slug, next_run_id
+from masp_bench.runner import BenchmarkRunner, next_run_id
 from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
 
 
-def _normalize_model(name: str) -> str:
-    """Strip date suffixes (e.g. 'gpt-5.4-2026-03-05' → 'gpt-5.4')."""
-    return re.sub(r"-\d{4}-\d{2}-\d{2}$", "", name)
-
-
 def cmd_run(args: argparse.Namespace) -> None:
     """Run a single task and evaluate."""
-    args.model = _normalize_model(args.model)
     pkg_root = Path(__file__).resolve().parent        # masp_bench/
     repo_root = pkg_root.parent                       # MASP_Bench/
     task_path = resolve_task_path(args.task, project_root=pkg_root, cwd=Path.cwd())
@@ -55,11 +48,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             if args.output
             else pkg_root / "results"
         )
-        run_id = next_run_id(
-            [trace_dir, output_dir],
-            args.model,
-            framework_slug=framework_run_id_slug(args.framework),
-        )
+        run_id = next_run_id(model=args.model)
         trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
 
@@ -78,7 +67,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             task, catalog, model=args.model, framework=args.framework, trace_writer=writer,
             max_turns=args.max_turns,
             workspace_manager=workspace_manager,
-            agent_timeout=getattr(args, "agent_timeout", 600),
+            agent_timeout=getattr(args, "agent_timeout", 300),
         )
 
         metrics = None
@@ -86,7 +75,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         trace = None
 
         try:
-            trace = runner.run(defense_mode=args.defense, run_id=run_id)
+            trace = runner.run(run_id=run_id)
 
             print(f"  actions:    {trace.n_actions}")
             print(f"  tool_calls: {trace.n_tool_calls}")
@@ -190,7 +179,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 if runner.dump_bank_to_file(db_path):
                     print(f"Bank DB saved to {db_path}")
 
-            # Explicitly release per-run SQLite resources once optional dump is done.
             runner.close_bank()
 
         if args.output:
@@ -203,20 +191,15 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "run_id": trace.run_id,
                 "framework": trace.framework,
                 "llm": trace.llm,
-                "defense_mode": trace.defense_mode,
                 "n_actions": trace.n_actions,
                 "n_tool_calls": trace.n_tool_calls,
                 "n_communications": trace.n_communications,
                 "n_violations": len(violations),
-                # Layer 1
                 "access_score": metrics.access_score,
-                # Layer 2
                 "op_privacy_score": metrics.op_privacy_score,
                 "info_privacy_score": metrics.info_privacy_score,
-                # Layer 3
                 "tsr": metrics.tsr,
                 "pqsr": metrics.pqsr,
-                "qsr": metrics.qsr,  # alias for pqsr (backward compat)
                 "violations_by_code": metrics.violations_by_code,
                 "violations_by_severity": metrics.violations_by_severity,
                 "trace_file": str(trace_path),
@@ -229,13 +212,8 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    # Load .env from repo root
     env_path = Path(__file__).resolve().parent.parent / ".env"
     load_dotenv(env_path)
-
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY not set. Add it to .env or export it.", file=sys.stderr)
-        sys.exit(1)
 
     parser = argparse.ArgumentParser(
         prog="masp-bench",
@@ -259,10 +237,8 @@ def main() -> None:
         choices=["clawteam"],
         help="MAS framework adapter (default: clawteam)",
     )
-    run_p.add_argument("--agent-timeout", type=int, default=600,
-                       help="Max seconds to wait for all agents to exit (default: 600)")
-    run_p.add_argument("--defense", default="monitor",
-                       choices=["monitor", "declared", "enforced"])
+    run_p.add_argument("--agent-timeout", type=int, default=300,
+                       help="Max seconds to wait for all agents to exit (default: 300)")
     run_p.add_argument("--output", "-o", help="Output directory for results JSON")
     _default_trace = str(Path(__file__).resolve().parent / "traces")
     run_p.add_argument("--trace-dir", default=_default_trace,

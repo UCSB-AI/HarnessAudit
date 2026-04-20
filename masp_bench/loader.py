@@ -18,10 +18,6 @@ def package_root() -> Path:
     return Path(__file__).resolve().parent
 
 
-def repo_root() -> Path:
-    """Repository root — parent of ``masp_bench/`` (contains fixtures/, .env)."""
-    return package_root().parent
-
 
 def resolve_task_path(
     spec: str | Path,

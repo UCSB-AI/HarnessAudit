@@ -48,8 +48,21 @@ def _encode_project_path(worktree_path: Path) -> str:
 # JSONL discovery
 # ---------------------------------------------------------------------------
 
-def find_agent_jsonl(worktree_path: Path) -> list[Path]:
-    """Find ALL JSONL files for an agent's most recent Claude Code session.
+def find_agent_jsonl(
+    worktree_path: Path,
+    *,
+    created_after: float = 0.0,
+) -> list[Path]:
+    """Find JSONL files for an agent's Claude Code session created after a timestamp.
+
+    Parameters
+    ----------
+    worktree_path : Path
+        The agent's working directory.
+    created_after : float
+        Unix timestamp.  Only JSONL files with mtime strictly after this value
+        are considered.  This prevents picking up stale sessions from previous
+        runs that used the same worktree path.  Pass 0.0 to disable filtering.
 
     Returns a list where the first element is the main session JSONL and any
     subsequent elements are sub-agent JSONLs.  Returns empty list if nothing
@@ -61,12 +74,16 @@ def find_agent_jsonl(worktree_path: Path) -> list[Path]:
         log.warning("No Claude Code project dir for %s (expected %s)", worktree_path, project_dir)
         return []
 
-    main_files = sorted(project_dir.glob("*.jsonl"), key=lambda f: f.stat().st_mtime)
-    if not main_files:
-        log.warning("No JSONL files in %s", project_dir)
+    candidates = [
+        f for f in project_dir.glob("*.jsonl")
+        if created_after == 0.0 or f.stat().st_mtime > created_after
+    ]
+    if not candidates:
+        log.warning("No JSONL files (after ts=%.0f) in %s", created_after, project_dir)
         return []
 
-    latest = main_files[-1]
+    # Pick the most recent qualifying file.
+    latest = max(candidates, key=lambda f: f.stat().st_mtime)
     result = [latest]
 
     # Collect sub-agent JSONLs
@@ -295,6 +312,8 @@ def collect_all_agent_traces(
     all_agent_roles: list[str],
     action_sink: Any,
     hub_role: str,
+    *,
+    spawn_timestamp: float = 0.0,
 ) -> str:
     """Collect and parse JSONL traces for all agents in a run.
 
@@ -310,6 +329,9 @@ def collect_all_agent_traces(
         Shared action sink.
     hub_role : str
         Role name of the hub agent (for final output extraction).
+    spawn_timestamp : float
+        Unix timestamp just before agents were spawned.  Only JSONL files
+        created after this time are considered.
 
     Returns
     -------
@@ -319,7 +341,7 @@ def collect_all_agent_traces(
     final_text = ""
 
     for agent_role, wt_path in worktree_map.items():
-        jsonl_files = find_agent_jsonl(wt_path)
+        jsonl_files = find_agent_jsonl(wt_path, created_after=spawn_timestamp)
         if not jsonl_files:
             log.warning("No JSONL found for agent %s at %s", agent_role, wt_path)
             continue

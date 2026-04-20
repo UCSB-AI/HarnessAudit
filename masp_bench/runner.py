@@ -1,25 +1,21 @@
-"""Task runner — framework-agnostic orchestration with AAP adapters."""
+"""Task runner — framework-agnostic orchestration with adapters."""
 
 from __future__ import annotations
 
 import asyncio
 import os
-import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from masp_bench.banks import get_bank
 from masp_bench.frameworks import (
-    DefaultDefenseHook,
-    DefenseHook,
-    DefenseMode,
     RunContext,
     get_framework_adapter,
 )
 from masp_bench.frameworks.action_sink import ActionSink
 from masp_bench.frameworks.common import build_task_input
-from masp_bench.frameworks.tool_runtime import ToolRuntime
 from masp_bench.schemas.actions import ObservableAction
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
 from masp_bench.schemas.trace import ExecutionTrace
@@ -30,34 +26,17 @@ from masp_bench.workspace import Workspace, WorkspaceManager
 
 def framework_run_id_slug(framework: str) -> str:
     """Map framework id to stable run-id prefix."""
-    mapping = {"clawteam": "ct", "openai_agents": "oai", "autogen": "ag"}
-    return mapping.get(framework, re.sub(r"[^a-z0-9]+", "", framework.lower()) or "run")
+    mapping = {"clawteam": "ct"}
+    return mapping.get(framework, framework[:3])
 
 
 def next_run_id(
-    search_dirs: Iterable[Path] | None = None,
     model: str = "claude-sonnet-4",
     framework_slug: str = "ct",
 ) -> str:
-    """Return next sequential run id ``{framework_slug}-{model}-{n}``."""
-    if search_dirs is None:
-        project_root = Path(__file__).resolve().parent.parent
-        search_dirs = [project_root / "traces", project_root / "results"]
-
-    tail_re = re.compile(
-        rf"_{re.escape(framework_slug)}-.+-(\d+)\.(?:jsonl|json|sqlite)$",
-        re.IGNORECASE,
-    )
-    max_index = 0
-    for directory in search_dirs:
-        if not directory.exists() or not directory.is_dir():
-            continue
-        for entry in directory.iterdir():
-            match = tail_re.search(entry.name)
-            if not match:
-                continue
-            max_index = max(max_index, int(match.group(1)))
-    return f"{framework_slug}-{model}-{max_index + 1}"
+    """Return a unique run id: ``{framework_slug}-{model}-{short_uuid}``."""
+    short = uuid.uuid4().hex[:8]
+    return f"{framework_slug}-{model}-{short}"
 
 
 def _build_execution_trace(
@@ -67,7 +46,6 @@ def _build_execution_trace(
     domain: str,
     framework: str,
     llm: str,
-    defense_mode: DefenseMode,
     actions: list[ObservableAction],
     started_at: datetime,
     task_completed: bool,
@@ -79,7 +57,7 @@ def _build_execution_trace(
         domain=domain,
         framework=framework,
         llm=llm,
-        defense_mode=defense_mode,
+        defense_mode="monitor",
         actions=actions,
         decisions=[],
         task_completed=task_completed,
@@ -102,9 +80,8 @@ class BenchmarkRunner:
         trace_writer: TraceWriter | None = None,
         max_turns: int = 30,
         workspace_manager: WorkspaceManager | None = None,
-        defense_hook: DefenseHook | None = None,
         bank_factory: Any = None,
-        agent_timeout: int = 600,
+        agent_timeout: int = 300,
     ) -> None:
         self.task = task
         self.catalog = catalog
@@ -113,7 +90,6 @@ class BenchmarkRunner:
         self._trace_writer = trace_writer
         self.max_turns = max_turns
         self._workspace_manager = workspace_manager
-        self._defense_hook = defense_hook or DefaultDefenseHook()
         self._bank_factory = bank_factory or get_bank
         self._agent_timeout = agent_timeout
         self._bank: Any = None
@@ -121,15 +97,14 @@ class BenchmarkRunner:
 
     def run(
         self,
-        defense_mode: DefenseMode = "monitor",
         run_id: str | None = None,
+        **_kwargs: Any,
     ) -> ExecutionTrace:
         """Synchronous entry point."""
-        return asyncio.run(self._run_async(defense_mode=defense_mode, run_id=run_id))
+        return asyncio.run(self._run_async(run_id=run_id))
 
     async def _run_async(
         self,
-        defense_mode: DefenseMode,
         run_id: str | None = None,
     ) -> ExecutionTrace:
         run_id = run_id or next_run_id(
@@ -141,9 +116,7 @@ class BenchmarkRunner:
 
         action_sink = ActionSink(
             run_id=run_id,
-            defense_mode=defense_mode,
             trace_writer=trace_writer,
-            defense_hook=self._defense_hook,
         )
         final_text = ""
         task_completed = False
@@ -166,7 +139,7 @@ class BenchmarkRunner:
                         domain=self.task.domain,
                         framework=self.framework,
                         model=self.model,
-                        defense_mode=defense_mode,
+                        defense_mode="monitor",
                         agents=[
                             AgentInfo(
                                 agent_id=agent_cfg.role,
@@ -179,13 +152,6 @@ class BenchmarkRunner:
                     )
                 )
 
-            tool_runtime = ToolRuntime(
-                run_id=run_id,
-                defense_mode=defense_mode,
-                bank=self._bank,
-                workspace=self._workspace,
-                defense_hook=self._defense_hook,
-            )
             adapter = get_framework_adapter(
                 self.framework, agent_timeout=self._agent_timeout
             )
@@ -196,13 +162,11 @@ class BenchmarkRunner:
                     catalog=self.catalog,
                     model=self.model,
                     framework=self.framework,
-                    defense_mode=defense_mode,
                     max_turns=self.max_turns,
                     trace_writer=trace_writer,
                     bank=self._bank,
                     workspace=self._workspace,
                     action_sink=action_sink,
-                    tool_runtime=tool_runtime,
                 ),
                 build_task_input(self.task),
             )
@@ -221,7 +185,6 @@ class BenchmarkRunner:
             domain=self.task.domain,
             framework=self.framework,
             llm=self.model,
-            defense_mode=defense_mode,
             actions=action_sink.actions,
             started_at=run_started_at,
             task_completed=task_completed,
@@ -363,7 +326,6 @@ def _eval_expect(actual: Any, expect: str) -> bool:
 
 __all__ = [
     "BenchmarkRunner",
-    "DefenseMode",
     "build_task_input",
     "framework_run_id_slug",
     "next_run_id",

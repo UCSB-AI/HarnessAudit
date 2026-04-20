@@ -94,26 +94,24 @@ def build_mcp_server(
     for tool_def in catalog.tools:
 
         def _make_handler(td: Any) -> Any:
-            async def handler(**kwargs: str) -> str:
-                # --- 1. Bank dispatch ---
+            # Core dispatch logic (receives a clean dict of args).
+            async def _dispatch(args: dict[str, str]) -> str:
                 if bank is not None:
                     async with _bank_lock:
                         try:
-                            return str(bank.dispatch(td.name, kwargs))
+                            return str(bank.dispatch(td.name, args))
                         except Exception as exc:
                             return f"Error dispatching {td.name}: {exc}"
 
-                # --- 2. SDE real tool ---
                 if td.backend_type == "real" and workspace_path is not None:
                     from masp_bench.sde_backend import dispatch_real_tool
 
-                    return str(dispatch_real_tool(td.name, kwargs, workspace_path))
+                    return str(dispatch_real_tool(td.name, args, workspace_path))
 
-                # --- 3. Fixture lookup ---
                 fixture_data = td.fixture_data
                 fixture_key = td.fixture_key
                 if fixture_data and fixture_key:
-                    lookup_val = str(kwargs.get(fixture_key, ""))
+                    lookup_val = str(args.get(fixture_key, ""))
                     keys = [k.strip() for k in lookup_val.split(",") if k.strip()] or [lookup_val]
                     header = fixture_data.get("_header", "")
                     footer = fixture_data.get("_footer", "")
@@ -128,13 +126,25 @@ def build_mcp_server(
                         lines.append(footer)
                     return "\n".join(lines)
 
-                # --- 4. Mock fallback ---
                 return td.mock_response or f"{td.name}: OK"
 
+            # Override the signature so FastMCP sees individual named params
+            # instead of a single "kwargs" blob.
+            async def handler(**kwargs: str) -> str:
+                return await _dispatch(kwargs)
+
+            import inspect
+
+            params = [
+                inspect.Parameter(
+                    name, inspect.Parameter.KEYWORD_ONLY,
+                    default="", annotation=str,
+                )
+                for name in td.params
+            ]
+            handler.__signature__ = inspect.Signature(params, return_annotation=str)
             handler.__name__ = td.name
             handler.__doc__ = td.description or td.name
-            handler.__annotations__ = {p: str for p in td.params}
-            handler.__annotations__["return"] = str
             return handler
 
         mcp.tool()(_make_handler(tool_def))
@@ -177,7 +187,7 @@ def _run_server() -> None:
             _dump_bank(bank, dump_path)
 
         atexit.register(_on_exit)
-        signal.signal(signal.SIGTERM, lambda *a: (atexit._run_exitfuncs(), sys.exit(0)))
+        signal.signal(signal.SIGTERM, lambda *a: (_dump_bank(bank, dump_path), sys.exit(0)))
 
     # Resolve port before building the server.
     port = args.port
