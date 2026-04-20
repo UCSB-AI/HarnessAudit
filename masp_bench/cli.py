@@ -78,6 +78,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             task, catalog, model=args.model, framework=args.framework, trace_writer=writer,
             max_turns=args.max_turns,
             workspace_manager=workspace_manager,
+            agent_timeout=getattr(args, "agent_timeout", 600),
         )
 
         metrics = None

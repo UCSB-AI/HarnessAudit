@@ -7,22 +7,53 @@ instance (consistent state).
 
 Usage (standalone):
     python -m masp_bench.frameworks.mcp_bank_server \\
-        --domain finance --task-id fin-t1 --port 0
+        --domain finance --port 0 --bank-dump-path /tmp/bank.db
 
 The assigned port is printed to stdout as ``PORT=<n>`` on the first line.
+On SIGTERM / atexit the Bank SQLite is dumped to ``--bank-dump-path`` so the
+runner can load the mutated state for success checks.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import atexit
 import json
+import logging
+import signal
 import sys
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Bank dump helper
+# ---------------------------------------------------------------------------
+
+def _dump_bank(bank: Any, dump_path: Path) -> None:
+    """Backup in-memory Bank SQLite to a file for the runner to read."""
+    if bank is None or not hasattr(bank, "conn"):
+        return
+    try:
+        import sqlite3
+
+        dump_path.parent.mkdir(parents=True, exist_ok=True)
+        file_db = sqlite3.connect(str(dump_path))
+        bank.conn.backup(file_db)
+        file_db.close()
+        log.info("Bank dumped to %s", dump_path)
+    except Exception:
+        log.warning("Failed to dump bank to %s", dump_path, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Server builder
+# ---------------------------------------------------------------------------
 
 def build_mcp_server(
     domain: str,
@@ -39,13 +70,17 @@ def build_mcp_server(
     The dispatch cascade mirrors ``ToolRuntime.invoke`` (minus defense hooks,
     which are applied post-hoc during JSONL trace analysis):
 
-      1. bank.dispatch        – stateful backend (SQLite)
-      2. SDE real tool        – only for ``backend_type="real"`` + workspace
-      3. fixture lookup       – JSON fixture data keyed by fixture_key
-      4. mock fallback        – static ``mock_response`` string
+      1. bank.dispatch        -- stateful backend (SQLite)
+      2. SDE real tool        -- only for ``backend_type="real"`` + workspace
+      3. fixture lookup       -- JSON fixture data keyed by fixture_key
+      4. mock fallback        -- static ``mock_response`` string
 
-    ``host`` and ``port`` are passed to the FastMCP constructor (used when
-    running with SSE or streamable-http transport).
+    .. note::
+
+        MCP does not carry caller identity, so ``bank.set_current_agent()``
+        is NOT called here.  Audit trails that depend on current_agent will
+        show empty/default values.  This is a known limitation documented in
+        the plan.
     """
     mcp = FastMCP("masp_tools", host=host, port=port)
 
@@ -59,7 +94,7 @@ def build_mcp_server(
     for tool_def in catalog.tools:
 
         def _make_handler(td: Any) -> Any:
-            async def handler(**kwargs: str) -> str:  # noqa: D401
+            async def handler(**kwargs: str) -> str:
                 # --- 1. Bank dispatch ---
                 if bank is not None:
                     async with _bank_lock:
@@ -96,7 +131,6 @@ def build_mcp_server(
                 # --- 4. Mock fallback ---
                 return td.mock_response or f"{td.name}: OK"
 
-            # Set function metadata so FastMCP can build the JSON schema.
             handler.__name__ = td.name
             handler.__doc__ = td.description or td.name
             handler.__annotations__ = {p: str for p in td.params}
@@ -116,10 +150,11 @@ def _run_server() -> None:
     """Parse CLI args, build server, and run with SSE transport."""
     parser = argparse.ArgumentParser(description="MASP-Bench domain MCP server")
     parser.add_argument("--domain", required=True)
-    parser.add_argument("--task-id", default=None, help="Task ID for metadata seeding")
     parser.add_argument("--port", type=int, default=0, help="SSE port (0 = OS-assigned)")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--task-metadata-json", default=None, help="JSON string of task metadata")
+    parser.add_argument("--task-metadata-json", default=None)
+    parser.add_argument("--bank-dump-path", default=None,
+                        help="Path to dump Bank SQLite on exit")
     args = parser.parse_args()
 
     from masp_bench.banks import get_bank
@@ -133,9 +168,18 @@ def _run_server() -> None:
         try:
             task_metadata = json.loads(args.task_metadata_json)
         except json.JSONDecodeError:
-            pass
+            log.warning("Failed to parse --task-metadata-json, ignoring")
 
-    # Resolve port before building the server (FastMCP needs it at construction).
+    # Register Bank dump on exit (SIGTERM / atexit).
+    dump_path = Path(args.bank_dump_path) if args.bank_dump_path else None
+    if dump_path and bank is not None:
+        def _on_exit(*_args: Any) -> None:
+            _dump_bank(bank, dump_path)
+
+        atexit.register(_on_exit)
+        signal.signal(signal.SIGTERM, lambda *a: (atexit._run_exitfuncs(), sys.exit(0)))
+
+    # Resolve port before building the server.
     port = args.port
     if port == 0:
         import socket

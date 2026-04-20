@@ -104,6 +104,7 @@ class BenchmarkRunner:
         workspace_manager: WorkspaceManager | None = None,
         defense_hook: DefenseHook | None = None,
         bank_factory: Any = None,
+        agent_timeout: int = 600,
     ) -> None:
         self.task = task
         self.catalog = catalog
@@ -114,6 +115,7 @@ class BenchmarkRunner:
         self._workspace_manager = workspace_manager
         self._defense_hook = defense_hook or DefaultDefenseHook()
         self._bank_factory = bank_factory or get_bank
+        self._agent_timeout = agent_timeout
         self._bank: Any = None
         self._workspace: Workspace | None = None
 
@@ -184,7 +186,9 @@ class BenchmarkRunner:
                 workspace=self._workspace,
                 defense_hook=self._defense_hook,
             )
-            adapter = get_framework_adapter(self.framework)
+            adapter = get_framework_adapter(
+                self.framework, agent_timeout=self._agent_timeout
+            )
             outcome = await adapter.run(
                 RunContext(
                     run_id=run_id,

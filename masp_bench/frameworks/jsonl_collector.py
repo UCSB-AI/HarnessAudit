@@ -110,6 +110,7 @@ def parse_jsonl(
     action_sink: Any,
     *,
     mcp_server_name: str = MCP_SERVER_NAME,
+    is_subagent: bool = False,
 ) -> str:
     """Parse one JSONL file and emit ``ObservableAction`` entries.
 
@@ -127,6 +128,8 @@ def parse_jsonl(
         Shared sink to emit actions into.
     mcp_server_name : str
         MCP server name used for prefix stripping (default ``masp_tools``).
+    is_subagent : bool
+        If True, marks emitted actions with ``is_subagent: True`` in raw_event.
 
     Returns
     -------
@@ -136,6 +139,7 @@ def parse_jsonl(
     last_assistant_text = ""
     # tool_use_id → {name, args, raw_name}
     pending_tool_calls: dict[str, dict[str, Any]] = {}
+    _sub_flag: dict[str, Any] = {"is_subagent": True} if is_subagent else {}
 
     with open(jsonl_path) as f:
         for line_no, line in enumerate(f, 1):
@@ -187,6 +191,7 @@ def parse_jsonl(
                                     "framework": "clawteam",
                                     "tool": raw_name,
                                     "capture_mode": "jsonl_mailbox_send",
+                                    **_sub_flag,
                                 },
                                 kind="inbox_message",
                             )
@@ -210,6 +215,7 @@ def parse_jsonl(
                                             "tool": raw_name,
                                             "capture_mode": "jsonl_mailbox_broadcast",
                                             "expanded_from": "broadcast",
+                                            **_sub_flag,
                                         },
                                         kind="broadcast",
                                     )
@@ -253,6 +259,7 @@ def parse_jsonl(
                                 "framework": "clawteam",
                                 "raw_tool_name": tc["raw_name"],
                                 "capture_mode": "jsonl_tool_result",
+                                **_sub_flag,
                             },
                         )
 
@@ -269,6 +276,7 @@ def parse_jsonl(
                 "framework": "clawteam",
                 "raw_tool_name": tc["raw_name"],
                 "capture_mode": "jsonl_orphan_tool_use",
+                **_sub_flag,
             },
         )
 
@@ -311,13 +319,15 @@ def collect_all_agent_traces(
             continue
 
         for idx, jsonl_path in enumerate(jsonl_files):
-            log.info("Parsing %s for agent %s", jsonl_path.name, agent_role)
+            log.info("Parsing %s for agent %s%s", jsonl_path.name, agent_role,
+                     " (subagent)" if idx > 0 else "")
             agent_output = parse_jsonl(
                 jsonl_path,
                 agent_role,
                 catalog_tool_names,
                 all_agent_roles,
                 action_sink,
+                is_subagent=(idx > 0),
             )
             # Final output = last text from hub's main JSONL (first file only)
             if agent_role == hub_role and idx == 0:

@@ -11,22 +11,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import signal
 import subprocess
 import sys
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
 
 from .base import MASFrameworkAdapter, RunContext, RunOutcome
-from .common import build_clawteam_hub_prompt, build_clawteam_spoke_prompt
+from .common import build_clawteam_hub_prompt, build_clawteam_spoke_prompt, build_task_input
 from .jsonl_collector import collect_all_agent_traces
 
 log = logging.getLogger(__name__)
 
-# Default timeout (seconds) waiting for all agents to exit.
 DEFAULT_AGENT_TIMEOUT = 600
 
 
@@ -45,10 +41,8 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     async def run(
         self, ctx: RunContext, initial_input: str | list[dict[str, Any]]
     ) -> RunOutcome:
-        # Lazy-import ClawTeam to keep it an optional dependency.
         try:
             from clawteam.spawn.subprocess_backend import SubprocessBackend
-            from clawteam.spawn.registry import is_agent_alive, get_registry
             from clawteam.team.manager import TeamManager
         except ImportError as exc:
             raise RuntimeError(
@@ -57,11 +51,13 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
         team_name = f"masp-{ctx.run_id}"
         mcp_proc: subprocess.Popen | None = None
+        bank_dump_path = Path(f"/tmp/masp_bank_{ctx.run_id}.db")
         final_text = ""
+        expected_agent_count = len(ctx.task.agents)
 
         try:
             # 1. Start domain MCP server (SSE transport)
-            mcp_proc, mcp_port = await self._start_mcp_server(ctx)
+            mcp_proc, mcp_port = await self._start_mcp_server(ctx, bank_dump_path)
             log.info("MCP server started on port %d", mcp_port)
 
             # 2. Create ClawTeam team
@@ -74,7 +70,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 description=f"MASP run {ctx.run_id} — {ctx.task.task_id}",
             )
 
-            # 3. Setup worktrees and .claude.json per agent
+            # 3. Setup working directories + .claude.json per agent
             worktrees: dict[str, Path] = {}
             for agent_cfg in ctx.task.agents:
                 wt_path = self._setup_agent_dir(team_name, agent_cfg.role, mcp_port)
@@ -85,11 +81,13 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             all_agents = ctx.task.agents
             hub_role = hub_cfg.role
 
+            # Build text version of initial_input for hub prompt (fix #6)
+            input_text = self._extract_input_text(initial_input)
+
             for idx, agent_cfg in enumerate(all_agents):
                 is_leader = idx == 0
                 agent_id = hub_id if is_leader else uuid.uuid4().hex[:12]
 
-                # Register spoke members
                 if not is_leader:
                     TeamManager.add_member(
                         team_name,
@@ -98,15 +96,13 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                         agent_type=agent_cfg.description or "specialist",
                     )
 
-                # Build prompt
                 if is_leader:
                     prompt = build_clawteam_hub_prompt(
-                        hub_role, all_agents[1:], ctx.task.goal,
+                        hub_role, all_agents[1:], input_text or ctx.task.goal,
                     )
                 else:
                     prompt = build_clawteam_spoke_prompt(agent_cfg, hub_role)
 
-                # Build system prompt (role definition)
                 sys_prompt = agent_cfg.system_prompt or agent_cfg.description or ""
 
                 cwd = str(worktrees[agent_cfg.role])
@@ -125,10 +121,19 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 )
                 log.info("Spawned %s: %s", agent_cfg.role, result_msg)
 
-            # 5. Wait for all agents to exit
-            await self._wait_for_agents(team_name, timeout=self._agent_timeout)
+            # 5. Wait for all agents to exit (fix #2: pass expected count)
+            await self._wait_for_agents(
+                team_name,
+                expected_count=expected_agent_count,
+                timeout=self._agent_timeout,
+            )
 
-            # 6. Collect JSONL traces
+            # 6. Stop MCP server and restore Bank state (fix #1)
+            self._stop_mcp_server(mcp_proc)
+            mcp_proc = None  # prevent double-stop in finally
+            self._restore_bank(ctx.bank, bank_dump_path)
+
+            # 7. Collect JSONL traces
             catalog_names = {t.name for t in ctx.catalog.tools}
             all_roles = [a.role for a in all_agents]
 
@@ -140,7 +145,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 hub_role=hub_role,
             )
 
-            # 7. Emit final user_output
+            # 8. Emit final user_output
             ctx.action_sink.emit_communication(
                 agent_id=hub_role,
                 agent_role=hub_role,
@@ -165,46 +170,45 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 error=str(exc),
             )
         finally:
-            # 8. Cleanup
             self._stop_mcp_server(mcp_proc)
             self._cleanup_team(team_name)
+            # Clean up dump file
+            try:
+                bank_dump_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # MCP server lifecycle
     # ------------------------------------------------------------------
 
     async def _start_mcp_server(
-        self, ctx: RunContext
+        self, ctx: RunContext, bank_dump_path: Path
     ) -> tuple[subprocess.Popen, int]:
         """Start the domain MCP server as a subprocess, return (proc, port)."""
         task_metadata_json = json.dumps(ctx.task.metadata) if ctx.task.metadata else "{}"
 
         cmd = [
-            sys.executable,
-            "-m",
-            "masp_bench.frameworks.mcp_bank_server",
-            "--domain",
-            ctx.task.domain,
-            "--port",
-            "0",
-            "--task-metadata-json",
-            task_metadata_json,
+            sys.executable, "-m", "masp_bench.frameworks.mcp_bank_server",
+            "--domain", ctx.task.domain,
+            "--port", "0",
+            "--task-metadata-json", task_metadata_json,
+            "--bank-dump-path", str(bank_dump_path),
         ]
 
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,  # fix #4: avoid pipe deadlock
             text=True,
         )
 
-        # Read the PORT=<n> line from stdout (with timeout).
+        # Read the PORT=<n> line from stdout.
+        loop = asyncio.get_running_loop()  # fix #9
         port = 0
         try:
             line = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(
-                    None, proc.stdout.readline  # type: ignore[union-attr]
-                ),
+                loop.run_in_executor(None, proc.stdout.readline),
                 timeout=30,
             )
             if line and line.startswith("PORT="):
@@ -217,7 +221,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             proc.kill()
             raise RuntimeError("MCP server did not report a port")
 
-        # Give the server a moment to bind.
         await asyncio.sleep(0.5)
         return proc, port
 
@@ -227,20 +230,36 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             return
         try:
             proc.terminate()
-            proc.wait(timeout=5)
+            proc.wait(timeout=10)  # allow time for Bank dump
         except Exception:
             try:
                 proc.kill()
             except Exception:
                 pass
 
+    @staticmethod
+    def _restore_bank(bank: Any, dump_path: Path) -> None:
+        """Restore MCP server's Bank state into the Runner's Bank (fix #1)."""
+        if bank is None or not dump_path.exists():
+            return
+        if not hasattr(bank, "conn"):
+            return
+        try:
+            import sqlite3
+
+            src = sqlite3.connect(str(dump_path))
+            src.backup(bank.conn)
+            src.close()
+            log.info("Bank state restored from %s", dump_path)
+        except Exception:
+            log.warning("Failed to restore bank from %s", dump_path, exc_info=True)
+
     # ------------------------------------------------------------------
-    # Agent directory / worktree setup
+    # Agent directory setup
     # ------------------------------------------------------------------
 
-    def _setup_agent_dir(
-        self, team_name: str, agent_role: str, mcp_port: int
-    ) -> Path:
+    @staticmethod
+    def _setup_agent_dir(team_name: str, agent_role: str, mcp_port: int) -> Path:
         """Create a working directory for the agent with .claude.json MCP config."""
         from clawteam.team.models import get_data_dir
 
@@ -249,7 +268,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         wt_path = base / agent_role
         wt_path.mkdir(parents=True, exist_ok=True)
 
-        # Write .claude.json (project-local MCP config, scope=local)
+        # .claude.json = project-local MCP config (scope=local)
         claude_json = {
             "mcpServers": {
                 "masp_tools": {
@@ -261,38 +280,71 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         (wt_path / ".claude.json").write_text(
             json.dumps(claude_json, indent=2), encoding="utf-8"
         )
-
         return wt_path
 
     # ------------------------------------------------------------------
     # Agent completion detection
     # ------------------------------------------------------------------
 
+    @staticmethod
     async def _wait_for_agents(
-        self, team_name: str, *, timeout: int = DEFAULT_AGENT_TIMEOUT
+        team_name: str,
+        *,
+        expected_count: int,
+        timeout: int = DEFAULT_AGENT_TIMEOUT,
     ) -> None:
-        """Poll spawn registry until all agents are dead or timeout expires."""
+        """Poll spawn registry until all agents are dead or timeout expires.
+
+        Waits for the registry to contain ``expected_count`` entries before
+        starting liveness checks (fix #2: prevents premature return on empty
+        registry).
+        """
         from clawteam.spawn.registry import get_registry, is_agent_alive
 
-        deadline = asyncio.get_event_loop().time() + timeout
+        loop = asyncio.get_running_loop()  # fix #9
+        deadline = loop.time() + timeout
         poll_interval = 5
 
-        while asyncio.get_event_loop().time() < deadline:
-            registry = get_registry(team_name)
-            if not registry:
-                return
+        # Initial grace period for agents to register
+        await asyncio.sleep(3)
 
-            all_dead = all(
-                is_agent_alive(team_name, name) is not True
-                for name in registry
-            )
-            if all_dead:
-                log.info("All agents have exited for team %s", team_name)
-                return
+        while loop.time() < deadline:
+            registry = get_registry(team_name)
+
+            # Don't declare "all done" until registry has everyone
+            if len(registry) >= expected_count:
+                all_dead = all(
+                    is_agent_alive(team_name, name) is not True
+                    for name in registry
+                )
+                if all_dead:
+                    log.info("All %d agents have exited for team %s",
+                             len(registry), team_name)
+                    return
 
             await asyncio.sleep(poll_interval)
 
         log.warning("Timeout (%ds) waiting for agents in team %s", timeout, team_name)
+
+    # ------------------------------------------------------------------
+    # Input text extraction (fix #6)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_input_text(initial_input: str | list[dict[str, Any]]) -> str:
+        """Extract text content from initial_input for hub prompt."""
+        if isinstance(initial_input, str):
+            return initial_input
+        parts: list[str] = []
+        for msg in initial_input:
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "input_text":
+                        text = str(item.get("text", "")).strip()
+                        if text:
+                            parts.append(text)
+        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -300,10 +352,8 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
     @staticmethod
     def _cleanup_team(team_name: str) -> None:
-        """Best-effort cleanup of the ClawTeam team and its data."""
         try:
             from clawteam.team.manager import TeamManager
-
             TeamManager.cleanup(team_name)
         except Exception:
             log.debug("ClawTeam cleanup failed for team %s", team_name, exc_info=True)
