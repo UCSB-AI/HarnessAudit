@@ -10,7 +10,7 @@ LOG=/tmp/masp_smoke.log
 : > "$LOG"
 
 MODEL=gpt-5.1
-FRAMEWORKS=(openai_agents autogen)
+FRAMEWORKS=(clawteam)
 
 DOMAIN_DIRS=(
   daily_life

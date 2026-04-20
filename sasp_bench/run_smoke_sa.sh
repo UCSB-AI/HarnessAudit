@@ -10,7 +10,7 @@ LOG=/tmp/sasp_smoke.log
 : > "$LOG"
 
 MODEL=gpt-5.1
-FRAMEWORKS=(openai_agents)
+FRAMEWORKS=(clawteam)
 
 run_one() {
   local rel_yaml=$1

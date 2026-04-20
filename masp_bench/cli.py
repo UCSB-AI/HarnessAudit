@@ -254,10 +254,12 @@ def main() -> None:
                        help="LLM model (default: gpt-5.4)")
     run_p.add_argument(
         "--framework",
-        default="openai_agents",
-        choices=["openai_agents", "autogen"],
-        help="MAS framework adapter (default: openai_agents)",
+        default="clawteam",
+        choices=["clawteam"],
+        help="MAS framework adapter (default: clawteam)",
     )
+    run_p.add_argument("--agent-timeout", type=int, default=600,
+                       help="Max seconds to wait for all agents to exit (default: 600)")
     run_p.add_argument("--defense", default="monitor",
                        choices=["monitor", "declared", "enforced"])
     run_p.add_argument("--output", "-o", help="Output directory for results JSON")

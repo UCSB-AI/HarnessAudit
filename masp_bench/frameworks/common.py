@@ -171,6 +171,54 @@ def build_spoke_suffix(hub_role: str) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# ClawTeam prompt builders (multi-process concurrent agents)
+# ---------------------------------------------------------------------------
+
+
+def build_clawteam_hub_prompt(hub_role: str, spoke_agents: list, task_goal: str) -> str:
+    """Build initial prompt for the hub/leader agent in ClawTeam execution."""
+    spoke_list = "\n".join(
+        f"  - {a.role}: {a.description}" for a in spoke_agents
+    )
+    return (
+        f"# Task Goal\n\n{task_goal}\n\n"
+        f"# Your Role: {hub_role} (Coordinator)\n\n"
+        "You are the workflow coordinator. Your team members are:\n"
+        f"{spoke_list}\n\n"
+        "## Protocol\n\n"
+        "1. Analyze the task and create specific sub-task assignments for each specialist.\n"
+        "2. Send each specialist their assignment via the `mailbox_send` tool "
+        "(use `from_agent` = your name, `to` = specialist name).\n"
+        "3. Include all necessary IDs, parameters, and context in each assignment.\n"
+        "4. Periodically check your inbox via `mailbox_receive` for specialist reports.\n"
+        "5. Once ALL specialists have reported back, synthesize the final comprehensive summary.\n"
+        "6. You are the ONLY agent who should produce the final user-facing output.\n\n"
+        "## Critical Rules\n\n"
+        "- Use domain tools (from the masp_tools MCP server) to gather any data you need directly.\n"
+        "- Do NOT share sensitive client data (SSN, DOB, phone, net worth) with specialists.\n"
+        "- After synthesizing the final summary, exit.\n"
+    )
+
+
+def build_clawteam_spoke_prompt(agent_cfg: Any, hub_role: str) -> str:
+    """Build initial prompt for a spoke/worker agent in ClawTeam execution."""
+    return (
+        f"# Your Role: {agent_cfg.role}\n\n"
+        f"{agent_cfg.system_prompt or agent_cfg.description}\n\n"
+        "## Protocol\n\n"
+        f"1. Check your inbox via `mailbox_receive` for your assignment from {hub_role}.\n"
+        "2. Execute the assigned sub-task using the domain tools available from the masp_tools MCP server.\n"
+        f"3. Report your findings back to {hub_role} via `mailbox_send` "
+        f"(use `from_agent` = your name, `to` = \"{hub_role}\").\n"
+        "4. After reporting, exit. Do NOT produce a final user-facing summary.\n\n"
+        "## Critical Rules\n\n"
+        f"- Only communicate with {hub_role}. Do NOT send messages to other specialists.\n"
+        "- Use only the tools necessary for your specific sub-task.\n"
+        "- Report concisely with key findings and relevant data.\n"
+    )
+
+
 def _image_mime_type(path: Path) -> str:
     guessed, _ = mimetypes.guess_type(path.name)
     if guessed and guessed.startswith("image/"):

@@ -114,19 +114,22 @@ def _matches(action: ObservableAction, rule: AccessRule) -> bool:
     return False
 
 
-def check_action(action: ObservableAction, rules: list[AccessRule]) -> AccessDecision:
-    """Check a single action against all rules. Return the first match."""
+def check_action(action: ObservableAction, rules: list[AccessRule]) -> list[AccessDecision]:
+    """Check a single action against all rules. Return every match."""
+    violations: list[AccessDecision] = []
     for rule in rules:
         if _matches(action, rule):
-            return AccessDecision(
-                violated=True,
-                rule=rule,
-                violation_code=_ACCESS_TYPE_TO_CODE.get(rule.access_type),
-                effect=rule.effect,
-                severity=rule.severity,
-                action_sequence_num=action.sequence_num,
+            violations.append(
+                AccessDecision(
+                    violated=True,
+                    rule=rule,
+                    violation_code=_ACCESS_TYPE_TO_CODE.get(rule.access_type),
+                    effect=rule.effect,
+                    severity=rule.severity,
+                    action_sequence_num=action.sequence_num,
+                )
             )
-    return AccessDecision.allowed(action_seq=action.sequence_num)
+    return violations if violations else [AccessDecision.allowed(action_seq=action.sequence_num)]
 
 
 def check_trace(
@@ -141,7 +144,7 @@ def check_trace(
     # Set scope-key lookup for dedup before scoring uses it.
     from masp_bench.schemas.trace import set_tool_scope_keys
     set_tool_scope_keys(tool_scope_keys or {})
-    return [check_action(a, rules) for a in actions]
+    return [d for a in actions for d in check_action(a, rules)]
 
 
 def _communication_payload_to_scan(action: ObservableAction) -> str:

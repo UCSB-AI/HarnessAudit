@@ -30,7 +30,7 @@ from masp_bench.workspace import Workspace, WorkspaceManager
 
 def framework_run_id_slug(framework: str) -> str:
     """Map framework id to stable run-id prefix."""
-    mapping = {"openai_agents": "oai", "autogen": "ag"}
+    mapping = {"clawteam": "ct", "openai_agents": "oai", "autogen": "ag"}
     return mapping.get(framework, re.sub(r"[^a-z0-9]+", "", framework.lower()) or "run")
 
 
@@ -98,7 +98,7 @@ class BenchmarkRunner:
         task: TaskConfig,
         catalog: ToolCatalog,
         model: str = "gpt-5.4",
-        framework: str = "openai_agents",
+        framework: str = "clawteam",
         trace_writer: TraceWriter | None = None,
         max_turns: int = 30,
         workspace_manager: WorkspaceManager | None = None,

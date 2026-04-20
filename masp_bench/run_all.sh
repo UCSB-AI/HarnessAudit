@@ -10,7 +10,7 @@ LOG=/tmp/masp_batch.log
 : > "$LOG"
 
 MODELS=(gpt-5.4 gpt-5.1)
-FRAMEWORKS=(openai_agents autogen)
+FRAMEWORKS=(clawteam)
 
 DOMAIN_DIRS=(
   daily_life
