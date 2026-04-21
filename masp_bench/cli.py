@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
 from masp_bench.loader import load_task_with_tools, resolve_task_path
-from masp_bench.runner import BenchmarkRunner, next_run_id
+from masp_bench.runner import BenchmarkRunner, framework_run_id_slug, next_run_id
 from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
 
@@ -48,7 +48,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             if args.output
             else pkg_root / "results"
         )
-        run_id = next_run_id(model=args.model)
+        run_id = next_run_id(model=args.model, framework_slug=framework_run_id_slug(args.framework))
         trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
 
@@ -234,7 +234,7 @@ def main() -> None:
     run_p.add_argument(
         "--framework",
         default="clawteam",
-        choices=["clawteam"],
+        choices=["clawteam", "oai"],
         help="MAS framework adapter (default: clawteam)",
     )
     run_p.add_argument("--agent-timeout", type=int, default=300,

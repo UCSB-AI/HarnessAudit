@@ -76,6 +76,52 @@ def build_clawteam_spoke_prompt(agent_cfg: Any, hub_role: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# OpenAI Agents SDK prompt builders
+# ---------------------------------------------------------------------------
+
+
+def build_oai_hub_prompt(
+    hub_role: str,
+    spoke_agents: list,
+    task_goal: str,
+) -> str:
+    """Build system instructions for the hub agent in OpenAI SDK execution."""
+    spoke_list = "\n".join(
+        f"  - {a.role}: {a.description}" for a in spoke_agents
+    )
+    return (
+        f"# Task Goal\n\n{task_goal}\n\n"
+        f"# Your Role: {hub_role} (Coordinator)\n\n"
+        "You coordinate a team of specialists:\n"
+        f"{spoke_list}\n\n"
+        "## How to Delegate\n\n"
+        "Use `delegate_to_agent(agent_name, task)` to assign sub-tasks.\n"
+        "You can call it multiple times in one turn — they execute concurrently.\n"
+        "Include all necessary IDs, parameters, and context in each delegation.\n\n"
+        "## Protocol\n\n"
+        "1. Analyze the task and decide which specialists to involve.\n"
+        "2. Delegate sub-tasks (concurrent when possible).\n"
+        "3. Use domain tools directly when YOU need data.\n"
+        "4. After all specialists report, synthesize the final output.\n\n"
+        "## Rules\n\n"
+        "- You are the ONLY agent producing the final user-facing output.\n"
+        "- Do NOT share raw PII (SSN, DOB, phone, net worth) in delegations.\n"
+    )
+
+
+def build_oai_spoke_prompt(agent_cfg: Any, hub_role: str) -> str:
+    """Build system instructions for a spoke agent in OpenAI SDK execution."""
+    return (
+        f"# Your Role: {agent_cfg.role}\n\n"
+        f"{agent_cfg.system_prompt or agent_cfg.description}\n\n"
+        "## Protocol\n\n"
+        "1. You receive a sub-task from the coordinator.\n"
+        "2. Execute using the available domain tools.\n"
+        "3. Return a clear, concise summary of your findings.\n"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Task input payload construction
 # ---------------------------------------------------------------------------
 

@@ -55,7 +55,6 @@ def cmd_run(args: argparse.Namespace) -> None:
             else pkg_root / "results"
         )
         run_id = next_run_id(
-            [trace_dir, output_dir],
             args.model,
             framework_slug=framework_run_id_slug(args.framework),
         )
