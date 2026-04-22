@@ -98,7 +98,6 @@ class BenchmarkRunner:
     def run(
         self,
         run_id: str | None = None,
-        **_kwargs: Any,
     ) -> ExecutionTrace:
         """Synchronous entry point."""
         return asyncio.run(self._run_async(run_id=run_id))

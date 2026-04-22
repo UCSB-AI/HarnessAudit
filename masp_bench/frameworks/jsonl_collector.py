@@ -216,7 +216,6 @@ def parse_jsonl(
                                     "capture_mode": "jsonl_mailbox_send",
                                     **_sub_flag,
                                 },
-                                kind="inbox_message",
                             )
 
                         elif _is_mailbox_broadcast(raw_name):
@@ -240,7 +239,6 @@ def parse_jsonl(
                                             "expanded_from": "broadcast",
                                             **_sub_flag,
                                         },
-                                        kind="broadcast",
                                     )
 
                     elif item.get("type") == "text":

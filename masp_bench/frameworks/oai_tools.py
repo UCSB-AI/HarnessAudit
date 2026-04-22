@@ -54,32 +54,6 @@ def _build_params_schema(td: ToolDef) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Fixture lookup (mirrors mcp_bank_server.py:111-127)
-# ---------------------------------------------------------------------------
-
-def _fixture_lookup(td: ToolDef, args: dict[str, Any]) -> str:
-    fixture_data = td.fixture_data
-    fixture_key = td.fixture_key
-    if not fixture_data or not fixture_key:
-        return td.mock_response or f"{td.name}: OK"
-
-    lookup_val = str(args.get(fixture_key, ""))
-    keys = [k.strip() for k in lookup_val.split(",") if k.strip()] or [lookup_val]
-    header = fixture_data.get("_header", "")
-    footer = fixture_data.get("_footer", "")
-    default = fixture_data.get("_default", "No data found.")
-    lines: list[str] = []
-    if header:
-        lines.append(header)
-    for key in keys:
-        entry = fixture_data.get(key)
-        lines.append(entry if entry is not None else f"{key}: {default}")
-    if footer:
-        lines.append(footer)
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
 # Domain tool factory
 # ---------------------------------------------------------------------------
 
@@ -110,24 +84,14 @@ def _make_domain_handler(td: ToolDef, workspace: Any):
     async def handler(ctx: ToolContext[Any], args_json: str) -> str:
         args = json.loads(args_json)
         masp = ctx.context  # MASPContext
-        bank = masp.bank
         agent_role = masp.agent_role
 
-        # --- dispatch cascade (same order as mcp_bank_server.py:98-129) ---
-        if bank is not None:
-            try:
-                result = str(bank.dispatch(td.name, args))
-            except Exception as exc:
-                result = f"Error dispatching {td.name}: {exc}"
-        elif td.backend_type == "real" and workspace is not None:
-            from masp_bench.sde_backend import dispatch_real_tool
-            result = str(dispatch_real_tool(td.name, args, workspace))
-        elif td.fixture_data and td.fixture_key:
-            result = _fixture_lookup(td, args)
-        else:
-            result = td.mock_response or f"{td.name}: OK"
+        from .common import dispatch_tool
 
-        # --- emit to ActionSink ---
+        result = dispatch_tool(
+            td.name, args, bank=masp.bank, tool_def=td, workspace=workspace,
+        )
+
         masp.action_sink.emit_tool_call(
             agent_id=agent_role,
             agent_role=agent_role,

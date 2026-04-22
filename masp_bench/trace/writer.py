@@ -8,14 +8,13 @@ from typing import IO
 from .events import (
     AccessDecisionEvent,
     CommunicationEvent,
-    HandoffEvent,
     ToolCallEvent,
     TraceEnd,
     TraceStart,
 )
 
 _AnyEvent = (
-    TraceStart | ToolCallEvent | HandoffEvent | CommunicationEvent
+    TraceStart | ToolCallEvent | CommunicationEvent
     | AccessDecisionEvent | TraceEnd
 )
 

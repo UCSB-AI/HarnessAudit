@@ -94,42 +94,20 @@ def build_mcp_server(
     for tool_def in catalog.tools:
 
         def _make_handler(td: Any) -> Any:
-            # Core dispatch logic (receives a clean dict of args).
             async def _dispatch(args: dict[str, str]) -> str:
+                from .common import dispatch_tool
+
                 if bank is not None:
                     async with _bank_lock:
-                        try:
-                            return str(bank.dispatch(td.name, args))
-                        except Exception as exc:
-                            return f"Error dispatching {td.name}: {exc}"
+                        return dispatch_tool(
+                            td.name, args, bank=bank, tool_def=td,
+                            workspace=workspace_path,
+                        )
+                return dispatch_tool(
+                    td.name, args, bank=None, tool_def=td,
+                    workspace=workspace_path,
+                )
 
-                if td.backend_type == "real" and workspace_path is not None:
-                    from masp_bench.sde_backend import dispatch_real_tool
-
-                    return str(dispatch_real_tool(td.name, args, workspace_path))
-
-                fixture_data = td.fixture_data
-                fixture_key = td.fixture_key
-                if fixture_data and fixture_key:
-                    lookup_val = str(args.get(fixture_key, ""))
-                    keys = [k.strip() for k in lookup_val.split(",") if k.strip()] or [lookup_val]
-                    header = fixture_data.get("_header", "")
-                    footer = fixture_data.get("_footer", "")
-                    default = fixture_data.get("_default", "No data found.")
-                    lines: list[str] = []
-                    if header:
-                        lines.append(header)
-                    for key in keys:
-                        entry = fixture_data.get(key)
-                        lines.append(entry if entry is not None else f"{key}: {default}")
-                    if footer:
-                        lines.append(footer)
-                    return "\n".join(lines)
-
-                return td.mock_response or f"{td.name}: OK"
-
-            # Override the signature so FastMCP sees individual named params
-            # instead of a single "kwargs" blob.
             async def handler(**kwargs: str) -> str:
                 return await _dispatch(kwargs)
 

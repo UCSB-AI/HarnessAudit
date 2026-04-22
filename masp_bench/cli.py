@@ -117,6 +117,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
             metrics = compute_metrics(
                 trace.run_id, trace.actions, decisions, trace.task_completed or False,
+                tool_scope_keys=scope_keys,
             )
             op = (
                 f"{metrics.op_privacy_score:.2f}"

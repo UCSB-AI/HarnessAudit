@@ -11,6 +11,68 @@ from masp_bench.schemas.task import TaskConfig
 
 
 # ---------------------------------------------------------------------------
+# Shared tool dispatch cascade (used by mcp_bank_server + oai_tools)
+# ---------------------------------------------------------------------------
+
+
+def dispatch_tool(
+    tool_name: str,
+    args: dict[str, Any],
+    *,
+    bank: Any = None,
+    tool_def: Any = None,
+    workspace: Any = None,
+) -> str:
+    """Execute a domain tool through the Bank→real→fixture→mock cascade.
+
+    Shared by all adapters so dispatch semantics are identical regardless
+    of framework.  The cascade order matches ``mcp_bank_server.py``:
+
+      1. ``bank.dispatch(tool_name, args)`` — stateful SQLite backend
+      2. ``dispatch_real_tool()`` — SDE domain real tool execution
+      3. Fixture JSON lookup via ``tool_def.fixture_key``
+      4. Static ``tool_def.mock_response`` fallback
+    """
+    # 1. Bank dispatch (authoritative when available)
+    if bank is not None:
+        try:
+            return str(bank.dispatch(tool_name, args))
+        except Exception as exc:
+            return f"Error dispatching {tool_name}: {exc}"
+
+    # 2. Real backend (SDE domain)
+    if tool_def is not None and tool_def.backend_type == "real" and workspace is not None:
+        from masp_bench.sde_backend import dispatch_real_tool
+
+        return str(dispatch_real_tool(tool_name, args, workspace))
+
+    # 3. Fixture lookup
+    if tool_def is not None:
+        fixture_data = tool_def.fixture_data
+        fixture_key = tool_def.fixture_key
+        if fixture_data and fixture_key:
+            lookup_val = str(args.get(fixture_key, ""))
+            keys = [k.strip() for k in lookup_val.split(",") if k.strip()] or [lookup_val]
+            header = fixture_data.get("_header", "")
+            footer = fixture_data.get("_footer", "")
+            default = fixture_data.get("_default", "No data found.")
+            lines: list[str] = []
+            if header:
+                lines.append(header)
+            for key in keys:
+                entry = fixture_data.get(key)
+                lines.append(entry if entry is not None else f"{key}: {default}")
+            if footer:
+                lines.append(footer)
+            return "\n".join(lines)
+
+        # 4. Mock fallback
+        return tool_def.mock_response or f"{tool_name}: OK"
+
+    return f"{tool_name}: OK"
+
+
+# ---------------------------------------------------------------------------
 # ClawTeam prompt builders
 # ---------------------------------------------------------------------------
 
@@ -73,6 +135,27 @@ def build_clawteam_spoke_prompt(agent_cfg: Any, hub_role: str) -> str:
         "- Use only the tools necessary for your specific sub-task.\n"
         "- Report concisely with key findings and relevant data.\n"
     )
+
+
+# ---------------------------------------------------------------------------
+# Multimodal input → text extraction (shared by all adapters)
+# ---------------------------------------------------------------------------
+
+
+def extract_input_text(initial_input: str | list[dict[str, Any]]) -> str:
+    """Extract plain text from a potentially multimodal initial input payload."""
+    if isinstance(initial_input, str):
+        return initial_input
+    parts: list[str] = []
+    for msg in initial_input:
+        content = msg.get("content", [])
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") in ("input_text", "text"):
+                    text = str(item.get("text", "")).strip()
+                    if text:
+                        parts.append(text)
+    return "\n".join(parts)
 
 
 # ---------------------------------------------------------------------------

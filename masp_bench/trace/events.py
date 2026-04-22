@@ -65,26 +65,6 @@ class ToolCallEvent(BaseModel):
     timestamp: str = Field(default_factory=_now)
 
 
-class HandoffEvent(BaseModel):
-    """Emitted for agent-to-agent delegation."""
-
-    type: Literal["handoff"] = "handoff"
-    trace_id: str
-    sequence_num: int
-    from_agent_id: str
-    from_role: str
-    to_agent_id: str
-    to_role: str
-    handoff_note: str = Field(
-        "",
-        description="Human-readable note, ideally the final assistant text before handoff.",
-    )
-    handoff_context_raw: Any = Field(
-        None,
-        description="Raw structured context seen by the receiving agent on its first LLM turn.",
-    )
-    timestamp: str = Field(default_factory=_now)
-
 
 class CommunicationEvent(BaseModel):
     """Emitted for inter-agent messages and final output to user."""

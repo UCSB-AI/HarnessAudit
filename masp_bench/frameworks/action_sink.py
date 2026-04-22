@@ -79,7 +79,6 @@ class ActionSink:
         content: str,
         raw_event: dict[str, Any] | None = None,
         sequence_num: int | None = None,
-        kind: str = "message",
     ) -> int:
         seq = sequence_num or self.reserve_sequence()
         action = ObservableAction(

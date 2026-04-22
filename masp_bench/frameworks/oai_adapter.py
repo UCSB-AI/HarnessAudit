@@ -73,7 +73,7 @@ class OAIAdapter(MASFrameworkAdapter):
                 "OpenAI Agents SDK not installed.  pip install openai-agents"
             ) from exc
 
-        from .common import build_oai_hub_prompt, build_oai_spoke_prompt
+        from .common import build_oai_hub_prompt, build_oai_spoke_prompt, extract_input_text
         from .oai_tools import build_delegate_tool, build_domain_tools
 
         hub_role = ctx.task.agents[0].role
@@ -121,13 +121,18 @@ class OAIAdapter(MASFrameworkAdapter):
                 spoke_agents=spoke_agents,
             )
 
-            # 6. Run
-            input_text = self._extract_input_text(initial_input)
-            result = await Runner.run(
-                hub,
-                input_text or ctx.task.goal,
-                context=masp_ctx,
-                max_turns=ctx.max_turns,
+            # 6. Run (with timeout guard)
+            import asyncio
+
+            input_text = extract_input_text(initial_input)
+            result = await asyncio.wait_for(
+                Runner.run(
+                    hub,
+                    input_text or ctx.task.goal,
+                    context=masp_ctx,
+                    max_turns=ctx.max_turns,
+                ),
+                timeout=self._agent_timeout,
             )
             final_output = str(result.final_output) if result.final_output else ""
 
@@ -149,7 +154,6 @@ class OAIAdapter(MASFrameworkAdapter):
                 "framework": "oai",
                 "communication_kind": "user_output",
             },
-            kind="user_output",
         )
         return RunOutcome(framework=self.framework_id, final_output=final_output)
 
@@ -171,21 +175,3 @@ class OAIAdapter(MASFrameworkAdapter):
             return f"litellm/gemini/{model}"
         return model
 
-    @staticmethod
-    def _extract_input_text(initial_input: str | list[dict[str, Any]]) -> str:
-        """Extract plain text from potentially multimodal input."""
-        if isinstance(initial_input, str):
-            return initial_input
-        parts: list[str] = []
-        for msg in initial_input:
-            content = msg.get("content", [])
-            if isinstance(content, list):
-                for item in content:
-                    if isinstance(item, dict) and item.get("type") in (
-                        "input_text",
-                        "text",
-                    ):
-                        text = str(item.get("text", "")).strip()
-                        if text:
-                            parts.append(text)
-        return "\n".join(parts)

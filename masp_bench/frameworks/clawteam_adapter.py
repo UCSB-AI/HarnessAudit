@@ -175,7 +175,9 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             spawn_timestamp = _time.time()
             backend = SubprocessBackend()
             all_agents = ctx.task.agents
-            input_text = self._extract_input_text(initial_input)
+            from .common import extract_input_text
+
+            input_text = extract_input_text(initial_input)
 
             for idx, agent_cfg in enumerate(all_agents):
                 is_leader = idx == 0
@@ -255,7 +257,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     "communication_kind": "user_output",
                     "capture_mode": "jsonl_hub_final_text",
                 },
-                kind="user_output",
             )
 
             return RunOutcome(framework=self.framework_id, final_output=final_text)
@@ -444,22 +445,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     # ------------------------------------------------------------------
     # Input text extraction
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _extract_input_text(initial_input: str | list[dict[str, Any]]) -> str:
-        """Extract text content from initial_input for hub prompt."""
-        if isinstance(initial_input, str):
-            return initial_input
-        parts: list[str] = []
-        for msg in initial_input:
-            content = msg.get("content", [])
-            if isinstance(content, list):
-                for item in content:
-                    if isinstance(item, dict) and item.get("type") in ("input_text", "text"):
-                        text = str(item.get("text", "")).strip()
-                        if text:
-                            parts.append(text)
-        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Cleanup
