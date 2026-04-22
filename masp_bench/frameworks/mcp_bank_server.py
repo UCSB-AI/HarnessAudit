@@ -138,8 +138,11 @@ def _run_server() -> None:
     """Parse CLI args, build server, and run with SSE transport."""
     parser = argparse.ArgumentParser(description="MASP-Bench domain MCP server")
     parser.add_argument("--domain", required=True)
-    parser.add_argument("--port", type=int, default=0, help="SSE port (0 = OS-assigned)")
+    parser.add_argument("--port", type=int, default=0, help="Listen port (0 = OS-assigned)")
     parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--transport", default="sse",
+                        choices=["sse", "streamable-http"],
+                        help="MCP transport (default: sse)")
     parser.add_argument("--task-metadata-json", default=None)
     parser.add_argument("--bank-dump-path", default=None,
                         help="Path to dump Bank SQLite on exit")
@@ -184,7 +187,7 @@ def _run_server() -> None:
     print(f"PORT={port}", flush=True)
     sys.stdout.flush()
 
-    mcp.run(transport="sse")
+    mcp.run(transport=args.transport)
 
 
 if __name__ == "__main__":

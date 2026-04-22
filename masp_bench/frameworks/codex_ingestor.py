@@ -1,0 +1,301 @@
+"""Codex trace discovery and parsing for MASP_Bench.
+
+Codex stores session rollouts as JSONL files at::
+
+    $CODEX_HOME/sessions/{YYYY}/{MM}/{DD}/rollout-{datetime}-{thread_id}.jsonl
+
+Each line is a ``RolloutItem`` variant (verified via Phase 0 probe):
+
+- ``session_meta``   — session metadata (cwd, model, instructions)
+- ``response_item``  — model messages (assistant, user, developer) and tool calls
+- ``event_msg``      — lifecycle events (task_started, task_complete, user_message)
+- ``turn_context``   — turn metadata (model, policy, timestamps)
+
+Tool calls appear as ``ResponseItem::FunctionCall`` with:
+
+- ``name``       — qualified tool name (e.g. ``mcp__masp_tools__execute_trade``)
+- ``arguments``  — JSON string of tool arguments
+- ``call_id``    — ID for pairing with ``FunctionCallOutput``
+
+Tool results appear as ``ResponseItem::FunctionCallOutput`` with:
+
+- ``call_id``    — matches the ``FunctionCall``
+- ``output``     — result text or structured content
+
+This is structurally similar to Claude Code's tool_use/tool_result pairing,
+so the same ActionSink emit pattern applies.
+
+.. note::
+
+    Tool call format inferred from ``codex-rs/protocol/src/models.rs``
+    (``ResponseItem`` enum).  Phase 0 probe captured session JSONL path
+    and structure, but API key was expired so no real tool call events
+    were captured.  Parser needs validation with a real Codex run.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+from .jsonl_collector import _is_mailbox_broadcast, _is_mailbox_send, _strip_mcp_prefix
+
+log = logging.getLogger(__name__)
+
+MCP_SERVER_NAME = "masp_tools"
+
+
+# ---------------------------------------------------------------------------
+# Artifact discovery
+# ---------------------------------------------------------------------------
+
+def _find_codex_sessions(
+    agent_dir: Path,
+    agent_role: str,
+    *,
+    created_after: float = 0.0,
+) -> list[Path]:
+    """Find Codex rollout JSONL files for an agent.
+
+    All Codex agents share ``~/.codex/sessions/`` (no per-agent CODEX_HOME
+    because Codex wipes and recreates it on startup).  We find sessions by
+    scanning all rollout files created after spawn_timestamp.
+
+    Since multiple agents share the same sessions dir, we return ALL recent
+    rollout files and let the caller iterate.  Each agent produces exactly
+    one rollout file per spawn.
+    """
+    sessions_dir = Path.home() / ".codex" / "sessions"
+
+    if not sessions_dir.exists():
+        log.warning("No Codex sessions dir at %s", sessions_dir)
+        return []
+
+    candidates = [
+        f for f in sessions_dir.rglob("rollout-*.jsonl")
+        if created_after == 0.0 or f.stat().st_mtime > created_after
+    ]
+    if not candidates:
+        log.warning("No Codex rollout files (after ts=%.0f) in %s", created_after, sessions_dir)
+        return []
+
+    # All agents share ~/.codex/sessions/. Match rollout to agent by
+    # checking the cwd field in the session_meta (first line).
+    agent_cwd = str(agent_dir)
+    for f in candidates:
+        try:
+            first_line = f.open().readline()
+            meta = json.loads(first_line)
+            if meta.get("type") == "session_meta":
+                rollout_cwd = meta.get("payload", {}).get("cwd", "")
+                if rollout_cwd == agent_cwd:
+                    return [f]
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    log.warning("No Codex rollout matched cwd=%s for agent %s", agent_cwd, agent_role)
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Rollout JSONL parsing
+# ---------------------------------------------------------------------------
+
+def _parse_codex_rollout(
+    rollout_path: Path,
+    agent_role: str,
+    catalog_tool_names: set[str],
+    all_agent_roles: list[str],
+    action_sink: Any,
+    *,
+    mcp_server_name: str = MCP_SERVER_NAME,
+) -> str:
+    """Parse one Codex rollout JSONL and emit ObservableActions.
+
+    Returns the last assistant text (for hub final output extraction).
+    """
+    last_assistant_text = ""
+    # call_id → {name, args, raw_name}
+    pending_tool_calls: dict[str, dict[str, Any]] = {}
+
+    with open(rollout_path) as f:
+        for line_no, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            record_type = record.get("type", "")
+
+            # ---- response_item: contains model messages and tool calls ----
+            if record_type == "response_item":
+                payload = record.get("payload", {})
+                item_type = payload.get("type", "")
+
+                if item_type == "message":
+                    role = payload.get("role", "")
+                    content = payload.get("content", [])
+                    if not isinstance(content, list):
+                        continue
+
+                    if role == "assistant":
+                        # Extract text and (potentially) tool calls from assistant messages
+                        for item in content:
+                            if not isinstance(item, dict):
+                                continue
+                            ctype = item.get("type", "")
+                            if ctype == "output_text":
+                                text = item.get("text", "")
+                                if text:
+                                    last_assistant_text = text
+
+                # ---- FunctionCall: tool invocation ----
+                elif item_type == "function_call":
+                    raw_name = payload.get("name", "")
+                    arguments_str = payload.get("arguments", "{}")
+                    call_id = payload.get("call_id", "")
+
+                    try:
+                        tool_args = json.loads(arguments_str) if isinstance(arguments_str, str) else arguments_str
+                    except json.JSONDecodeError:
+                        tool_args = {"_raw": arguments_str}
+
+                    tool_name = _strip_mcp_prefix(raw_name, mcp_server_name)
+
+                    if tool_name in catalog_tool_names:
+                        pending_tool_calls[call_id] = {
+                            "name": tool_name,
+                            "args": tool_args,
+                            "raw_name": raw_name,
+                        }
+                    elif _is_mailbox_send(raw_name):
+                        action_sink.emit_communication(
+                            agent_id=agent_role,
+                            agent_role=agent_role,
+                            target_agent=tool_args.get("to", ""),
+                            target_role=tool_args.get("to", ""),
+                            content=str(tool_args.get("content", "")),
+                            raw_event={
+                                "framework": "clawteam",
+                                "harness": "codex",
+                                "tool": raw_name,
+                                "capture_mode": "codex_rollout_mailbox_send",
+                            },
+                        )
+                    elif _is_mailbox_broadcast(raw_name):
+                        exclude = set(tool_args.get("exclude", []) or [])
+                        exclude.add(agent_role)
+                        msg_content = str(tool_args.get("content", ""))
+                        for recipient in all_agent_roles:
+                            if recipient not in exclude:
+                                action_sink.emit_communication(
+                                    agent_id=agent_role,
+                                    agent_role=agent_role,
+                                    target_agent=recipient,
+                                    target_role=recipient,
+                                    content=msg_content,
+                                    raw_event={
+                                        "framework": "clawteam",
+                                        "harness": "codex",
+                                        "tool": raw_name,
+                                        "capture_mode": "codex_rollout_mailbox_broadcast",
+                                        "expanded_from": "broadcast",
+                                    },
+                                )
+
+                # ---- FunctionCallOutput: tool result ----
+                elif item_type == "function_call_output":
+                    call_id = payload.get("call_id", "")
+                    output = payload.get("output", "")
+                    if isinstance(output, dict):
+                        # Structured output — extract text content
+                        content_items = output.get("content_items", [])
+                        if content_items:
+                            parts = [
+                                ci.get("text", "") for ci in content_items
+                                if isinstance(ci, dict) and "text" in ci
+                            ]
+                            result_text = "\n".join(parts)
+                        else:
+                            result_text = output.get("content", str(output))
+                    else:
+                        result_text = str(output)
+
+                    if call_id in pending_tool_calls:
+                        tc = pending_tool_calls.pop(call_id)
+                        action_sink.emit_tool_call(
+                            agent_id=agent_role,
+                            agent_role=agent_role,
+                            tool_name=tc["name"],
+                            tool_args=tc["args"],
+                            tool_result=result_text[:500],
+                            raw_event={
+                                "framework": "clawteam",
+                                "harness": "codex",
+                                "raw_tool_name": tc["raw_name"],
+                                "capture_mode": "codex_rollout_tool_result",
+                            },
+                        )
+
+    # Emit orphan tool calls (shouldn't happen, but guards against truncated sessions)
+    for call_id, tc in pending_tool_calls.items():
+        action_sink.emit_tool_call(
+            agent_id=agent_role,
+            agent_role=agent_role,
+            tool_name=tc["name"],
+            tool_args=tc["args"],
+            tool_result="(no result recorded)",
+            raw_event={
+                "framework": "clawteam",
+                "harness": "codex",
+                "raw_tool_name": tc["raw_name"],
+                "capture_mode": "codex_rollout_orphan_tool_use",
+            },
+        )
+
+    return last_assistant_text
+
+
+# ---------------------------------------------------------------------------
+# Top-level collection entry point
+# ---------------------------------------------------------------------------
+
+def collect_codex_traces(
+    worktree_map: dict[str, Path],
+    catalog_tool_names: set[str],
+    all_agent_roles: list[str],
+    action_sink: Any,
+    hub_role: str,
+    *,
+    spawn_timestamp: float = 0.0,
+) -> str:
+    """Collect and parse Codex rollout traces for all agents in a run.
+
+    Returns the hub agent's final output text.
+    """
+    final_text = ""
+
+    for agent_role, wt_path in worktree_map.items():
+        rollout_files = _find_codex_sessions(wt_path, agent_role, created_after=spawn_timestamp)
+        if not rollout_files:
+            log.warning("No Codex rollout found for agent %s at %s", agent_role, wt_path)
+            continue
+
+        for idx, rollout_path in enumerate(rollout_files):
+            log.info("Parsing Codex rollout %s for agent %s", rollout_path.name, agent_role)
+            agent_output = _parse_codex_rollout(
+                rollout_path,
+                agent_role,
+                catalog_tool_names,
+                all_agent_roles,
+                action_sink,
+            )
+            if agent_role == hub_role and idx == 0:
+                final_text = agent_output
+
+    return final_text

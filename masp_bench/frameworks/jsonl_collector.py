@@ -102,11 +102,16 @@ def find_agent_jsonl(
 def _strip_mcp_prefix(raw_name: str, server_name: str) -> str:
     """Strip MCP namespace prefix.
 
-    ``mcp__masp_tools__execute_trade`` → ``execute_trade``
+    Handles multiple naming conventions across harnesses:
+    - Claude Code: ``mcp__masp_tools__execute_trade`` → ``execute_trade``
+    - Codex:       ``mcp__masp_tools__execute_trade`` → ``execute_trade``
+    - OpenClaw:    ``masp_tools__execute_trade``       → ``execute_trade``
     """
     for prefix in (
         f"mcp__{server_name}__",
         f"mcp__{server_name.replace('-', '_')}__",
+        f"{server_name}__",
+        f"{server_name.replace('-', '_')}__",
     ):
         if raw_name.startswith(prefix):
             return raw_name[len(prefix):]

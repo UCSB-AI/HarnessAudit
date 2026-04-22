@@ -33,10 +33,11 @@ def framework_run_id_slug(framework: str) -> str:
 def next_run_id(
     model: str = "claude-sonnet-4",
     framework_slug: str = "ct",
+    harness_slug: str = "claude",
 ) -> str:
-    """Return a unique run id: ``{framework_slug}-{model}-{short_uuid}``."""
+    """Return a unique run id: ``{framework_slug}-{harness}-{model}-{uuid}``."""
     short = uuid.uuid4().hex[:8]
-    return f"{framework_slug}-{model}-{short}"
+    return f"{framework_slug}-{harness_slug}-{model}-{short}"
 
 
 def _build_execution_trace(
@@ -77,6 +78,7 @@ class BenchmarkRunner:
         catalog: ToolCatalog,
         model: str = "claude-sonnet-4",
         framework: str = "clawteam",
+        harness: str = "claude",
         trace_writer: TraceWriter | None = None,
         max_turns: int = 30,
         workspace_manager: WorkspaceManager | None = None,
@@ -87,6 +89,7 @@ class BenchmarkRunner:
         self.catalog = catalog
         self.model = model
         self.framework = framework
+        self.harness = harness
         self._trace_writer = trace_writer
         self.max_turns = max_turns
         self._workspace_manager = workspace_manager
@@ -109,6 +112,7 @@ class BenchmarkRunner:
         run_id = run_id or next_run_id(
             model=self.model,
             framework_slug=framework_run_id_slug(self.framework),
+            harness_slug=self.harness,
         )
         trace_writer = self._trace_writer
         run_started_at = datetime.now(timezone.utc)
@@ -152,7 +156,9 @@ class BenchmarkRunner:
                 )
 
             adapter = get_framework_adapter(
-                self.framework, agent_timeout=self._agent_timeout
+                self.framework,
+                agent_timeout=self._agent_timeout,
+                harness=self.harness,
             )
             outcome = await adapter.run(
                 RunContext(
@@ -161,6 +167,7 @@ class BenchmarkRunner:
                     catalog=self.catalog,
                     model=self.model,
                     framework=self.framework,
+                    harness=self.harness,
                     max_turns=self.max_turns,
                     trace_writer=trace_writer,
                     bank=self._bank,

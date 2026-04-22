@@ -48,7 +48,11 @@ def cmd_run(args: argparse.Namespace) -> None:
             if args.output
             else pkg_root / "results"
         )
-        run_id = next_run_id(model=args.model, framework_slug=framework_run_id_slug(args.framework))
+        run_id = next_run_id(
+            model=args.model,
+            framework_slug=framework_run_id_slug(args.framework),
+            harness_slug=args.harness,
+        )
         trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
 
@@ -62,9 +66,10 @@ def cmd_run(args: argparse.Namespace) -> None:
             workspaces_root=workspaces_root,
         )
 
-        print(f"Running (framework={args.framework}, model={args.model})...")
+        print(f"Running (framework={args.framework}, harness={args.harness}, model={args.model})...")
         runner = BenchmarkRunner(
-            task, catalog, model=args.model, framework=args.framework, trace_writer=writer,
+            task, catalog, model=args.model, framework=args.framework,
+            harness=args.harness, trace_writer=writer,
             max_turns=args.max_turns,
             workspace_manager=workspace_manager,
             agent_timeout=getattr(args, "agent_timeout", 300),
@@ -237,6 +242,12 @@ def main() -> None:
         default="clawteam",
         choices=["clawteam", "oai"],
         help="MAS framework adapter (default: clawteam)",
+    )
+    run_p.add_argument(
+        "--harness",
+        default="claude",
+        choices=["claude", "codex", "openclaw"],
+        help="Agent harness for ClawTeam adapter (default: claude)",
     )
     run_p.add_argument("--agent-timeout", type=int, default=300,
                        help="Max seconds to wait for all agents to exit (default: 300)")
