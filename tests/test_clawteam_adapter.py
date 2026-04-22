@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-def _load_clawteam_adapter_module():
+def _load_clawteam_adapter_module(runtime=None):
     repo_root = Path(__file__).resolve().parents[1]
     module_path = repo_root / "masp_bench" / "frameworks" / "clawteam_adapter.py"
 
@@ -39,6 +39,18 @@ def _load_clawteam_adapter_module():
     )
     harness_mod.session_name = lambda run_id, role, harness: f"{run_id}-{role}"
     sys.modules["masp_bench.frameworks.harness_profiles"] = harness_mod
+
+    runtime_mod = types.ModuleType("masp_bench.frameworks.harness_runtime")
+    runtime_mod.HarnessRuntime = object
+    runtime_mod.get_harness_runtime = lambda name: runtime or SimpleNamespace(
+        register_mcp=lambda **kwargs: None,
+        unregister_mcp=lambda **kwargs: None,
+        build_spawn_env=lambda **kwargs: {},
+        session_id=lambda **kwargs: None,
+        collect_traces=lambda **kwargs: "",
+        cleanup=lambda: None,
+    )
+    sys.modules["masp_bench.frameworks.harness_runtime"] = runtime_mod
 
     spec = importlib.util.spec_from_file_location(
         "masp_bench.frameworks.clawteam_adapter",
@@ -116,4 +128,80 @@ def test_seed_spoke_tasks_creates_owned_task_for_each_specialist() -> None:
         "assignment_mode": "task_board_first",
         "hub_role": "concierge_lead",
         "role": "booking_specialist",
+    }
+
+
+def test_adapter_registers_mcp_via_runtime_strategy() -> None:
+    recorded: list[dict[str, object]] = []
+
+    runtime = SimpleNamespace(
+        register_mcp=lambda **kwargs: recorded.append(kwargs),
+        unregister_mcp=lambda **kwargs: None,
+        build_spawn_env=lambda **kwargs: {},
+        session_id=lambda **kwargs: None,
+        collect_traces=lambda **kwargs: "",
+        cleanup=lambda: None,
+    )
+    adapter_mod = _load_clawteam_adapter_module(runtime)
+    clawteam_adapter = adapter_mod.ClawTeamAdapter(harness="codex")
+
+    worktrees = {"concierge_lead": Path("/tmp/concierge")}
+    clawteam_adapter._register_mcp_for_harness(worktrees, 8123, "clawteam-mcp")
+
+    assert recorded == [
+        {
+            "worktrees": worktrees,
+            "mcp_port": 8123,
+            "clawteam_command": "clawteam-mcp",
+        }
+    ]
+
+
+def test_adapter_builds_spawn_env_and_collects_traces_via_runtime_strategy() -> None:
+    captured: dict[str, object] = {}
+
+    def build_spawn_env(**kwargs):
+        captured["env"] = kwargs
+        return {"RUNTIME_ROLE": kwargs["agent_role"]}
+
+    def collect_traces(**kwargs):
+        captured["collect"] = kwargs
+        return "final summary"
+
+    runtime = SimpleNamespace(
+        register_mcp=lambda **kwargs: None,
+        unregister_mcp=lambda **kwargs: None,
+        build_spawn_env=build_spawn_env,
+        session_id=lambda **kwargs: "session-123",
+        collect_traces=collect_traces,
+        cleanup=lambda: None,
+    )
+    adapter_mod = _load_clawteam_adapter_module(runtime)
+    clawteam_adapter = adapter_mod.ClawTeamAdapter(harness="openclaw")
+    clawteam_adapter._current_run_id = "ct-openclaw-test"
+
+    env = clawteam_adapter._build_spawn_env("vendor_liaison", "/tmp/vendor")
+    result = clawteam_adapter._collect_traces(
+        worktrees={"vendor_liaison": Path("/tmp/vendor")},
+        catalog_names={"mailbox_send"},
+        all_roles=["vendor_liaison", "concierge_lead"],
+        action_sink="sink",
+        hub_role="concierge_lead",
+        spawn_timestamp=123.0,
+    )
+
+    assert env == {"RUNTIME_ROLE": "vendor_liaison"}
+    assert captured["env"] == {
+        "agent_role": "vendor_liaison",
+        "cwd": "/tmp/vendor",
+    }
+    assert result == "final summary"
+    assert captured["collect"] == {
+        "run_id": "ct-openclaw-test",
+        "worktrees": {"vendor_liaison": Path("/tmp/vendor")},
+        "catalog_names": {"mailbox_send"},
+        "all_roles": ["vendor_liaison", "concierge_lead"],
+        "action_sink": "sink",
+        "hub_role": "concierge_lead",
+        "spawn_timestamp": 123.0,
     }

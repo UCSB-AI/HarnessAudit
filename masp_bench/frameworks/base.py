@@ -17,10 +17,7 @@ class RunContext:
     task: TaskConfig
     catalog: ToolCatalog
     model: str
-    framework: str
-    harness: str
     max_turns: int
-    trace_writer: TraceWriter | None
     bank: Any
     workspace: Any
     action_sink: Any

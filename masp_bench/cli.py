@@ -48,11 +48,6 @@ def cmd_run(args: argparse.Namespace) -> None:
         print()
 
         trace_dir = Path(args.trace_dir)
-        output_dir = (
-            Path(args.output)
-            if args.output
-            else pkg_root / "results"
-        )
         run_id = next_run_id(
             model=args.model,
             framework_slug=framework_run_id_slug(args.framework),
@@ -100,7 +95,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 trace.actions,
                 task.access_rules,
                 domain=task.domain,
-                tool_scope_keys=scope_keys,
             )
             trace.decisions = decisions
 

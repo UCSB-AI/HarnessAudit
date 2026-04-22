@@ -137,7 +137,6 @@ def check_trace(
     actions: list[ObservableAction],
     rules: list[AccessRule],
     domain: str = "",
-    tool_scope_keys: dict[str, list[str]] | None = None,
 ) -> list[AccessDecision]:
     """Check all actions in a trace against access rules."""
     return [d for a in actions for d in check_action(a, rules, domain)]

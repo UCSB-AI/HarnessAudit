@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from .jsonl_collector import _is_mailbox_broadcast, _is_mailbox_send, _strip_mcp_prefix
+from .trace_semantics import mailbox_call_succeeded, mailbox_recipients, mailbox_team_name
 
 log = logging.getLogger(__name__)
 
@@ -111,6 +112,7 @@ def _parse_codex_rollout(
     action_sink: Any,
     *,
     mcp_server_name: str = MCP_SERVER_NAME,
+    expected_team_name: str | None = None,
 ) -> str:
     """Parse one Codex rollout JSONL and emit ObservableActions.
 
@@ -119,6 +121,7 @@ def _parse_codex_rollout(
     last_assistant_text = ""
     # call_id → {name, args, raw_name}
     pending_tool_calls: dict[str, dict[str, Any]] = {}
+    pending_mailbox_calls: dict[str, dict[str, Any]] = {}
 
     def _record_timestamp(record: dict[str, Any]) -> str | None:
         ts = record.get("timestamp")
@@ -180,45 +183,21 @@ def _parse_codex_rollout(
                             "line_no": line_no,
                         }
                     elif _is_mailbox_send(raw_name):
-                        action_sink.emit_communication(
-                            agent_id=agent_role,
-                            agent_role=agent_role,
-                            target_agent=tool_args.get("to", ""),
-                            target_role=tool_args.get("to", ""),
-                            content=str(tool_args.get("content", "")),
-                            raw_event={
-                                "framework": "clawteam",
-                                "harness": "codex",
-                                "tool": raw_name,
-                                "capture_mode": "codex_rollout_mailbox_send",
-                                "source_file": str(rollout_path),
-                                "source_line": line_no,
-                            },
-                            timestamp=_record_timestamp(record),
-                        )
+                        pending_mailbox_calls[call_id] = {
+                            "kind": "send",
+                            "args": tool_args,
+                            "raw_name": raw_name,
+                            "timestamp": _record_timestamp(record),
+                            "line_no": line_no,
+                        }
                     elif _is_mailbox_broadcast(raw_name):
-                        exclude = set(tool_args.get("exclude", []) or [])
-                        exclude.add(agent_role)
-                        msg_content = str(tool_args.get("content", ""))
-                        for recipient in all_agent_roles:
-                            if recipient not in exclude:
-                                action_sink.emit_communication(
-                                    agent_id=agent_role,
-                                    agent_role=agent_role,
-                                    target_agent=recipient,
-                                    target_role=recipient,
-                                    content=msg_content,
-                                    raw_event={
-                                        "framework": "clawteam",
-                                        "harness": "codex",
-                                        "tool": raw_name,
-                                        "capture_mode": "codex_rollout_mailbox_broadcast",
-                                        "expanded_from": "broadcast",
-                                        "source_file": str(rollout_path),
-                                        "source_line": line_no,
-                                    },
-                                    timestamp=_record_timestamp(record),
-                                )
+                        pending_mailbox_calls[call_id] = {
+                            "kind": "broadcast",
+                            "args": tool_args,
+                            "raw_name": raw_name,
+                            "timestamp": _record_timestamp(record),
+                            "line_no": line_no,
+                        }
 
                 # ---- FunctionCallOutput: tool result ----
                 elif item_type == "function_call_output":
@@ -256,6 +235,45 @@ def _parse_codex_rollout(
                             },
                             timestamp=_record_timestamp(record) or tc.get("timestamp"),
                         )
+                    elif call_id in pending_mailbox_calls:
+                        mc = pending_mailbox_calls.pop(call_id)
+                        if not mailbox_call_succeeded(result_text):
+                            continue
+                        team_name = mailbox_team_name(mc["args"])
+                        if expected_team_name and team_name != expected_team_name:
+                            continue
+
+                        msg_content = str(mc["args"].get("content", ""))
+                        for recipient in mailbox_recipients(
+                            kind=mc["kind"],
+                            sender_role=agent_role,
+                            all_agent_roles=all_agent_roles,
+                            tool_args=mc["args"],
+                        ):
+                            raw_event = {
+                                "framework": "clawteam",
+                                "harness": "codex",
+                                "tool": mc["raw_name"],
+                                "capture_mode": (
+                                    "codex_rollout_mailbox_send"
+                                    if mc["kind"] == "send"
+                                    else "codex_rollout_mailbox_broadcast"
+                                ),
+                                "team_name": team_name,
+                                "source_file": str(rollout_path),
+                                "source_line": line_no,
+                            }
+                            if mc["kind"] == "broadcast":
+                                raw_event["expanded_from"] = "broadcast"
+                            action_sink.emit_communication(
+                                agent_id=agent_role,
+                                agent_role=agent_role,
+                                target_agent=recipient,
+                                target_role=recipient,
+                                content=msg_content,
+                                raw_event=raw_event,
+                                timestamp=_record_timestamp(record) or mc.get("timestamp"),
+                            )
 
     # Emit orphan tool calls (shouldn't happen, but guards against truncated sessions)
     for call_id, tc in pending_tool_calls.items():
@@ -290,6 +308,7 @@ def collect_codex_traces(
     action_sink: Any,
     hub_role: str,
     *,
+    run_id: str = "",
     spawn_timestamp: float = 0.0,
 ) -> str:
     """Collect and parse Codex rollout traces for all agents in a run.
@@ -312,6 +331,7 @@ def collect_codex_traces(
                 catalog_tool_names,
                 all_agent_roles,
                 action_sink,
+                expected_team_name=f"masp-{run_id}" if run_id else None,
             )
             if agent_role == hub_role and idx == 0:
                 final_text = agent_output

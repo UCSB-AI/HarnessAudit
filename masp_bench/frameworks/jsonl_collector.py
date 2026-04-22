@@ -18,6 +18,15 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .trace_semantics import (
+    is_mailbox_broadcast as _is_mailbox_broadcast,
+    is_mailbox_send as _is_mailbox_send,
+    mailbox_call_succeeded,
+    mailbox_recipients,
+    mailbox_team_name,
+    normalize_mcp_tool_name as _strip_mcp_prefix,
+)
+
 log = logging.getLogger(__name__)
 
 MCP_SERVER_NAME = "masp_tools"
@@ -96,37 +105,6 @@ def find_agent_jsonl(
 
 
 # ---------------------------------------------------------------------------
-# MCP tool-name helpers
-# ---------------------------------------------------------------------------
-
-def _strip_mcp_prefix(raw_name: str, server_name: str) -> str:
-    """Strip MCP namespace prefix.
-
-    Handles multiple naming conventions across harnesses:
-    - Claude Code: ``mcp__masp_tools__execute_trade`` → ``execute_trade``
-    - Codex:       ``mcp__masp_tools__execute_trade`` → ``execute_trade``
-    - OpenClaw:    ``masp_tools__execute_trade``       → ``execute_trade``
-    """
-    for prefix in (
-        f"mcp__{server_name}__",
-        f"mcp__{server_name.replace('-', '_')}__",
-        f"{server_name}__",
-        f"{server_name.replace('-', '_')}__",
-    ):
-        if raw_name.startswith(prefix):
-            return raw_name[len(prefix):]
-    return raw_name
-
-
-def _is_mailbox_send(name: str) -> bool:
-    return name == "mailbox_send" or name.endswith("__mailbox_send")
-
-
-def _is_mailbox_broadcast(name: str) -> bool:
-    return name == "mailbox_broadcast" or name.endswith("__mailbox_broadcast")
-
-
-# ---------------------------------------------------------------------------
 # JSONL parsing
 # ---------------------------------------------------------------------------
 
@@ -139,6 +117,7 @@ def parse_jsonl(
     *,
     mcp_server_name: str = MCP_SERVER_NAME,
     is_subagent: bool = False,
+    expected_team_name: str | None = None,
 ) -> str:
     """Parse one JSONL file and emit ``ObservableAction`` entries.
 
@@ -167,6 +146,7 @@ def parse_jsonl(
     last_assistant_text = ""
     # tool_use_id → {name, args, raw_name}
     pending_tool_calls: dict[str, dict[str, Any]] = {}
+    pending_mailbox_calls: dict[str, dict[str, Any]] = {}
     _sub_flag: dict[str, Any] = {"is_subagent": True} if is_subagent else {}
 
     def _event_timestamp(event: dict[str, Any]) -> str | None:
@@ -214,49 +194,22 @@ def parse_jsonl(
                             }
 
                         elif _is_mailbox_send(raw_name):
-                            # Point-to-point message → COMMUNICATION
-                            action_sink.emit_communication(
-                                agent_id=agent_role,
-                                agent_role=agent_role,
-                                target_agent=tool_args.get("to", ""),
-                                target_role=tool_args.get("to", ""),
-                                content=str(tool_args.get("content", "")),
-                                raw_event={
-                                    "framework": "clawteam",
-                                    "tool": raw_name,
-                                    "capture_mode": "jsonl_mailbox_send",
-                                    "source_file": str(jsonl_path),
-                                    "source_line": line_no,
-                                    **_sub_flag,
-                                },
-                                timestamp=_event_timestamp(event),
-                            )
+                            pending_mailbox_calls[tool_use_id] = {
+                                "kind": "send",
+                                "args": tool_args,
+                                "raw_name": raw_name,
+                                "timestamp": _event_timestamp(event),
+                                "line_no": line_no,
+                            }
 
                         elif _is_mailbox_broadcast(raw_name):
-                            # Broadcast → expand to per-recipient COMMUNICATION
-                            # so V-IC rules can detect spoke→spoke paths.
-                            exclude = set(tool_args.get("exclude", []) or [])
-                            exclude.add(agent_role)
-                            msg_content = str(tool_args.get("content", ""))
-                            for recipient in all_agent_roles:
-                                if recipient not in exclude:
-                                    action_sink.emit_communication(
-                                        agent_id=agent_role,
-                                        agent_role=agent_role,
-                                        target_agent=recipient,
-                                        target_role=recipient,
-                                        content=msg_content,
-                                        raw_event={
-                                            "framework": "clawteam",
-                                            "tool": raw_name,
-                                            "capture_mode": "jsonl_mailbox_broadcast",
-                                            "expanded_from": "broadcast",
-                                            "source_file": str(jsonl_path),
-                                            "source_line": line_no,
-                                            **_sub_flag,
-                                        },
-                                        timestamp=_event_timestamp(event),
-                                    )
+                            pending_mailbox_calls[tool_use_id] = {
+                                "kind": "broadcast",
+                                "args": tool_args,
+                                "raw_name": raw_name,
+                                "timestamp": _event_timestamp(event),
+                                "line_no": line_no,
+                            }
 
                     elif item.get("type") == "text":
                         text = item.get("text", "")
@@ -303,6 +256,48 @@ def parse_jsonl(
                             },
                             timestamp=_event_timestamp(event) or tc.get("timestamp"),
                         )
+                    elif tool_use_id in pending_mailbox_calls:
+                        mc = pending_mailbox_calls.pop(tool_use_id)
+                        if not mailbox_call_succeeded(
+                            result_text,
+                            is_error=bool(item.get("is_error")),
+                        ):
+                            continue
+                        team_name = mailbox_team_name(mc["args"])
+                        if expected_team_name and team_name != expected_team_name:
+                            continue
+
+                        msg_content = str(mc["args"].get("content", ""))
+                        for recipient in mailbox_recipients(
+                            kind=mc["kind"],
+                            sender_role=agent_role,
+                            all_agent_roles=all_agent_roles,
+                            tool_args=mc["args"],
+                        ):
+                            raw_event = {
+                                "framework": "clawteam",
+                                "tool": mc["raw_name"],
+                                "capture_mode": (
+                                    "jsonl_mailbox_send"
+                                    if mc["kind"] == "send"
+                                    else "jsonl_mailbox_broadcast"
+                                ),
+                                "team_name": team_name,
+                                "source_file": str(jsonl_path),
+                                "source_line": line_no,
+                                **_sub_flag,
+                            }
+                            if mc["kind"] == "broadcast":
+                                raw_event["expanded_from"] = "broadcast"
+                            action_sink.emit_communication(
+                                agent_id=agent_role,
+                                agent_role=agent_role,
+                                target_agent=recipient,
+                                target_role=recipient,
+                                content=msg_content,
+                                raw_event=raw_event,
+                                timestamp=_event_timestamp(event) or mc.get("timestamp"),
+                            )
 
     # Emit any pending tool calls that never got a result (shouldn't happen
     # normally, but guards against truncated sessions).
@@ -334,6 +329,7 @@ def collect_all_agent_traces(
     action_sink: Any,
     hub_role: str,
     *,
+    run_id: str = "",
     spawn_timestamp: float = 0.0,
 ) -> str:
     """Collect and parse JSONL traces for all agents in a run.
@@ -377,6 +373,7 @@ def collect_all_agent_traces(
                 all_agent_roles,
                 action_sink,
                 is_subagent=(idx > 0),
+                expected_team_name=f"masp-{run_id}" if run_id else None,
             )
             # Final output = last text from hub's main JSONL (first file only)
             if agent_role == hub_role and idx == 0:

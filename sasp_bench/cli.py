@@ -99,7 +99,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             }
             decisions = check_trace(
                 trace.actions, task.access_rules,
-                domain=task.domain, tool_scope_keys=scope_keys,
+                domain=task.domain,
             )
             trace.decisions = decisions
 
