@@ -35,6 +35,83 @@ _CLAUDE_JSON = Path.home() / ".claude.json"
 _MCP_SERVER_NAMES = ("masp_tools", "clawteam")
 
 
+def _spoke_task_subject(agent_cfg: Any) -> str:
+    summary = (agent_cfg.description or agent_cfg.system_prompt or "").strip()
+    if summary and not summary.endswith("."):
+        summary = f"{summary}."
+    if not summary:
+        summary = "Complete your assigned specialist work."
+    return f"{agent_cfg.role}: {summary}"
+
+
+def _spoke_task_description(
+    agent_cfg: Any,
+    task_goal: str,
+    hub_role: str,
+    *,
+    team_name: str,
+) -> str:
+    start_call = (
+        f'`task_update(team_name="{team_name}", task_id="<this-task-id>", '
+        f'status="in_progress", caller="{agent_cfg.role}")`'
+    )
+    complete_call = (
+        f'`task_update(team_name="{team_name}", task_id="<this-task-id>", '
+        'status="completed")`'
+    )
+    send_call = (
+        f'`mailbox_send(team_name="{team_name}", '
+        f'from_agent="{agent_cfg.role}", to="{hub_role}")`'
+    )
+    scope_text = (agent_cfg.system_prompt or agent_cfg.description or "").strip()
+
+    return (
+        f"Primary assignment channel: the shared task board for team {team_name}.\n\n"
+        "Overall task goal:\n"
+        f"{task_goal}\n\n"
+        f"Your role: {agent_cfg.role}\n"
+        f"Role scope:\n{scope_text}\n\n"
+        "Execution protocol:\n"
+        "1. Treat this task-board entry as your primary assignment.\n"
+        f"2. Start work by claiming it with {start_call}.\n"
+        "3. Stay within your role scope and use only the domain tools needed for this "
+        "assignment.\n"
+        f"4. Send your concise findings back to {hub_role} via {send_call}.\n"
+        f"5. After you report back, mark this task completed with {complete_call}.\n"
+        "6. Use the inbox only for clarifications, follow-up context, or escalation.\n"
+    )
+
+
+def seed_spoke_tasks(
+    task_store: Any,
+    spoke_agents: list[Any],
+    *,
+    task_goal: str,
+    hub_role: str,
+    team_name: str,
+) -> dict[str, str]:
+    """Create one seeded task-board assignment per specialist."""
+    task_ids: dict[str, str] = {}
+    for agent_cfg in spoke_agents:
+        task = task_store.create(
+            subject=_spoke_task_subject(agent_cfg),
+            description=_spoke_task_description(
+                agent_cfg,
+                task_goal,
+                hub_role,
+                team_name=team_name,
+            ),
+            owner=agent_cfg.role,
+            metadata={
+                "assignment_mode": "task_board_first",
+                "hub_role": hub_role,
+                "role": agent_cfg.role,
+            },
+        )
+        task_ids[agent_cfg.role] = task.id
+    return task_ids
+
+
 # ---------------------------------------------------------------------------
 # Atomic ~/.claude.json read-modify-write (file-locked)
 # ---------------------------------------------------------------------------
@@ -147,6 +224,9 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 leader_id=hub_id,
                 description=f"MASP run {ctx.run_id} — {ctx.task.task_id}",
             )
+            from .common import extract_input_text
+
+            input_text = extract_input_text(initial_input)
 
             # 3. Create sentinel task for hub completion detection
             task_store = FileTaskStore(team_name)
@@ -157,6 +237,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             )
             sentinel_id = sentinel.id
             log.info("Sentinel task created: %s", sentinel_id)
+
+            seeded_task_ids = seed_spoke_tasks(
+                task_store,
+                ctx.task.agents[1:],
+                task_goal=input_text or ctx.task.goal,
+                hub_role=hub_role,
+                team_name=team_name,
+            )
+            log.info("Seeded %d spoke tasks on the shared task board", len(seeded_task_ids))
 
             # 4. Setup working directories (mkdir only, no MCP write yet)
             clawteam_mcp_bin = shutil.which("clawteam-mcp") or "clawteam-mcp"
@@ -175,9 +264,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             spawn_timestamp = _time.time()
             backend = SubprocessBackend()
             all_agents = ctx.task.agents
-            from .common import extract_input_text
-
-            input_text = extract_input_text(initial_input)
 
             for idx, agent_cfg in enumerate(all_agents):
                 is_leader = idx == 0
@@ -199,14 +285,24 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                         sentinel_task_id=sentinel_id,
                     )
                 else:
-                    prompt = build_clawteam_spoke_prompt(agent_cfg, hub_role)
+                    prompt = build_clawteam_spoke_prompt(
+                        agent_cfg,
+                        hub_role,
+                        team_name=team_name,
+                    )
 
                 sys_prompt = agent_cfg.system_prompt or agent_cfg.description or ""
 
                 cwd = str(worktrees[agent_cfg.role])
                 spawn_env = self._build_spawn_env(agent_cfg.role, cwd)
+                spawn_command = list(self._profile.spawn_command)
+                if self._profile.name == "openclaw":
+                    spawn_command.extend([
+                        "--session-id",
+                        session_name(ctx.run_id, agent_cfg.role, self._profile.name),
+                    ])
                 result_msg = backend.spawn(
-                    command=list(self._profile.spawn_command),
+                    command=spawn_command,
                     agent_name=agent_cfg.role,
                     agent_id=agent_id,
                     agent_type=agent_cfg.description or agent_cfg.role,
@@ -489,7 +585,10 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 )
                 with open(codex_global, "a") as f:
                     f.write(mcp_block)
-                log.info("Appended Codex MCP config (stdio proxy) to %s", codex_global)
+                log.info(
+                    "Appended Codex MCP config (streamable-http for masp_tools, stdio for clawteam) to %s",
+                    codex_global,
+                )
             else:
                 log.info("Codex MCP config already present in %s", codex_global)
 

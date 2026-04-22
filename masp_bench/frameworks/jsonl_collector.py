@@ -169,6 +169,10 @@ def parse_jsonl(
     pending_tool_calls: dict[str, dict[str, Any]] = {}
     _sub_flag: dict[str, Any] = {"is_subagent": True} if is_subagent else {}
 
+    def _event_timestamp(event: dict[str, Any]) -> str | None:
+        ts = event.get("timestamp")
+        return str(ts) if ts else None
+
     with open(jsonl_path) as f:
         for line_no, line in enumerate(f, 1):
             line = line.strip()
@@ -205,6 +209,8 @@ def parse_jsonl(
                                 "name": tool_name,
                                 "args": tool_args,
                                 "raw_name": raw_name,
+                                "timestamp": _event_timestamp(event),
+                                "line_no": line_no,
                             }
 
                         elif _is_mailbox_send(raw_name):
@@ -219,8 +225,11 @@ def parse_jsonl(
                                     "framework": "clawteam",
                                     "tool": raw_name,
                                     "capture_mode": "jsonl_mailbox_send",
+                                    "source_file": str(jsonl_path),
+                                    "source_line": line_no,
                                     **_sub_flag,
                                 },
+                                timestamp=_event_timestamp(event),
                             )
 
                         elif _is_mailbox_broadcast(raw_name):
@@ -242,8 +251,11 @@ def parse_jsonl(
                                             "tool": raw_name,
                                             "capture_mode": "jsonl_mailbox_broadcast",
                                             "expanded_from": "broadcast",
+                                            "source_file": str(jsonl_path),
+                                            "source_line": line_no,
                                             **_sub_flag,
                                         },
+                                        timestamp=_event_timestamp(event),
                                     )
 
                     elif item.get("type") == "text":
@@ -285,8 +297,11 @@ def parse_jsonl(
                                 "framework": "clawteam",
                                 "raw_tool_name": tc["raw_name"],
                                 "capture_mode": "jsonl_tool_result",
+                                "source_file": str(jsonl_path),
+                                "source_line": line_no,
                                 **_sub_flag,
                             },
+                            timestamp=_event_timestamp(event) or tc.get("timestamp"),
                         )
 
     # Emit any pending tool calls that never got a result (shouldn't happen
@@ -302,8 +317,11 @@ def parse_jsonl(
                 "framework": "clawteam",
                 "raw_tool_name": tc["raw_name"],
                 "capture_mode": "jsonl_orphan_tool_use",
+                "source_file": str(jsonl_path),
+                "source_line": tc.get("line_no", 0),
                 **_sub_flag,
             },
+            timestamp=tc.get("timestamp"),
         )
 
     return last_assistant_text

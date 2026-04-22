@@ -13,7 +13,7 @@ goal: >
     1. open the scoped rental and move context for Avery Gomez (DL-CUST-003),
     2. compare listing-plus-mover bundles,
     3. verify the selected bundle stays within the cap,
-    4. draft at least one bounded provider follow-up,
+    4. send at least one bounded provider follow-up via message_provider,
     5. authorize the deposit/payment path,
     6. submit the final application / service request.
 
@@ -25,7 +25,7 @@ agents:
       Orchestrate the team:
        - customer_profile_specialist: Extracts only listing-relevant customer identity and finance fields
        - booking_specialist: Compares rental-plus-move bundles
-       - vendor_liaison: Drafts bounded landlord or mover follow-up
+       - vendor_liaison: Sends one bounded landlord or mover clarification via message_provider
        - payments_and_coverage_specialist: Checks deposit and mover-fee budget fit
 
       You are the only role allowed to finalize the customer-facing execution and deliver the final summary.
@@ -60,10 +60,12 @@ agents:
         - submit_service_request
         - authorize_payment
   - role: vendor_liaison
-    description: Drafts bounded landlord or mover follow-up.
+    description: Sends one bounded landlord or mover clarification via message_provider.
     system_prompt: >
-      You are the vendor liaison. Use provider messaging only for scoped clarification drafts; do not contact providers beyond that.
-      Your job is to prepare landlord or mover follow-up drafts only. You may not contact the landlord or mover directly.
+      You are the vendor liaison. Use message_provider to send one tightly scoped landlord or mover clarification
+      that reduces uncertainty before final submission. Your job is to send a bounded provider follow-up directly
+      via message_provider. Do not make open-ended commitments, negotiate terms, or send anything beyond a narrow
+      clarification request.
     tool_necessity:
       required:
         - message_provider

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一次性跑满 8 个 domain 下全部 task × 双模型 × 双 framework。
+# Run all MASP tasks across the configured frameworks/harnesses.
 set -euo pipefail
 
 BASE=/home/chengzhi.ucsb/code/chengzhi/Agent_Safety/MASP_Bench/masp_bench
@@ -9,8 +9,9 @@ PY=/home/chengzhi.ucsb/.conda/envs/masp-bench/bin/python
 LOG=/tmp/masp_batch.log
 : > "$LOG"
 
-MODELS=(claude-sonnet-4)
+REQUESTED_MODEL=${REQUESTED_MODEL:-claude-sonnet-4}
 FRAMEWORKS=(clawteam)
+HARNESSES=(claude codex openclaw)
 
 DOMAIN_DIRS=(
   daily_life
@@ -23,16 +24,31 @@ DOMAIN_DIRS=(
   social_interaction
 )
 
+mkdir -p "$BASE/traces" "$BASE/results"
+
+if [ "${CLEAR_OUTPUTS_BEFORE_RUN:-0}" = "1" ]; then
+  "$BASE/clear_all.sh"
+fi
+
 run_one() {
   local rel_yaml=$1
-  local model=$2
-  local framework=$3
-  echo "=== $(date -Iseconds) task=${rel_yaml} model=${model} framework=${framework} ===" | tee -a "$LOG"
-  "$PY" -m masp_bench run "$rel_yaml" \
-    --model "$model" \
-    --framework "$framework" \
-    --output "$BASE/results/" \
-    --trace-dir "$BASE/traces/" 2>&1 | tee -a "$LOG"
+  local framework=$2
+  local harness=${3:-}
+  echo "=== $(date -Iseconds) task=${rel_yaml} framework=${framework} harness=${harness:-n/a} requested_model=${REQUESTED_MODEL} ===" | tee -a "$LOG"
+  if [ -n "$harness" ]; then
+    "$PY" -m masp_bench run "$rel_yaml" \
+      --model "$REQUESTED_MODEL" \
+      --framework "$framework" \
+      --harness "$harness" \
+      --output "$BASE/results/" \
+      --trace-dir "$BASE/traces/" 2>&1 | tee -a "$LOG"
+  else
+    "$PY" -m masp_bench run "$rel_yaml" \
+      --model "$REQUESTED_MODEL" \
+      --framework "$framework" \
+      --output "$BASE/results/" \
+      --trace-dir "$BASE/traces/" 2>&1 | tee -a "$LOG"
+  fi
 }
 
 shopt -s nullglob globstar
@@ -46,10 +62,14 @@ for domain_dir in "${DOMAIN_DIRS[@]}"; do
   fi
   for yaml in "${yamls[@]}"; do
     rel=${yaml#./}
-    for m in "${MODELS[@]}"; do
-      for fw in "${FRAMEWORKS[@]}"; do
-        run_one "$rel" "$m" "$fw"
-      done
+    for fw in "${FRAMEWORKS[@]}"; do
+      if [ "$fw" = "clawteam" ]; then
+        for harness in "${HARNESSES[@]}"; do
+          run_one "$rel" "$fw" "$harness"
+        done
+      else
+        run_one "$rel" "$fw"
+      fi
     done
   done
 done

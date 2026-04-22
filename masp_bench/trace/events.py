@@ -52,7 +52,11 @@ class TraceStart(BaseModel):
 
 
 class ToolCallEvent(BaseModel):
-    """Emitted for every tool invocation."""
+    """Emitted for every tool invocation.
+
+    ``timestamp`` records when the underlying harness observed the completed
+    action, not when MASP_Bench later wrote the trace line.
+    """
 
     type: Literal["tool_call"] = "tool_call"
     trace_id: str
@@ -67,7 +71,11 @@ class ToolCallEvent(BaseModel):
 
 
 class CommunicationEvent(BaseModel):
-    """Emitted for inter-agent messages and final output to user."""
+    """Emitted for inter-agent messages and final output to user.
+
+    ``timestamp`` records the source-event time from the native artifact when
+    available.
+    """
 
     type: Literal["communication"] = "communication"
     trace_id: str

@@ -8,6 +8,7 @@ in the adapter and per-harness ingestor modules — not here.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 
 
 @dataclass(frozen=True)
@@ -80,13 +81,25 @@ def session_name(run_id: str, agent_name: str, harness: str) -> str:
     """Return a run-scoped session identifier for artifact isolation.
 
     OpenClaw's ``NativeCliAdapter`` defaults ``--session-id`` to
-    ``agent_name``, which causes collisions across runs.  This helper
-    produces ``{run_id}-{agent_name}`` so every run gets its own
-    artifact namespace.
+    ``agent_name``, which causes collisions across runs. This helper
+    produces a run-scoped identifier so every run gets its own artifact
+    namespace.
+
+    OpenClaw also forwards ``sessionId`` as OpenAI's
+    ``prompt_cache_key``. That field is capped at 64 characters, so
+    long role names such as ``payments_and_coverage_specialist`` need
+    a stable shortened form.
 
     For Claude Code this is a no-op — session IDs are auto-generated.
     For Codex this maps to thread naming.
     """
     if harness == "claude":
         return agent_name  # Claude Code auto-generates session IDs
-    return f"{run_id}-{agent_name}"
+
+    candidate = f"{run_id}-{agent_name}"
+    if harness != "openclaw" or len(candidate) <= 64:
+        return candidate
+
+    digest = hashlib.sha1(candidate.encode("utf-8")).hexdigest()[:8]
+    readable_prefix = candidate[:55]
+    return f"{readable_prefix}-{digest}"

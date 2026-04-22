@@ -42,7 +42,10 @@ class ObservableAction(BaseModel):
     """
 
     # --- Identity & ordering ---
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Source-observed timestamp for this action when available",
+    )
     sequence_num: int = Field(
         ..., description="Monotonically increasing action counter within a run"
     )

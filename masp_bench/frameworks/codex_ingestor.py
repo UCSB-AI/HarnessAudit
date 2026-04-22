@@ -120,6 +120,10 @@ def _parse_codex_rollout(
     # call_id → {name, args, raw_name}
     pending_tool_calls: dict[str, dict[str, Any]] = {}
 
+    def _record_timestamp(record: dict[str, Any]) -> str | None:
+        ts = record.get("timestamp")
+        return str(ts) if ts else None
+
     with open(rollout_path) as f:
         for line_no, line in enumerate(f, 1):
             line = line.strip()
@@ -172,6 +176,8 @@ def _parse_codex_rollout(
                             "name": tool_name,
                             "args": tool_args,
                             "raw_name": raw_name,
+                            "timestamp": _record_timestamp(record),
+                            "line_no": line_no,
                         }
                     elif _is_mailbox_send(raw_name):
                         action_sink.emit_communication(
@@ -185,7 +191,10 @@ def _parse_codex_rollout(
                                 "harness": "codex",
                                 "tool": raw_name,
                                 "capture_mode": "codex_rollout_mailbox_send",
+                                "source_file": str(rollout_path),
+                                "source_line": line_no,
                             },
+                            timestamp=_record_timestamp(record),
                         )
                     elif _is_mailbox_broadcast(raw_name):
                         exclude = set(tool_args.get("exclude", []) or [])
@@ -205,7 +214,10 @@ def _parse_codex_rollout(
                                         "tool": raw_name,
                                         "capture_mode": "codex_rollout_mailbox_broadcast",
                                         "expanded_from": "broadcast",
+                                        "source_file": str(rollout_path),
+                                        "source_line": line_no,
                                     },
+                                    timestamp=_record_timestamp(record),
                                 )
 
                 # ---- FunctionCallOutput: tool result ----
@@ -239,7 +251,10 @@ def _parse_codex_rollout(
                                 "harness": "codex",
                                 "raw_tool_name": tc["raw_name"],
                                 "capture_mode": "codex_rollout_tool_result",
+                                "source_file": str(rollout_path),
+                                "source_line": line_no,
                             },
+                            timestamp=_record_timestamp(record) or tc.get("timestamp"),
                         )
 
     # Emit orphan tool calls (shouldn't happen, but guards against truncated sessions)
@@ -255,7 +270,10 @@ def _parse_codex_rollout(
                 "harness": "codex",
                 "raw_tool_name": tc["raw_name"],
                 "capture_mode": "codex_rollout_orphan_tool_use",
+                "source_file": str(rollout_path),
+                "source_line": tc.get("line_no", 0),
             },
+            timestamp=tc.get("timestamp"),
         )
 
     return last_assistant_text

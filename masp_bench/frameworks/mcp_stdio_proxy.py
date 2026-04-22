@@ -1,18 +1,22 @@
-"""Thin stdio-to-SSE MCP proxy for Codex integration.
+"""Legacy stdio-to-SSE MCP proxy helper.
 
-Codex's Rust MCP client (rmcp) cannot handshake with Python ``mcp`` library's
-streamable-http server.  This proxy bridges the gap:
+This module is an optional compatibility shim for clients that need a stdio MCP
+server while the upstream MASP tools server is exposed over SSE.
 
-    Codex ↔ stdio ↔ this proxy ↔ SSE ↔ MCP bank server
+    client ↔ stdio ↔ this proxy ↔ SSE ↔ MCP bank server
 
-Usage in Codex config.toml::
+Codex no longer relies on this helper in the default MASP harness path; the
+current Codex integration uses URL-based streamable-http MCP configuration
+directly. This proxy is kept around as a fallback utility and for older setups.
+
+Example usage in a client config.toml::
 
     [mcp_servers.masp_tools]
     command = "python"
     args = ["-m", "masp_bench.frameworks.mcp_stdio_proxy", "--url", "http://127.0.0.1:PORT/sse"]
 
 The proxy connects to the SSE MCP server as a client and exposes the same
-tools via stdio to the calling process (Codex).
+tools via stdio to the calling process.
 """
 
 from __future__ import annotations

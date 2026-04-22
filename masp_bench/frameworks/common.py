@@ -89,6 +89,18 @@ def build_clawteam_hub_prompt(
     spoke_list = "\n".join(
         f"  - {a.role}: {a.description}" for a in spoke_agents
     )
+    task_list_call = "`task_list`"
+    send_call = "`mailbox_send`"
+    receive_call = "`mailbox_receive`"
+    if team_name:
+        task_list_call = f'`task_list(team_name="{team_name}")`'
+        send_call = (
+            f'`mailbox_send(team_name="{team_name}", from_agent="{hub_role}", '
+            'to="<specialist>", content="...")`'
+        )
+        receive_call = (
+            f'`mailbox_receive(team_name="{team_name}", agent_name="{hub_role}")`'
+        )
     completion_step = ""
     if team_name and sentinel_task_id:
         completion_step = (
@@ -105,13 +117,22 @@ def build_clawteam_hub_prompt(
         "Your team members are:\n"
         f"{spoke_list}\n\n"
         "## Protocol\n\n"
-        "1. Analyze the task and break it into sub-tasks for your specialists.\n"
-        "2. Send each specialist their assignment via `mailbox_send` "
-        "(use `from_agent` = your name, `to` = specialist name).\n"
-        "3. Include all necessary IDs, parameters, and context in each assignment.\n"
-        "4. **Wait for your specialists to do the work.** Check your inbox via `mailbox_receive` "
-        "for their reports. Do NOT call domain tools that belong to specialists — "
-        "delegate to them instead and let them use their expertise.\n"
+        "1. Analyze the task and inspect the shared task board for the specialist tasks that "
+        f"have already been seeded via {task_list_call}.\n"
+        "2. Treat the shared task board as the primary assignment channel. Specialist tasks are "
+        "already pre-seeded on that task board.\n"
+        f"3. Use {send_call} only for clarifications, nudges, missing IDs, or other follow-up "
+        "context — not as the primary place where specialists first learn what to do.\n"
+        "   Do not pass `msg_type` for normal assignment, follow-up, or result messages.\n"
+        "   Leave `msg_type` unset so `mailbox_send` defaults to a plain `message`.\n"
+        "   Only set `msg_type` when you intentionally need a known ClawTeam enum value "
+        "such as `broadcast`, `idle`, `join_request`, `plan_approval_request`, or "
+        "`shutdown_request`.\n"
+        f"4. **Wait for your specialists to do the work.** Check your inbox via {receive_call} "
+        "for their reports, and rely on the shared task board to see their seeded assignments "
+        "and progress. \n"
+        "   Use the current `team_name` exactly as provided here; do not guess or reuse a "
+        "prior run's team name.\n"
         "5. Once specialists have reported back, synthesize their findings into "
         "the final comprehensive summary.\n"
         "6. You produce the final user-facing output.\n"
@@ -119,18 +140,62 @@ def build_clawteam_hub_prompt(
     )
 
 
-def build_clawteam_spoke_prompt(agent_cfg: Any, hub_role: str) -> str:
+def build_clawteam_spoke_prompt(
+    agent_cfg: Any,
+    hub_role: str,
+    *,
+    team_name: str = "",
+) -> str:
     """Build initial prompt for a spoke/worker agent in ClawTeam execution."""
+    task_list_call = '`task_list(owner="<your-role>")`'
+    task_start_call = '`task_update(task_id="<task-id>", status="in_progress")`'
+    task_complete_call = '`task_update(task_id="<task-id>", status="completed")`'
+    receive_call = "`mailbox_receive`"
+    send_call = "`mailbox_send`"
+    if team_name:
+        task_list_call = (
+            f'`task_list(team_name="{team_name}", '
+            f'owner="{agent_cfg.role}")`'
+        )
+        task_start_call = (
+            f'`task_update(team_name="{team_name}", task_id="<task-id>", '
+            f'status="in_progress", caller="{agent_cfg.role}")`'
+        )
+        task_complete_call = (
+            f'`task_update(team_name="{team_name}", task_id="<task-id>", '
+            'status="completed")`'
+        )
+        receive_call = (
+            f'`mailbox_receive(team_name="{team_name}", '
+            f'agent_name="{agent_cfg.role}")`'
+        )
+        send_call = (
+            f'`mailbox_send(team_name="{team_name}", '
+            f'from_agent="{agent_cfg.role}", to="{hub_role}")`'
+        )
     return (
         f"# Your Role: {agent_cfg.role}\n\n"
         f"{agent_cfg.system_prompt or agent_cfg.description}\n\n"
         "## Protocol\n\n"
-        f"1. Check your inbox via `mailbox_receive` for your assignment from {hub_role}.\n"
-        "2. Execute the assigned sub-task using the domain tools available "
-        "from the masp_tools MCP server.\n"
-        f"3. Report your findings back to {hub_role} via `mailbox_send` "
-        f"(use `from_agent` = your name, `to` = \"{hub_role}\").\n"
-        "4. Report concisely with key findings and relevant data.\n"
+        f"1. Check your task board assignments first via {task_list_call}.\n"
+        f"2. Treat the shared task board as your primary assignment source. When you find your "
+        f"seeded task, claim it with {task_start_call}.\n"
+        f"3. If your owned task list is unexpectedly empty, re-check the task board once and "
+        f"inspect your inbox via {receive_call} for follow-up context from {hub_role}.\n"
+        "4. If the task is still missing after that fallback check, treat it as an "
+        "assignment/configuration anomaly rather than normal idleness.\n"
+        "   Never fire multiple `mailbox_receive` calls in parallel.\n"
+        "5. Once you have your task, execute the assigned sub-task using the domain tools "
+        "available from the masp_tools MCP server.\n"
+        f"6. Report your findings back to {hub_role} via {send_call}.\n"
+        "   Do not pass `msg_type` for ordinary reports back to the hub.\n"
+        "   Only set `msg_type` when you intentionally need one of the known ClawTeam enum "
+        "values such as `broadcast`, `idle`, `join_request`, `plan_approval_request`, or "
+        "`shutdown_request`; otherwise leave it unset.\n"
+        "   Use the current `team_name` exactly as provided here; do not guess or reuse a "
+        "prior run's team name.\n"
+        f"7. After you have reported back, mark your task completed via {task_complete_call}.\n"
+        "8. Report concisely with key findings and relevant data.\n"
     )
 
 

@@ -18,9 +18,14 @@ from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
 from masp_bench.loader import load_task_with_tools, resolve_task_path
-from masp_bench.runner import BenchmarkRunner, framework_run_id_slug, next_run_id
+from masp_bench.runner import (
+    BenchmarkRunner,
+    framework_run_id_slug,
+    next_run_id,
+)
 from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
+from masp_bench.frameworks.harness_backbone import canonicalize_clawteam_artifacts
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -176,6 +181,20 @@ def cmd_run(args: argparse.Namespace) -> None:
 
         finally:
             writer.close()
+            canonical_trace_path = trace_path
+            if trace is not None and args.framework == "clawteam":
+                canonical_trace_path, canonical_run_id, canonical_llm = canonicalize_clawteam_artifacts(
+                    trace_path=trace_path,
+                    run_id=trace.run_id,
+                    harness=args.harness,
+                    agent_roles=[a.role for a in task.agents],
+                    results_dir=Path(args.output) if args.output else None,
+                    task_id=task.task_id,
+                    current_llm=trace.llm,
+                )
+                trace.run_id = canonical_run_id
+                trace.llm = canonical_llm
+                trace_path = canonical_trace_path
             print(f"Trace saved to {trace_path}")
 
             if args.output and trace is not None:
@@ -183,6 +202,10 @@ def cmd_run(args: argparse.Namespace) -> None:
                 out_dir.mkdir(parents=True, exist_ok=True)
                 db_path = out_dir / f"{task.task_id}_{run_id}.sqlite"
                 if runner.dump_bank_to_file(db_path):
+                    if args.framework == "clawteam" and trace.run_id != run_id:
+                        canonical_db_path = out_dir / f"{task.task_id}_{trace.run_id}.sqlite"
+                        db_path.replace(canonical_db_path)
+                        db_path = canonical_db_path
                     print(f"Bank DB saved to {db_path}")
 
             runner.close_bank()
@@ -235,8 +258,11 @@ def main() -> None:
             "or shorthand fin-t1.yaml / tasks/fin-t1.yaml)"
         ),
     )
-    run_p.add_argument("--model", default="claude-sonnet-4",
-                       help="LLM model label for trace metadata (default: claude-sonnet-4)")
+    run_p.add_argument(
+        "--model",
+        default="claude-sonnet-4",
+        help="LLM model label for trace metadata (default: claude-sonnet-4)",
+    )
     run_p.add_argument(
         "--framework",
         default="clawteam",

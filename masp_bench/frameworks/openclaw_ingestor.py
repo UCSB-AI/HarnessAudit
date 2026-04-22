@@ -33,6 +33,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .harness_profiles import session_name
 from .jsonl_collector import _is_mailbox_broadcast, _is_mailbox_send, _strip_mcp_prefix
 
 log = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ def _parse_openclaw_session(
     action_sink: Any,
     *,
     mcp_server_name: str = MCP_SERVER_NAME,
+    expected_team_name: str | None = None,
 ) -> str:
     """Parse one OpenClaw session JSONL and emit ObservableActions.
 
@@ -91,9 +93,37 @@ def _parse_openclaw_session(
     last_assistant_text = ""
     # toolCall id → {name, args, raw_name}
     pending_tool_calls: dict[str, dict[str, Any]] = {}
+    pending_mailbox_calls: dict[str, dict[str, Any]] = {}
+
+    def _message_team_name(tool_args: dict[str, Any]) -> str:
+        return str(tool_args.get("team_name") or tool_args.get("teamName") or "")
+
+    def _record_timestamp(record: dict[str, Any]) -> str | None:
+        ts = record.get("timestamp")
+        return str(ts) if ts else None
+
+    def _mailbox_result_timestamp(record: dict[str, Any], message: dict[str, Any]) -> str | None:
+        details = message.get("details", {})
+        if isinstance(details, dict):
+            structured = details.get("structuredContent", {})
+            if isinstance(structured, dict):
+                result = structured.get("result", {})
+                if isinstance(result, dict):
+                    result_ts = result.get("timestamp")
+                    if result_ts:
+                        return str(result_ts)
+        return _record_timestamp(record)
+
+    def _tool_result_succeeded(message: dict[str, Any], result_text: str) -> bool:
+        details = message.get("details", {})
+        if message.get("isError"):
+            return False
+        if isinstance(details, dict) and details.get("status") == "error":
+            return False
+        return not result_text.lstrip().startswith("Error executing tool ")
 
     with open(session_path) as f:
-        for line in f:
+        for line_no, line in enumerate(f, 1):
             line = line.strip()
             if not line:
                 continue
@@ -137,41 +167,25 @@ def _parse_openclaw_session(
                                 "name": tool_name,
                                 "args": tool_args,
                                 "raw_name": raw_name,
+                                "timestamp": _record_timestamp(record),
+                                "line_no": line_no,
                             }
                         elif _is_mailbox_send(raw_name):
-                            action_sink.emit_communication(
-                                agent_id=agent_role,
-                                agent_role=agent_role,
-                                target_agent=tool_args.get("to", ""),
-                                target_role=tool_args.get("to", ""),
-                                content=str(tool_args.get("content", "")),
-                                raw_event={
-                                    "framework": "clawteam",
-                                    "harness": "openclaw",
-                                    "tool": raw_name,
-                                    "capture_mode": "openclaw_session_mailbox_send",
-                                },
-                            )
+                            pending_mailbox_calls[call_id] = {
+                                "kind": "send",
+                                "args": tool_args,
+                                "raw_name": raw_name,
+                                "timestamp": _record_timestamp(record),
+                                "line_no": line_no,
+                            }
                         elif _is_mailbox_broadcast(raw_name):
-                            exclude = set(tool_args.get("exclude", []) or [])
-                            exclude.add(agent_role)
-                            msg_content = str(tool_args.get("content", ""))
-                            for recipient in all_agent_roles:
-                                if recipient not in exclude:
-                                    action_sink.emit_communication(
-                                        agent_id=agent_role,
-                                        agent_role=agent_role,
-                                        target_agent=recipient,
-                                        target_role=recipient,
-                                        content=msg_content,
-                                        raw_event={
-                                            "framework": "clawteam",
-                                            "harness": "openclaw",
-                                            "tool": raw_name,
-                                            "capture_mode": "openclaw_session_mailbox_broadcast",
-                                            "expanded_from": "broadcast",
-                                        },
-                                    )
+                            pending_mailbox_calls[call_id] = {
+                                "kind": "broadcast",
+                                "args": tool_args,
+                                "raw_name": raw_name,
+                                "timestamp": _record_timestamp(record),
+                                "line_no": line_no,
+                            }
 
                     elif ctype == "text":
                         text = item.get("text", "")
@@ -202,8 +216,61 @@ def _parse_openclaw_session(
                             "harness": "openclaw",
                             "raw_tool_name": tc["raw_name"],
                             "capture_mode": "openclaw_session_tool_result",
+                            "source_file": str(session_path),
+                            "source_line": line_no,
                         },
+                        timestamp=_record_timestamp(record) or tc.get("timestamp"),
                     )
+                elif call_id in pending_mailbox_calls:
+                    mc = pending_mailbox_calls.pop(call_id)
+                    if not _tool_result_succeeded(msg, result_text):
+                        continue
+                    message_team = _message_team_name(mc["args"])
+                    if expected_team_name and message_team != expected_team_name:
+                        continue
+
+                    if mc["kind"] == "send":
+                        action_sink.emit_communication(
+                            agent_id=agent_role,
+                            agent_role=agent_role,
+                            target_agent=mc["args"].get("to", ""),
+                            target_role=mc["args"].get("to", ""),
+                            content=str(mc["args"].get("content", "")),
+                            raw_event={
+                                "framework": "clawteam",
+                                "harness": "openclaw",
+                                "tool": mc["raw_name"],
+                                "capture_mode": "openclaw_session_mailbox_send",
+                                "team_name": message_team,
+                                "source_file": str(session_path),
+                                "source_line": line_no,
+                            },
+                            timestamp=_mailbox_result_timestamp(record, msg) or mc.get("timestamp"),
+                        )
+                    else:
+                        exclude = set(mc["args"].get("exclude", []) or [])
+                        exclude.add(agent_role)
+                        msg_content = str(mc["args"].get("content", ""))
+                        for recipient in all_agent_roles:
+                            if recipient not in exclude:
+                                action_sink.emit_communication(
+                                    agent_id=agent_role,
+                                    agent_role=agent_role,
+                                    target_agent=recipient,
+                                    target_role=recipient,
+                                    content=msg_content,
+                                    raw_event={
+                                        "framework": "clawteam",
+                                        "harness": "openclaw",
+                                        "tool": mc["raw_name"],
+                                        "capture_mode": "openclaw_session_mailbox_broadcast",
+                                        "expanded_from": "broadcast",
+                                        "team_name": message_team,
+                                        "source_file": str(session_path),
+                                        "source_line": line_no,
+                                    },
+                                    timestamp=_mailbox_result_timestamp(record, msg) or mc.get("timestamp"),
+                                )
 
     # Emit orphan tool calls
     for call_id, tc in pending_tool_calls.items():
@@ -218,7 +285,10 @@ def _parse_openclaw_session(
                 "harness": "openclaw",
                 "raw_tool_name": tc["raw_name"],
                 "capture_mode": "openclaw_session_orphan_tool_use",
+                "source_file": str(session_path),
+                "source_line": tc.get("line_no", 0),
             },
+            timestamp=tc.get("timestamp"),
         )
 
     return last_assistant_text
@@ -245,9 +315,7 @@ def collect_openclaw_traces(
     final_text = ""
 
     for agent_role in worktree_map:
-        # NativeCliAdapter sets --session-id to agent_name by default
-        # (adapters.py:108-109), so session files are just {agent_name}.jsonl
-        sid = agent_role
+        sid = session_name(run_id, agent_role, "openclaw") if run_id else agent_role
         session_files = _find_openclaw_sessions(
             agent_role, sid, created_after=spawn_timestamp,
         )
@@ -263,6 +331,7 @@ def collect_openclaw_traces(
                 catalog_tool_names,
                 all_agent_roles,
                 action_sink,
+                expected_team_name=f"masp-{run_id}" if run_id else None,
             )
             if agent_role == hub_role and idx == 0:
                 final_text = agent_output
