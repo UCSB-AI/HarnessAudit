@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,7 +28,7 @@ from masp_bench.workspace import Workspace, WorkspaceManager
 
 def framework_run_id_slug(framework: str) -> str:
     """Map framework id to stable run-id prefix."""
-    mapping = {"clawteam": "ct", "oai": "oa"}
+    mapping = {"clawteam": "ct", "oai": "oa", "openclaw_local": "ol"}
     return mapping.get(framework, framework[:3])
 
 
@@ -38,7 +39,8 @@ def next_run_id(
 ) -> str:
     """Return a unique run id: ``{framework_slug}-{harness}-{model}-{uuid}``."""
     short = uuid.uuid4().hex[:8]
-    return f"{framework_slug}-{harness_slug}-{model}-{short}"
+    safe_model = re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-") or "model"
+    return f"{framework_slug}-{harness_slug}-{safe_model}-{short}"
 
 
 def _build_execution_trace(
@@ -98,6 +100,13 @@ class BenchmarkRunner:
         self._agent_timeout = agent_timeout
         self._bank: Any = None
         self._workspace: Workspace | None = None
+
+    def _bank_source(self) -> str:
+        bank_factory = self._bank_factory
+        module_name = getattr(bank_factory, "__module__", "")
+        if module_name.startswith("sasp_bench."):
+            return "sasp"
+        return "masp"
 
     def run(
         self,
@@ -171,6 +180,7 @@ class BenchmarkRunner:
                     bank=self._bank,
                     workspace=self._workspace,
                     action_sink=action_sink,
+                    bank_source=self._bank_source(),
                 ),
                 build_task_input(self.task),
             )

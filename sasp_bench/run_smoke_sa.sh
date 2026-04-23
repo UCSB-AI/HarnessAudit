@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Smoke test: single-agent tasks × gpt-5.1 × 双 framework
+# Smoke test: single-agent tasks via OpenClaw local mode
 set -euo pipefail
 
-BASE=/home/chengzhi.ucsb/code/chengzhi/Agent_Safety/MASP_Bench/sasp_bench
+BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE" || exit 1
 
 PY=/home/chengzhi.ucsb/.conda/envs/masp-bench/bin/python
 LOG=/tmp/sasp_smoke.log
 : > "$LOG"
 
-MODEL=claude-sonnet-4
-FRAMEWORKS=(clawteam)
+MODEL=anthropic/claude-sonnet-4-6
+FRAMEWORKS=(openclaw_local)
 
 run_one() {
   local rel_yaml=$1

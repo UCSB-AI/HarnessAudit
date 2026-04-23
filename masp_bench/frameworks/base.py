@@ -20,6 +20,7 @@ class RunContext:
     bank: Any
     workspace: Any
     action_sink: Any
+    bank_source: str = "masp"
 
 
 @dataclass(slots=True)
