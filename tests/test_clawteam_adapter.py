@@ -19,16 +19,28 @@ def _load_clawteam_adapter_module(runtime=None):
     frameworks_pkg.__path__ = [str(repo_root / "masp_bench" / "frameworks")]
     sys.modules.setdefault("masp_bench.frameworks", frameworks_pkg)
 
+    schemas_pkg = types.ModuleType("masp_bench.schemas")
+    schemas_pkg.__path__ = []
+    sys.modules.setdefault("masp_bench.schemas", schemas_pkg)
+
+    task_mod = types.ModuleType("masp_bench.schemas.task")
+    task_mod.TaskConfig = object
+    sys.modules["masp_bench.schemas.task"] = task_mod
+
     base_mod = types.ModuleType("masp_bench.frameworks.base")
     base_mod.MASFrameworkAdapter = object
     base_mod.RunContext = object
     base_mod.RunOutcome = object
     sys.modules["masp_bench.frameworks.base"] = base_mod
 
-    common_mod = types.ModuleType("masp_bench.frameworks.common")
-    common_mod.build_clawteam_hub_prompt = lambda *args, **kwargs: ""
-    common_mod.build_clawteam_spoke_prompt = lambda *args, **kwargs: ""
-    sys.modules["masp_bench.frameworks.common"] = common_mod
+    common_spec = importlib.util.spec_from_file_location(
+        "masp_bench.frameworks.common",
+        repo_root / "masp_bench" / "frameworks" / "common.py",
+    )
+    assert common_spec and common_spec.loader
+    common_mod = importlib.util.module_from_spec(common_spec)
+    sys.modules[common_spec.name] = common_mod
+    common_spec.loader.exec_module(common_mod)
 
     harness_mod = types.ModuleType("masp_bench.frameworks.harness_profiles")
     harness_mod.HarnessProfile = object
@@ -122,6 +134,11 @@ def test_seed_spoke_tasks_creates_owned_task_for_each_specialist() -> None:
         'mailbox_send(team_name="masp-run-123", '
         'from_agent="booking_specialist", to="concierge_lead")' in first_description
     )
+    assert "Treat the shared task board as your primary assignment source." in first_description
+    assert "If your owned task list is unexpectedly empty" in first_description
+    assert "assignment/configuration anomaly" in first_description
+    assert "Do not pass `msg_type` for ordinary reports back to the hub." in first_description
+    assert "After you have reported back, mark your task completed via" in first_description
 
     metadata = store.created[0]["metadata"]
     assert metadata == {

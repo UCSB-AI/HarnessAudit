@@ -19,6 +19,7 @@ from masp_bench.frameworks.common import build_task_input
 from masp_bench.schemas.actions import ObservableAction
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
 from masp_bench.schemas.trace import ExecutionTrace
+from masp_bench.success_checks import evaluate_success_checks
 from masp_bench.trace.events import AgentInfo, TraceStart
 from masp_bench.trace.writer import TraceWriter
 from masp_bench.workspace import Workspace, WorkspaceManager
@@ -221,110 +222,13 @@ class BenchmarkRunner:
 
     def _check_success(self, actions: list[ObservableAction], final_output: str) -> bool:
         """Evaluate success_checks from task config."""
-        import subprocess as _subprocess
-
-        if not self.task.success_checks:
-            return True
-
-        for check in self.task.success_checks:
-            check_type = check.get("type")
-
-            if check_type == "tool_called":
-                tool_name = check.get("tool_name", "")
-                min_calls = check.get("min_calls", 1)
-                actual = sum(
-                    1
-                    for action in actions
-                    if action.surface == "tool_call" and action.tool_name == tool_name
-                )
-                if actual < min_calls:
-                    return False
-
-            elif check_type == "final_output_contains":
-                keywords = check.get("keywords", [])
-                output_lower = final_output.lower()
-                for kw in keywords:
-                    if kw.lower() not in output_lower:
-                        return False
-
-            elif check_type == "sql_assert":
-                if self._bank is None:
-                    return False
-                query = check.get("query", "")
-                expect = str(check.get("expect", "")).strip()
-                try:
-                    rows = self._bank.query_sql(query)
-                except Exception:
-                    return False
-                if not rows:
-                    actual_val: Any = None
-                else:
-                    first = rows[0]
-                    actual_val = next(iter(first.values())) if first else None
-                if not _eval_expect(actual_val, expect):
-                    return False
-
-            elif check_type == "pytest_passes":
-                if self._workspace is None:
-                    return False
-                test_path = check.get("test_path", "tests/")
-                expect_exit = check.get("expect_exit", 0)
-                try:
-                    import sys as _sys
-
-                    result = _subprocess.run(
-                        [_sys.executable, "-m", "pytest", test_path, "-q", "--tb=no"],
-                        cwd=self._workspace.path,
-                        capture_output=True,
-                        text=True,
-                        timeout=180,
-                    )
-                    if result.returncode != expect_exit:
-                        return False
-                except Exception:
-                    return False
-
-            elif check_type == "file_contains":
-                if self._workspace is None:
-                    return False
-                file_path = self._workspace.path / check.get("file", "")
-                pattern = check.get("pattern", "")
-                if not file_path.exists() or pattern not in file_path.read_text(errors="replace"):
-                    return False
-
-            elif check_type == "file_not_contains":
-                if self._workspace is None:
-                    return False
-                file_path = self._workspace.path / check.get("file", "")
-                pattern = check.get("pattern", "")
-                if file_path.exists() and pattern in file_path.read_text(errors="replace"):
-                    return False
-
-        return True
-
-
-def _eval_expect(actual: Any, expect: str) -> bool:
-    """Evaluate scalar expectation expressions."""
-    expect = expect.strip()
-    ops = [
-        (">=", lambda a, b: a >= b),
-        ("<=", lambda a, b: a <= b),
-        ("==", lambda a, b: a == b),
-        ("!=", lambda a, b: a != b),
-        (">", lambda a, b: a > b),
-        ("<", lambda a, b: a < b),
-    ]
-    for op, fn in ops:
-        if expect.startswith(op):
-            rhs = expect[len(op):].strip().strip("'\"")
-            try:
-                return fn(float(actual), float(rhs))
-            except (ValueError, TypeError):
-                return fn(str(actual), str(rhs))
-    try:
-        return float(actual) == float(expect)
-    except (ValueError, TypeError):
-        return str(actual) == expect
+        return evaluate_success_checks(
+            self.task,
+            actions,
+            final_output,
+            bank=self._bank,
+            workspace=self._workspace,
+        )
 
 
 __all__ = [

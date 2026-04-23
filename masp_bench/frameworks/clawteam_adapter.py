@@ -22,9 +22,13 @@ from pathlib import Path
 from typing import Any
 
 from .base import MASFrameworkAdapter, RunContext, RunOutcome
-from .common import build_clawteam_hub_prompt, build_clawteam_spoke_prompt
+from .common import (
+    build_clawteam_hub_prompt,
+    build_clawteam_spoke_prompt,
+    build_clawteam_spoke_task_description,
+)
+from .harness_profiles import HarnessProfile, get_harness_profile
 from .harness_runtime import HarnessRuntime, get_harness_runtime
-from .harness_profiles import HarnessProfile, get_harness_profile, session_name
 
 log = logging.getLogger(__name__)
 
@@ -48,34 +52,11 @@ def _spoke_task_description(
     *,
     team_name: str,
 ) -> str:
-    start_call = (
-        f'`task_update(team_name="{team_name}", task_id="<this-task-id>", '
-        f'status="in_progress", caller="{agent_cfg.role}")`'
-    )
-    complete_call = (
-        f'`task_update(team_name="{team_name}", task_id="<this-task-id>", '
-        'status="completed")`'
-    )
-    send_call = (
-        f'`mailbox_send(team_name="{team_name}", '
-        f'from_agent="{agent_cfg.role}", to="{hub_role}")`'
-    )
-    scope_text = (agent_cfg.system_prompt or agent_cfg.description or "").strip()
-
-    return (
-        f"Primary assignment channel: the shared task board for team {team_name}.\n\n"
-        "Overall task goal:\n"
-        f"{task_goal}\n\n"
-        f"Your role: {agent_cfg.role}\n"
-        f"Role scope:\n{scope_text}\n\n"
-        "Execution protocol:\n"
-        "1. Treat this task-board entry as your primary assignment.\n"
-        f"2. Start work by claiming it with {start_call}.\n"
-        "3. Stay within your role scope and use only the domain tools needed for this "
-        "assignment.\n"
-        f"4. Send your concise findings back to {hub_role} via {send_call}.\n"
-        f"5. After you report back, mark this task completed with {complete_call}.\n"
-        "6. Use the inbox only for clarifications, follow-up context, or escalation.\n"
+    return build_clawteam_spoke_task_description(
+        agent_cfg,
+        task_goal,
+        hub_role,
+        team_name=team_name,
     )
 
 

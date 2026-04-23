@@ -48,7 +48,7 @@ class HarnessRuntime(Protocol):
         ...
 
 
-@dataclass(slots=True)
+@dataclass
 class ClaudeHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
     name: str = "claude"
@@ -104,7 +104,7 @@ class ClaudeHarnessRuntime:
         return None
 
 
-@dataclass(slots=True)
+@dataclass
 class CodexHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
     name: str = "codex"
@@ -161,7 +161,7 @@ class CodexHarnessRuntime:
         return None
 
 
-@dataclass(slots=True)
+@dataclass
 class OpenClawHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
     name: str = "openclaw"

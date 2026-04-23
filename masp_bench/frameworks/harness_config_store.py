@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 MASP_OWNED_KEY = "masp_owned"
 MASP_SERVER_NAMES = ("masp_tools", "clawteam")
 
@@ -169,7 +168,7 @@ def _render_managed_section_lines(values: dict[str, Any]) -> list[str]:
     return lines
 
 
-@dataclass(slots=True)
+@dataclass
 class HarnessConfigStore:
     claude_config_path: Path = Path.home() / ".claude.json"
     codex_config_path: Path = Path.home() / ".codex" / "config.toml"

@@ -17,6 +17,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
+from masp_bench.frameworks.harness_backbone import canonicalize_clawteam_artifacts
 from masp_bench.loader import load_task_with_tools, resolve_task_path
 from masp_bench.runner import (
     BenchmarkRunner,
@@ -25,7 +26,6 @@ from masp_bench.runner import (
 )
 from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
-from masp_bench.frameworks.harness_backbone import canonicalize_clawteam_artifacts
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -66,7 +66,10 @@ def cmd_run(args: argparse.Namespace) -> None:
             workspaces_root=workspaces_root,
         )
 
-        print(f"Running (framework={args.framework}, harness={args.harness}, model={args.model})...")
+        print(
+            f"Running (framework={args.framework}, "
+            f"harness={args.harness}, model={args.model})..."
+        )
         runner = BenchmarkRunner(
             task, catalog, model=args.model, framework=args.framework,
             harness=args.harness, trace_writer=writer,
@@ -177,7 +180,11 @@ def cmd_run(args: argparse.Namespace) -> None:
             writer.close()
             canonical_trace_path = trace_path
             if trace is not None and args.framework == "clawteam":
-                canonical_trace_path, canonical_run_id, canonical_llm = canonicalize_clawteam_artifacts(
+                (
+                    canonical_trace_path,
+                    canonical_run_id,
+                    canonical_llm,
+                ) = canonicalize_clawteam_artifacts(
                     trace_path=trace_path,
                     run_id=trace.run_id,
                     harness=args.harness,

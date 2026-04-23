@@ -254,7 +254,10 @@ def _parse_openclaw_session(
                             target_role=recipient,
                             content=msg_content,
                             raw_event=raw_event,
-                            timestamp=_mailbox_result_timestamp(record, msg) or mc.get("timestamp"),
+                            timestamp=(
+                                _mailbox_result_timestamp(record, msg)
+                                or mc.get("timestamp")
+                            ),
                         )
 
     # Emit orphan tool calls

@@ -7,8 +7,8 @@ in the adapter and per-harness ingestor modules — not here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,8 @@ PROFILES: dict[str, HarnessProfile] = {
     "codex": HarnessProfile(
         name="codex",
         spawn_command=("codex", "exec"),
-        mcp_transport="streamable-http",  # Codex rmcp uses streamable-http (verified working in run 863f3867)
+        # Codex rmcp uses streamable-http (verified working in run 863f3867).
+        mcp_transport="streamable-http",
         mcp_config_scope="global",
         run_id_slug="codex",
     ),

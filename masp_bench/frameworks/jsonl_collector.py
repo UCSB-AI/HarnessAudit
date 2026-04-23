@@ -20,10 +20,16 @@ from typing import Any
 
 from .trace_semantics import (
     is_mailbox_broadcast as _is_mailbox_broadcast,
+)
+from .trace_semantics import (
     is_mailbox_send as _is_mailbox_send,
+)
+from .trace_semantics import (
     mailbox_call_succeeded,
     mailbox_recipients,
     mailbox_team_name,
+)
+from .trace_semantics import (
     normalize_mcp_tool_name as _strip_mcp_prefix,
 )
 

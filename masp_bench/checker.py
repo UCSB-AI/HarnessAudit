@@ -11,14 +11,13 @@ import json
 from fnmatch import fnmatch
 
 from masp_bench.recognizer import contains as _recognizer_contains
-from masp_bench.schemas.actions import ObservableAction
 from masp_bench.schemas.access_rules import (
     AccessDecision,
     AccessRule,
     ViolationCode,
 )
+from masp_bench.schemas.actions import ObservableAction
 from masp_bench.schemas.trace import RunMetrics
-
 
 # ---------------------------------------------------------------------------
 # Rule matching

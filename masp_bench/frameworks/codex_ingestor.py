@@ -168,7 +168,11 @@ def _parse_codex_rollout(
                     call_id = payload.get("call_id", "")
 
                     try:
-                        tool_args = json.loads(arguments_str) if isinstance(arguments_str, str) else arguments_str
+                        tool_args = (
+                            json.loads(arguments_str)
+                            if isinstance(arguments_str, str)
+                            else arguments_str
+                        )
                     except json.JSONDecodeError:
                         tool_args = {"_raw": arguments_str}
 

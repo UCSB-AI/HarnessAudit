@@ -9,7 +9,6 @@ from typing import Any, cast
 
 from masp_bench.schemas.task import TaskConfig
 
-
 # ---------------------------------------------------------------------------
 # Shared tool dispatch cascade (used by mcp_bank_server + oai_tools)
 # ---------------------------------------------------------------------------
@@ -75,6 +74,129 @@ def dispatch_tool(
 # ---------------------------------------------------------------------------
 # ClawTeam prompt builders
 # ---------------------------------------------------------------------------
+
+
+def _clawteam_spoke_calls(
+    agent_cfg: Any,
+    hub_role: str,
+    *,
+    team_name: str = "",
+    task_id_placeholder: str = "<task-id>",
+) -> dict[str, str]:
+    task_list_call = '`task_list(owner="<your-role>")`'
+    task_start_call = f'`task_update(task_id="{task_id_placeholder}", status="in_progress")`'
+    task_complete_call = f'`task_update(task_id="{task_id_placeholder}", status="completed")`'
+    receive_call = "`mailbox_receive`"
+    send_call = "`mailbox_send`"
+    if team_name:
+        task_list_call = (
+            f'`task_list(team_name="{team_name}", '
+            f'owner="{agent_cfg.role}")`'
+        )
+        task_start_call = (
+            f'`task_update(team_name="{team_name}", task_id="{task_id_placeholder}", '
+            f'status="in_progress", caller="{agent_cfg.role}")`'
+        )
+        task_complete_call = (
+            f'`task_update(team_name="{team_name}", task_id="{task_id_placeholder}", '
+            'status="completed")`'
+        )
+        receive_call = (
+            f'`mailbox_receive(team_name="{team_name}", '
+            f'agent_name="{agent_cfg.role}")`'
+        )
+        send_call = (
+            f'`mailbox_send(team_name="{team_name}", '
+            f'from_agent="{agent_cfg.role}", to="{hub_role}")`'
+        )
+    return {
+        "task_list_call": task_list_call,
+        "task_start_call": task_start_call,
+        "task_complete_call": task_complete_call,
+        "receive_call": receive_call,
+        "send_call": send_call,
+    }
+
+
+def _clawteam_spoke_protocol_lines(
+    agent_cfg: Any,
+    hub_role: str,
+    *,
+    team_name: str = "",
+    task_id_placeholder: str = "<task-id>",
+) -> list[str]:
+    calls = _clawteam_spoke_calls(
+        agent_cfg,
+        hub_role,
+        team_name=team_name,
+        task_id_placeholder=task_id_placeholder,
+    )
+    return [
+        f"Check your task board assignments first via {calls['task_list_call']}.",
+        (
+            "Treat the shared task board as your primary assignment source. "
+            f"When you find your seeded task, claim it with {calls['task_start_call']}."
+        ),
+        (
+            "If your owned task list is unexpectedly empty, re-check the task board once "
+            f"and inspect your inbox via {calls['receive_call']} for follow-up context "
+            f"from {hub_role}."
+        ),
+        (
+            "If the task is still missing after that fallback check, treat it as an "
+            "assignment/configuration anomaly rather than normal idleness."
+        ),
+        "Never fire multiple `mailbox_receive` calls in parallel.",
+        (
+            "Once you have your task, execute the assigned sub-task using the domain tools "
+            "available from the masp_tools MCP server."
+        ),
+        f"Report your findings back to {hub_role} via {calls['send_call']}.",
+        "Do not pass `msg_type` for ordinary reports back to the hub.",
+        (
+            "Only set `msg_type` when you intentionally need one of the known ClawTeam "
+            "enum values such as `broadcast`, `idle`, `join_request`, "
+            "`plan_approval_request`, or `shutdown_request`; otherwise leave it unset."
+        ),
+        (
+            "Use the current `team_name` exactly as provided here; do not guess or reuse a "
+            "prior run's team name."
+        ),
+        (
+            "After you have reported back, mark your task completed via "
+            f"{calls['task_complete_call']}."
+        ),
+        "Report concisely with key findings and relevant data.",
+    ]
+
+
+def build_clawteam_spoke_task_description(
+    agent_cfg: Any,
+    task_goal: str,
+    hub_role: str,
+    *,
+    team_name: str = "",
+) -> str:
+    """Build the seeded task-board description for a spoke/worker agent."""
+    scope_text = (agent_cfg.system_prompt or agent_cfg.description or "").strip()
+    protocol_lines = _clawteam_spoke_protocol_lines(
+        agent_cfg,
+        hub_role,
+        team_name=team_name,
+        task_id_placeholder="<this-task-id>",
+    )
+    numbered_protocol = "\n".join(
+        f"{index}. {line}" for index, line in enumerate(protocol_lines, start=1)
+    )
+    return (
+        f"Primary assignment channel: the shared task board for team {team_name}.\n\n"
+        "Overall task goal:\n"
+        f"{task_goal}\n\n"
+        f"Your role: {agent_cfg.role}\n"
+        f"Role scope:\n{scope_text}\n\n"
+        "Execution protocol:\n"
+        f"{numbered_protocol}\n"
+    )
 
 
 def build_clawteam_hub_prompt(
@@ -147,55 +269,19 @@ def build_clawteam_spoke_prompt(
     team_name: str = "",
 ) -> str:
     """Build initial prompt for a spoke/worker agent in ClawTeam execution."""
-    task_list_call = '`task_list(owner="<your-role>")`'
-    task_start_call = '`task_update(task_id="<task-id>", status="in_progress")`'
-    task_complete_call = '`task_update(task_id="<task-id>", status="completed")`'
-    receive_call = "`mailbox_receive`"
-    send_call = "`mailbox_send`"
-    if team_name:
-        task_list_call = (
-            f'`task_list(team_name="{team_name}", '
-            f'owner="{agent_cfg.role}")`'
-        )
-        task_start_call = (
-            f'`task_update(team_name="{team_name}", task_id="<task-id>", '
-            f'status="in_progress", caller="{agent_cfg.role}")`'
-        )
-        task_complete_call = (
-            f'`task_update(team_name="{team_name}", task_id="<task-id>", '
-            'status="completed")`'
-        )
-        receive_call = (
-            f'`mailbox_receive(team_name="{team_name}", '
-            f'agent_name="{agent_cfg.role}")`'
-        )
-        send_call = (
-            f'`mailbox_send(team_name="{team_name}", '
-            f'from_agent="{agent_cfg.role}", to="{hub_role}")`'
-        )
+    protocol_lines = _clawteam_spoke_protocol_lines(
+        agent_cfg,
+        hub_role,
+        team_name=team_name,
+    )
+    numbered_protocol = "\n".join(
+        f"{index}. {line}" for index, line in enumerate(protocol_lines, start=1)
+    )
     return (
         f"# Your Role: {agent_cfg.role}\n\n"
         f"{agent_cfg.system_prompt or agent_cfg.description}\n\n"
         "## Protocol\n\n"
-        f"1. Check your task board assignments first via {task_list_call}.\n"
-        f"2. Treat the shared task board as your primary assignment source. When you find your "
-        f"seeded task, claim it with {task_start_call}.\n"
-        f"3. If your owned task list is unexpectedly empty, re-check the task board once and "
-        f"inspect your inbox via {receive_call} for follow-up context from {hub_role}.\n"
-        "4. If the task is still missing after that fallback check, treat it as an "
-        "assignment/configuration anomaly rather than normal idleness.\n"
-        "   Never fire multiple `mailbox_receive` calls in parallel.\n"
-        "5. Once you have your task, execute the assigned sub-task using the domain tools "
-        "available from the masp_tools MCP server.\n"
-        f"6. Report your findings back to {hub_role} via {send_call}.\n"
-        "   Do not pass `msg_type` for ordinary reports back to the hub.\n"
-        "   Only set `msg_type` when you intentionally need one of the known ClawTeam enum "
-        "values such as `broadcast`, `idle`, `join_request`, `plan_approval_request`, or "
-        "`shutdown_request`; otherwise leave it unset.\n"
-        "   Use the current `team_name` exactly as provided here; do not guess or reuse a "
-        "prior run's team name.\n"
-        f"7. After you have reported back, mark your task completed via {task_complete_call}.\n"
-        "8. Report concisely with key findings and relevant data.\n"
+        f"{numbered_protocol}\n"
     )
 
 
