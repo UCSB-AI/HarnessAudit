@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 import importlib.util
+import inspect
 import json
 import sys
 import types
@@ -35,18 +38,92 @@ def _bootstrap_real_modules():
     frameworks_pkg.__path__ = [str(REPO_ROOT / "masp_bench" / "frameworks")]
     sys.modules["masp_bench.frameworks"] = frameworks_pkg
 
-    _load_module(
-        "masp_bench.schemas.actions",
-        REPO_ROOT / "masp_bench" / "schemas" / "actions.py",
-    )
-    _load_module(
-        "masp_bench.trace.events",
-        REPO_ROOT / "masp_bench" / "trace" / "events.py",
-    )
-    writer_mod = _load_module(
-        "masp_bench.trace.writer",
-        REPO_ROOT / "masp_bench" / "trace" / "writer.py",
-    )
+    actions_mod = types.ModuleType("masp_bench.schemas.actions")
+
+    class ActionSurface:
+        TOOL_CALL = "tool_call"
+        COMMUNICATION = "communication"
+
+    @dataclass
+    class ObservableAction:
+        timestamp: datetime
+        sequence_num: int
+        run_id: str
+        surface: str
+        agent_id: str
+        agent_role: str
+        tool_name: str | None = None
+        tool_args: dict | None = None
+        tool_result: str | None = None
+        target_agent: str | None = None
+        target_role: str | None = None
+        content: str | None = None
+        raw_event: dict | None = None
+
+    actions_mod.ActionSurface = ActionSurface
+    actions_mod.ObservableAction = ObservableAction
+    sys.modules["masp_bench.schemas.actions"] = actions_mod
+
+    events_mod = types.ModuleType("masp_bench.trace.events")
+
+    @dataclass
+    class _TraceEvent:
+        def model_dump_json(self) -> str:
+            return json.dumps(self.__dict__)
+
+    @dataclass
+    class ToolCallEvent(_TraceEvent):
+        trace_id: str
+        sequence_num: int
+        agent_id: str
+        agent_role: str
+        tool_name: str
+        tool_args: dict
+        tool_result: str
+        timestamp: str
+        type: str = "tool_call"
+
+    @dataclass
+    class CommunicationEvent(_TraceEvent):
+        trace_id: str
+        sequence_num: int
+        agent_id: str
+        agent_role: str
+        target_agent: str
+        target_role: str
+        content: str
+        timestamp: str
+        type: str = "communication"
+
+    events_mod.ToolCallEvent = ToolCallEvent
+    events_mod.CommunicationEvent = CommunicationEvent
+    sys.modules["masp_bench.trace.events"] = events_mod
+
+    writer_mod = types.ModuleType("masp_bench.trace.writer")
+
+    class TraceWriter:
+        def __init__(self, path: str | Path) -> None:
+            self.path = Path(path)
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._fh = None
+
+        def _ensure_open(self):
+            if self._fh is None or self._fh.closed:
+                self._fh = open(self.path, "a", encoding="utf-8")
+            return self._fh
+
+        def write_event(self, event) -> None:
+            fh = self._ensure_open()
+            fh.write(event.model_dump_json() + "\n")
+            fh.flush()
+
+        def close(self) -> None:
+            if self._fh is not None and not self._fh.closed:
+                self._fh.close()
+
+    writer_mod.TraceWriter = TraceWriter
+    sys.modules["masp_bench.trace.writer"] = writer_mod
+
     _load_module(
         "masp_bench.frameworks.harness_profiles",
         REPO_ROOT / "masp_bench" / "frameworks" / "harness_profiles.py",
@@ -132,6 +209,14 @@ def test_action_sink_resequences_by_source_timestamp_and_source_line(
         "2026-04-22T10:08:04.643000+00:00",
         "2026-04-22T10:08:04.643000+00:00",
     ]
+
+
+def test_action_sink_emit_methods_do_not_expose_sequence_num_argument() -> None:
+    tool_call_params = inspect.signature(ActionSink.emit_tool_call).parameters
+    communication_params = inspect.signature(ActionSink.emit_communication).parameters
+
+    assert "sequence_num" not in tool_call_params
+    assert "sequence_num" not in communication_params
 
 
 def test_collect_openclaw_traces_global_ordering_beats_agent_iteration(

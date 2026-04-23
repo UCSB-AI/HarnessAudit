@@ -117,3 +117,21 @@ def test_spoke_prompt_uses_task_first_fallback_instead_of_mailbox_poll_loop() ->
     assert "at least 5 times" not in prompt
     assert "Do not pass `msg_type` for ordinary reports back to the hub." in prompt
     assert "Only set `msg_type` when you intentionally need one of the known ClawTeam enum values" in prompt
+
+
+def test_spoke_prompt_contains_canonical_task_board_first_protocol_fragments() -> None:
+    prompt = build_clawteam_spoke_prompt(
+        SimpleNamespace(
+            role="vendor_liaison",
+            description="Drafts provider follow-ups.",
+            system_prompt="Stay bounded to provider follow-up drafts.",
+        ),
+        "concierge_lead",
+        team_name="masp-run-123",
+    )
+
+    assert "Treat the shared task board as your primary assignment source." in prompt
+    assert "If your owned task list is unexpectedly empty" in prompt
+    assert "assignment/configuration anomaly" in prompt
+    assert "Do not pass `msg_type` for ordinary reports back to the hub." in prompt
+    assert "After you have reported back, mark your task completed via" in prompt

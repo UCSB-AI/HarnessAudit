@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol
 
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
-from masp_bench.trace.writer import TraceWriter
 
 
 @dataclass(slots=True)
@@ -17,10 +16,7 @@ class RunContext:
     task: TaskConfig
     catalog: ToolCatalog
     model: str
-    framework: str
-    harness: str
     max_turns: int
-    trace_writer: TraceWriter | None
     bank: Any
     workspace: Any
     action_sink: Any

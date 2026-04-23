@@ -35,6 +35,7 @@ from typing import Any
 
 from .harness_profiles import session_name
 from .jsonl_collector import _is_mailbox_broadcast, _is_mailbox_send, _strip_mcp_prefix
+from .trace_semantics import mailbox_call_succeeded, mailbox_recipients, mailbox_team_name
 
 log = logging.getLogger(__name__)
 
@@ -95,9 +96,6 @@ def _parse_openclaw_session(
     pending_tool_calls: dict[str, dict[str, Any]] = {}
     pending_mailbox_calls: dict[str, dict[str, Any]] = {}
 
-    def _message_team_name(tool_args: dict[str, Any]) -> str:
-        return str(tool_args.get("team_name") or tool_args.get("teamName") or "")
-
     def _record_timestamp(record: dict[str, Any]) -> str | None:
         ts = record.get("timestamp")
         return str(ts) if ts else None
@@ -113,14 +111,6 @@ def _parse_openclaw_session(
                     if result_ts:
                         return str(result_ts)
         return _record_timestamp(record)
-
-    def _tool_result_succeeded(message: dict[str, Any], result_text: str) -> bool:
-        details = message.get("details", {})
-        if message.get("isError"):
-            return False
-        if isinstance(details, dict) and details.get("status") == "error":
-            return False
-        return not result_text.lstrip().startswith("Error executing tool ")
 
     with open(session_path) as f:
         for line_no, line in enumerate(f, 1):
@@ -223,54 +213,52 @@ def _parse_openclaw_session(
                     )
                 elif call_id in pending_mailbox_calls:
                     mc = pending_mailbox_calls.pop(call_id)
-                    if not _tool_result_succeeded(msg, result_text):
+                    details = msg.get("details", {})
+                    status = details.get("status") if isinstance(details, dict) else None
+                    if not mailbox_call_succeeded(
+                        result_text,
+                        is_error=bool(msg.get("isError")),
+                        status=status,
+                    ):
                         continue
-                    message_team = _message_team_name(mc["args"])
+                    message_team = mailbox_team_name(mc["args"])
                     if expected_team_name and message_team != expected_team_name:
                         continue
 
-                    if mc["kind"] == "send":
+                    msg_content = str(mc["args"].get("content", ""))
+                    for recipient in mailbox_recipients(
+                        kind=mc["kind"],
+                        sender_role=agent_role,
+                        all_agent_roles=all_agent_roles,
+                        tool_args=mc["args"],
+                    ):
+                        raw_event = {
+                            "framework": "clawteam",
+                            "harness": "openclaw",
+                            "tool": mc["raw_name"],
+                            "capture_mode": (
+                                "openclaw_session_mailbox_send"
+                                if mc["kind"] == "send"
+                                else "openclaw_session_mailbox_broadcast"
+                            ),
+                            "team_name": message_team,
+                            "source_file": str(session_path),
+                            "source_line": line_no,
+                        }
+                        if mc["kind"] == "broadcast":
+                            raw_event["expanded_from"] = "broadcast"
                         action_sink.emit_communication(
                             agent_id=agent_role,
                             agent_role=agent_role,
-                            target_agent=mc["args"].get("to", ""),
-                            target_role=mc["args"].get("to", ""),
-                            content=str(mc["args"].get("content", "")),
-                            raw_event={
-                                "framework": "clawteam",
-                                "harness": "openclaw",
-                                "tool": mc["raw_name"],
-                                "capture_mode": "openclaw_session_mailbox_send",
-                                "team_name": message_team,
-                                "source_file": str(session_path),
-                                "source_line": line_no,
-                            },
-                            timestamp=_mailbox_result_timestamp(record, msg) or mc.get("timestamp"),
+                            target_agent=recipient,
+                            target_role=recipient,
+                            content=msg_content,
+                            raw_event=raw_event,
+                            timestamp=(
+                                _mailbox_result_timestamp(record, msg)
+                                or mc.get("timestamp")
+                            ),
                         )
-                    else:
-                        exclude = set(mc["args"].get("exclude", []) or [])
-                        exclude.add(agent_role)
-                        msg_content = str(mc["args"].get("content", ""))
-                        for recipient in all_agent_roles:
-                            if recipient not in exclude:
-                                action_sink.emit_communication(
-                                    agent_id=agent_role,
-                                    agent_role=agent_role,
-                                    target_agent=recipient,
-                                    target_role=recipient,
-                                    content=msg_content,
-                                    raw_event={
-                                        "framework": "clawteam",
-                                        "harness": "openclaw",
-                                        "tool": mc["raw_name"],
-                                        "capture_mode": "openclaw_session_mailbox_broadcast",
-                                        "expanded_from": "broadcast",
-                                        "team_name": message_team,
-                                        "source_file": str(session_path),
-                                        "source_line": line_no,
-                                    },
-                                    timestamp=_mailbox_result_timestamp(record, msg) or mc.get("timestamp"),
-                                )
 
     # Emit orphan tool calls
     for call_id, tc in pending_tool_calls.items():

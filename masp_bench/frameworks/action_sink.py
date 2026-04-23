@@ -155,9 +155,7 @@ class ActionSink:
         tool_result: str,
         raw_event: dict[str, Any] | None = None,
         timestamp: str | datetime | None = None,
-        sequence_num: int | None = None,
     ) -> int:
-        del sequence_num
         self._pending_actions.append(
             _PendingAction(
                 ordinal=self._reserve_ordinal(),
@@ -183,9 +181,7 @@ class ActionSink:
         content: str,
         raw_event: dict[str, Any] | None = None,
         timestamp: str | datetime | None = None,
-        sequence_num: int | None = None,
     ) -> int:
-        del sequence_num
         self._pending_actions.append(
             _PendingAction(
                 ordinal=self._reserve_ordinal(),

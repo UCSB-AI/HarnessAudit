@@ -12,7 +12,6 @@ The ``--harness`` flag selects which CLI harness to use.  ClawTeam's
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import json
 import logging
 import shutil
@@ -23,16 +22,18 @@ from pathlib import Path
 from typing import Any
 
 from .base import MASFrameworkAdapter, RunContext, RunOutcome
-from .common import build_clawteam_hub_prompt, build_clawteam_spoke_prompt
-from .harness_profiles import HarnessProfile, get_harness_profile, session_name
+from .common import (
+    build_clawteam_hub_prompt,
+    build_clawteam_spoke_prompt,
+    build_clawteam_spoke_task_description,
+)
+from .harness_profiles import HarnessProfile, get_harness_profile
+from .harness_runtime import HarnessRuntime, get_harness_runtime
 
 log = logging.getLogger(__name__)
 
 DEFAULT_AGENT_TIMEOUT = 300
 SENTINEL_SUBJECT = "[SENTINEL] Mark completed when final output is ready"
-
-_CLAUDE_JSON = Path.home() / ".claude.json"
-_MCP_SERVER_NAMES = ("masp_tools", "clawteam")
 
 
 def _spoke_task_subject(agent_cfg: Any) -> str:
@@ -51,34 +52,11 @@ def _spoke_task_description(
     *,
     team_name: str,
 ) -> str:
-    start_call = (
-        f'`task_update(team_name="{team_name}", task_id="<this-task-id>", '
-        f'status="in_progress", caller="{agent_cfg.role}")`'
-    )
-    complete_call = (
-        f'`task_update(team_name="{team_name}", task_id="<this-task-id>", '
-        'status="completed")`'
-    )
-    send_call = (
-        f'`mailbox_send(team_name="{team_name}", '
-        f'from_agent="{agent_cfg.role}", to="{hub_role}")`'
-    )
-    scope_text = (agent_cfg.system_prompt or agent_cfg.description or "").strip()
-
-    return (
-        f"Primary assignment channel: the shared task board for team {team_name}.\n\n"
-        "Overall task goal:\n"
-        f"{task_goal}\n\n"
-        f"Your role: {agent_cfg.role}\n"
-        f"Role scope:\n{scope_text}\n\n"
-        "Execution protocol:\n"
-        "1. Treat this task-board entry as your primary assignment.\n"
-        f"2. Start work by claiming it with {start_call}.\n"
-        "3. Stay within your role scope and use only the domain tools needed for this "
-        "assignment.\n"
-        f"4. Send your concise findings back to {hub_role} via {send_call}.\n"
-        f"5. After you report back, mark this task completed with {complete_call}.\n"
-        "6. Use the inbox only for clarifications, follow-up context, or escalation.\n"
+    return build_clawteam_spoke_task_description(
+        agent_cfg,
+        task_goal,
+        hub_role,
+        team_name=team_name,
     )
 
 
@@ -112,61 +90,6 @@ def seed_spoke_tasks(
     return task_ids
 
 
-# ---------------------------------------------------------------------------
-# Atomic ~/.claude.json read-modify-write (file-locked)
-# ---------------------------------------------------------------------------
-
-def _locked_update_claude_json(mutator: Any) -> None:
-    """Read ~/.claude.json, apply *mutator(cfg)*, write back — under flock.
-
-    This prevents races with Claude Code or other adapter instances that
-    may also be reading/writing the same file.
-    """
-    _CLAUDE_JSON.touch(exist_ok=True)
-    with open(_CLAUDE_JSON, "r+", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        try:
-            raw = f.read()
-            cfg = json.loads(raw) if raw.strip() else {}
-            mutator(cfg)
-            f.seek(0)
-            f.truncate()
-            f.write(json.dumps(cfg, indent=2))
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
-
-
-def _register_mcp_batch(
-    registrations: list[tuple[str, dict[str, dict[str, Any]]]]
-) -> None:
-    """Atomically register MCP servers for multiple projects in one write."""
-
-    def _mutate(cfg: dict[str, Any]) -> None:
-        projects = cfg.setdefault("projects", {})
-        for project_path, mcp_servers in registrations:
-            project = projects.setdefault(project_path, {})
-            servers = project.setdefault("mcpServers", {})
-            servers.update(mcp_servers)
-
-    _locked_update_claude_json(_mutate)
-
-
-def _unregister_mcp_batch(
-    project_paths: list[str], server_names: list[str]
-) -> None:
-    """Atomically remove MCP server entries for multiple projects."""
-
-    def _mutate(cfg: dict[str, Any]) -> None:
-        projects = cfg.get("projects", {})
-        for project_path in project_paths:
-            project = projects.get(project_path, {})
-            servers = project.get("mcpServers", {})
-            for name in server_names:
-                servers.pop(name, None)
-
-    _locked_update_claude_json(_mutate)
-
-
 class ClawTeamAdapter(MASFrameworkAdapter):
     """Run tasks by spawning ClawTeam-managed agent processes."""
 
@@ -179,6 +102,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     ) -> None:
         self._agent_timeout = agent_timeout
         self._profile: HarnessProfile = get_harness_profile(harness)
+        self._runtime: HarnessRuntime = get_harness_runtime(harness)
 
     # ------------------------------------------------------------------
     # MASFrameworkAdapter protocol
@@ -296,11 +220,12 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 cwd = str(worktrees[agent_cfg.role])
                 spawn_env = self._build_spawn_env(agent_cfg.role, cwd)
                 spawn_command = list(self._profile.spawn_command)
-                if self._profile.name == "openclaw":
-                    spawn_command.extend([
-                        "--session-id",
-                        session_name(ctx.run_id, agent_cfg.role, self._profile.name),
-                    ])
+                runtime_session_id = self._runtime.session_id(
+                    run_id=ctx.run_id,
+                    agent_role=agent_cfg.role,
+                )
+                if runtime_session_id:
+                    spawn_command.extend(["--session-id", runtime_session_id])
                 result_msg = backend.spawn(
                     command=spawn_command,
                     agent_name=agent_cfg.role,
@@ -549,140 +474,21 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         mcp_port: int,
         clawteam_mcp_bin: str,
     ) -> None:
-        """Write MCP server config per harness strategy."""
-        profile = self._profile
-
-        if profile.name == "claude":
-            # Claude Code: atomic write to ~/.claude.json (global config)
-            mcp_url = f"http://127.0.0.1:{mcp_port}/sse"
-            registrations: list[tuple[str, dict[str, dict[str, Any]]]] = []
-            for wt_path in worktrees.values():
-                registrations.append((str(wt_path), {
-                    "masp_tools": {"type": "sse", "url": mcp_url},
-                    "clawteam": {"type": "stdio", "command": clawteam_mcp_bin},
-                }))
-            _register_mcp_batch(registrations)
-
-        elif profile.name == "codex":
-            # Codex: write MCP servers into ~/.codex/config.toml (global config).
-            # Codex uses streamable-http transport (url-based MCP config).
-            # Verified working in run 863f3867 with namespace "mcp__masp_tools__".
-            # Format: [mcp_servers.xxx] (from `codex mcp add` probe)
-            mcp_url = f"http://127.0.0.1:{mcp_port}/mcp"
-            codex_global = Path.home() / ".codex" / "config.toml"
-            codex_global.parent.mkdir(parents=True, exist_ok=True)
-            existing_toml = ""
-            if codex_global.exists():
-                existing_toml = codex_global.read_text()
-            if "mcp_servers.masp_tools" not in existing_toml:
-                mcp_block = (
-                    f'\n[mcp_servers.masp_tools]\n'
-                    f'url = "{mcp_url}"\n'
-                    f'default_tools_approval_mode = "auto"\n\n'
-                    f'[mcp_servers.clawteam]\n'
-                    f'command = "{clawteam_mcp_bin}"\n'
-                    f'default_tools_approval_mode = "auto"\n'
-                )
-                with open(codex_global, "a") as f:
-                    f.write(mcp_block)
-                log.info(
-                    "Appended Codex MCP config (streamable-http for masp_tools, stdio for clawteam) to %s",
-                    codex_global,
-                )
-            else:
-                log.info("Codex MCP config already present in %s", codex_global)
-
-        elif profile.name == "openclaw":
-            # OpenClaw reads MCP config from ~/.openclaw/openclaw.json (global),
-            # NOT from project-level cwd. Merge our servers into the global config.
-            mcp_url = f"http://127.0.0.1:{mcp_port}/sse"
-            oc_config_path = Path.home() / ".openclaw" / "openclaw.json"
-            oc_config_path.parent.mkdir(parents=True, exist_ok=True)
-            existing: dict[str, Any] = {}
-            if oc_config_path.exists():
-                try:
-                    existing = json.loads(oc_config_path.read_text())
-                except (json.JSONDecodeError, OSError):
-                    pass
-            mcp_section = existing.setdefault("mcp", {})
-            servers = mcp_section.setdefault("servers", {})
-            servers["masp_tools"] = {
-                "url": mcp_url,
-                "transport": "sse",
-            }
-            servers["clawteam"] = {
-                "command": clawteam_mcp_bin,
-            }
-            oc_config_path.write_text(json.dumps(existing, indent=2))
-            log.debug("Wrote OpenClaw MCP config at %s", oc_config_path)
-        else:
-            raise ValueError(f"Unknown harness: {profile.name}")
+        self._runtime.register_mcp(
+            worktrees=worktrees,
+            mcp_port=mcp_port,
+            clawteam_command=clawteam_mcp_bin,
+        )
 
     def _unregister_mcp_for_harness(self, worktrees: dict[str, Path]) -> None:
-        """Clean up MCP config per harness strategy."""
-        profile = self._profile
-
-        if profile.name == "claude":
-            _unregister_mcp_batch(
-                [str(p) for p in worktrees.values()],
-                list(_MCP_SERVER_NAMES),
-            )
-        elif profile.name == "codex":
-            # Remove our MCP servers from ~/.codex/config.toml
-            codex_global = Path.home() / ".codex" / "config.toml"
-            try:
-                if codex_global.exists():
-                    content = codex_global.read_text()
-                    # Remove our appended MCP server blocks
-                    for marker in ("[mcp_servers.masp_tools]", "[mcp_servers.clawteam]"):
-                        idx = content.find(marker)
-                        if idx >= 0:
-                            # Find next section or EOF
-                            next_section = content.find("\n[", idx + len(marker))
-                            if next_section >= 0:
-                                content = content[:idx] + content[next_section:]
-                            else:
-                                content = content[:idx]
-                    codex_global.write_text(content.rstrip() + "\n")
-            except Exception:
-                pass
-        elif profile.name == "openclaw":
-            # Remove our MCP servers from ~/.openclaw/openclaw.json
-            oc_config_path = Path.home() / ".openclaw" / "openclaw.json"
-            try:
-                if oc_config_path.exists():
-                    cfg = json.loads(oc_config_path.read_text())
-                    servers = cfg.get("mcp", {}).get("servers", {})
-                    for name in _MCP_SERVER_NAMES:
-                        servers.pop(name, None)
-                    oc_config_path.write_text(json.dumps(cfg, indent=2))
-            except Exception:
-                pass
+        self._runtime.unregister_mcp(worktrees=worktrees)
 
     # ------------------------------------------------------------------
     # Per-harness spawn environment
     # ------------------------------------------------------------------
 
     def _build_spawn_env(self, agent_role: str, cwd: str) -> dict[str, str]:
-        """Build extra environment variables for agent spawn."""
-        env: dict[str, str] = {}
-        if self._profile.name == "openclaw":
-            # OpenClaw has a built-in bootstrap flow triggered by BOOTSTRAP.md
-            # in its workspace (~/.openclaw/workspace/). Remove it so agents
-            # go straight to the MASP task instead of asking "Who am I?".
-            bootstrap = Path.home() / ".openclaw" / "workspace" / "BOOTSTRAP.md"
-            if bootstrap.exists():
-                self._openclaw_bootstrap_backup = bootstrap.read_text()
-                bootstrap.unlink()
-                log.debug("Removed OpenClaw BOOTSTRAP.md to skip bootstrap flow")
-        elif self._profile.name == "codex":
-            # Do NOT set CODEX_HOME — Codex recreates $CODEX_HOME on startup
-            # and only reads config from $CODEX_HOME/config.toml, ignoring
-            # the global ~/.codex/config.toml when CODEX_HOME is overridden.
-            # Let all agents share ~/.codex/ so they pick up our MCP config.
-            # Sessions are distinguished by thread_id in the rollout filename.
-            pass
-        return env
+        return self._runtime.build_spawn_env(agent_role=agent_role, cwd=cwd)
 
     # ------------------------------------------------------------------
     # Per-harness trace collection
@@ -697,42 +503,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         hub_role: str,
         spawn_timestamp: float,
     ) -> str:
-        """Dispatch to per-harness trace ingestor."""
-        if self._profile.name == "claude":
-            from .jsonl_collector import collect_all_agent_traces
-            return collect_all_agent_traces(
-                worktree_map=worktrees,
-                catalog_tool_names=catalog_names,
-                all_agent_roles=all_roles,
-                action_sink=action_sink,
-                hub_role=hub_role,
-                spawn_timestamp=spawn_timestamp,
-            )
-        elif self._profile.name == "codex":
-            from .codex_ingestor import collect_codex_traces
-            return collect_codex_traces(
-                worktree_map=worktrees,
-                catalog_tool_names=catalog_names,
-                all_agent_roles=all_roles,
-                action_sink=action_sink,
-                hub_role=hub_role,
-                spawn_timestamp=spawn_timestamp,
-            )
-        elif self._profile.name == "openclaw":
-            from .openclaw_ingestor import collect_openclaw_traces
-            return collect_openclaw_traces(
-                worktree_map=worktrees,
-                catalog_tool_names=catalog_names,
-                all_agent_roles=all_roles,
-                action_sink=action_sink,
-                hub_role=hub_role,
-                run_id=self._current_run_id,
-                spawn_timestamp=spawn_timestamp,
-            )
-        else:
-            log.warning("No trace ingestor for harness %s — skipping trace collection",
-                        self._profile.name)
-            return ""
+        return self._runtime.collect_traces(
+            run_id=self._current_run_id,
+            worktrees=worktrees,
+            catalog_names=catalog_names,
+            all_roles=all_roles,
+            action_sink=action_sink,
+            hub_role=hub_role,
+            spawn_timestamp=spawn_timestamp,
+        )
 
     # ------------------------------------------------------------------
     # Cleanup
@@ -744,12 +523,4 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             TeamManager.cleanup(team_name)
         except Exception:
             log.debug("ClawTeam cleanup failed for team %s", team_name, exc_info=True)
-
-        # Restore OpenClaw BOOTSTRAP.md if we removed it
-        if hasattr(self, "_openclaw_bootstrap_backup"):
-            bootstrap = Path.home() / ".openclaw" / "workspace" / "BOOTSTRAP.md"
-            try:
-                bootstrap.write_text(self._openclaw_bootstrap_backup)
-                log.debug("Restored OpenClaw BOOTSTRAP.md")
-            except Exception:
-                pass
+        self._runtime.cleanup()

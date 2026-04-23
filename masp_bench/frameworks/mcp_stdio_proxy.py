@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import sys
 
 
 async def _run_proxy(sse_url: str) -> None:
@@ -31,11 +30,6 @@ async def _run_proxy(sse_url: str) -> None:
     from mcp.client.sse import sse_client
     from mcp.server.lowlevel import Server
     from mcp.server.stdio import stdio_server
-    from mcp.types import (
-        CallToolResult,
-        TextContent,
-        Tool,
-    )
 
     # 1. Connect to the upstream SSE MCP server
     async with sse_client(sse_url) as (read_stream, write_stream):
