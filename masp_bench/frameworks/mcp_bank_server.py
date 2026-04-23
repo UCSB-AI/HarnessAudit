@@ -51,6 +51,23 @@ def _dump_bank(bank: Any, dump_path: Path) -> None:
         log.warning("Failed to dump bank to %s", dump_path, exc_info=True)
 
 
+def _load_runtime_components(
+    domain: str,
+    bank_source: str,
+) -> tuple[Any, Any]:
+    """Load the bank factory and tool catalog for the requested source."""
+    if bank_source == "sasp":
+        from sasp_bench.banks import get_bank
+        from sasp_bench.loader import load_sa_tool_catalog
+
+        return get_bank(domain), load_sa_tool_catalog(domain)
+
+    from masp_bench.banks import get_bank
+    from masp_bench.loader import load_tool_catalog
+
+    return get_bank(domain), load_tool_catalog(domain)
+
+
 # ---------------------------------------------------------------------------
 # Server builder
 # ---------------------------------------------------------------------------
@@ -146,13 +163,15 @@ def _run_server() -> None:
     parser.add_argument("--task-metadata-json", default=None)
     parser.add_argument("--bank-dump-path", default=None,
                         help="Path to dump Bank SQLite on exit")
+    parser.add_argument(
+        "--bank-source",
+        default="masp",
+        choices=["masp", "sasp"],
+        help="Which benchmark package should provide the bank/tool catalog.",
+    )
     args = parser.parse_args()
 
-    from masp_bench.banks import get_bank
-    from masp_bench.loader import load_tool_catalog
-
-    catalog = load_tool_catalog(args.domain)
-    bank = get_bank(args.domain)
+    bank, catalog = _load_runtime_components(args.domain, args.bank_source)
 
     task_metadata: dict[str, Any] | None = None
     if args.task_metadata_json:

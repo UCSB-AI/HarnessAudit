@@ -17,10 +17,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
-from masp_bench.runner import BenchmarkRunner, framework_run_id_slug, next_run_id
+from masp_bench.runner import (
+    BenchmarkRunner,
+    framework_run_id_slug,
+    next_run_id,
+)
 from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
-
 from sasp_bench.loader import load_sa_task_with_tools, resolve_sa_task_path
 
 
@@ -50,13 +53,10 @@ def cmd_run(args: argparse.Namespace) -> None:
         print()
 
         trace_dir = Path(args.trace_dir)
-        output_dir = (
-            Path(args.output) if args.output
-            else pkg_root / "results"
-        )
         run_id = next_run_id(
             args.model,
             framework_slug=framework_run_id_slug(args.framework),
+            harness_slug="openclaw",
         )
         trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
@@ -77,6 +77,8 @@ def cmd_run(args: argparse.Namespace) -> None:
             trace_writer=writer, max_turns=args.max_turns,
             workspace_manager=workspace_manager,
             bank_factory=sa_banks.get_bank,
+            harness="openclaw",
+            agent_timeout=args.agent_timeout,
         )
 
         metrics = None
@@ -93,10 +95,6 @@ def cmd_run(args: argparse.Namespace) -> None:
             print()
 
             print("Checking access rules...")
-            scope_keys = {
-                t.name: t.dedup_scope_keys
-                for t in catalog.tools if t.dedup_scope_keys
-            }
             decisions = check_trace(
                 trace.actions, task.access_rules,
                 domain=task.domain,
@@ -211,14 +209,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             print(f"Report saved to {out_path}")
 
 
-def main() -> None:
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(env_path)
-
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY not set.", file=sys.stderr)
-        sys.exit(1)
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sasp-bench",
         description="SASP-Bench: Single-Agent Safety & Privacy Benchmark",
@@ -227,15 +218,30 @@ def main() -> None:
 
     run_p = sub.add_parser("run", help="Run a single SA task")
     run_p.add_argument("task", help="SA task YAML path")
-    run_p.add_argument("--model", default="claude-sonnet-4")
-    run_p.add_argument("--framework", default="clawteam",
-                       choices=["clawteam"])
+    run_p.add_argument("--model", default="anthropic/claude-sonnet-4-6")
+    run_p.add_argument(
+        "--framework",
+        default="openclaw_local",
+        choices=["openclaw_local"],
+    )
     _sa_pkg = Path(__file__).resolve().parent
-    run_p.add_argument("--output", "-o", help="Output directory (default: sasp_bench/results/)")
+    run_p.add_argument(
+        "--output",
+        "-o",
+        help="Output directory (default: sasp_bench/results/)",
+    )
     run_p.add_argument("--trace-dir", default=str(_sa_pkg / "traces"))
     run_p.add_argument("--max-turns", type=int, default=15)
     run_p.add_argument("--repeat", type=int, default=1)
+    run_p.add_argument("--agent-timeout", type=int, default=300)
+    return parser
 
+
+def main() -> None:
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    load_dotenv(env_path)
+
+    parser = build_parser()
     args = parser.parse_args()
     if args.command == "run":
         cmd_run(args)
