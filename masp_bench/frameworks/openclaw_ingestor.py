@@ -34,8 +34,14 @@ from pathlib import Path
 from typing import Any
 
 from .harness_profiles import session_name
-from .jsonl_collector import _is_mailbox_broadcast, _is_mailbox_send, _strip_mcp_prefix
-from .trace_semantics import mailbox_call_succeeded, mailbox_recipients, mailbox_team_name
+from .trace_semantics import (
+    is_mailbox_broadcast as _is_mailbox_broadcast,
+    is_mailbox_send as _is_mailbox_send,
+    mailbox_call_succeeded,
+    mailbox_recipients,
+    mailbox_team_name,
+    normalize_mcp_tool_name as _strip_mcp_prefix,
+)
 
 log = logging.getLogger(__name__)
 
@@ -402,14 +408,10 @@ def collect_openclaw_traces(
             )
             if agent_role == hub_role and idx == 0:
                 final_text = agent_output
-                hub_meta = read_openclaw_final_text(session_path)[1]
                 log.info(
-                    "Collected OpenClaw hub session %s: found_final_text=%s "
-                    "last_role=%s last_content_type=%s",
+                    "Collected OpenClaw hub session %s: found_final_text=%s",
                     session_path,
-                    hub_meta["found_final_text"],
-                    hub_meta["last_message_role"] or "<none>",
-                    hub_meta["last_content_type"] or "<none>",
+                    bool(agent_output),
                 )
 
     return final_text

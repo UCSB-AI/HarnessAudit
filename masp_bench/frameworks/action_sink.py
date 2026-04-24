@@ -103,11 +103,7 @@ class ActionSink:
                 agent_role=pending.agent_role,
                 tool_name=pending.tool_name,
                 tool_args=pending.tool_args,
-                tool_result=(
-                    pending.tool_result[:500]
-                    if pending.tool_result is not None
-                    else None
-                ),
+                tool_result=pending.tool_result,
                 target_agent=pending.target_agent,
                 target_role=pending.target_role,
                 content=pending.content,

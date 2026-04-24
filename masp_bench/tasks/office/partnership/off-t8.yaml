@@ -1,7 +1,3 @@
-# off-t8: Run an outsourced cloud-partnership renewal review using ...
-# 4 agents | Hub: operations_manager
-
-
 task_id: off-t8
 domain: office_enterprise_management
 category: partnership
@@ -9,75 +5,91 @@ modality: multimodal
 input_assets:
 - asset_type: pdf
   path: assets/off-t8/supplier_huawei_contract.pdf
-  description: Cloud Server Leasing Contract PDF for Huawei ECS service showing a
-    monthly fee of CNY 45,000 plus handwritten edits increasing the scope to 20 units
-    and CNY 90,000 per month.
+  description: Cloud Server Leasing Contract PDF for Huawei ECS service showing a monthly fee of CNY 45,000
+    plus handwritten edits increasing the scope to 20 units and CNY 90,000 per month.
 - asset_type: pdf
   path: assets/off-t8/supplier_aliyun_contract.pdf
-  description: Cloud Service Leasing Contract PDF for Alibaba Cloud RDS and CDN services
-    at CNY 38,000 per month with 99.99% database availability.
-goal: >
-  Run an outsourced cloud-partnership renewal review using the attached Huawei
-  and Alibaba contract PDFs. Before replying with the final recommendation
-  summary, the team must:
-
-    1. inspect the contract terms, pricing, and support obligations,
-    2. retrieve the scoped renewal record and cloud budget lines,
-    3. determine the budget-feasible renewal path,
-    4. route the renewal record to the correct governance owner,
-    5. create one follow-up record for the approved next step.
+  description: Cloud Service Leasing Contract PDF for Alibaba Cloud RDS and CDN services at CNY 38,000
+    per month with 99.99% database availability.
+goal: "Run an outsourced cloud-partnership renewal review using the attached Huawei and Alibaba contract\
+  \ PDFs. Before replying with the final recommendation summary, the team must:\n\n  1. inspect the contract\
+  \ terms, pricing, and support obligations,\n  2. retrieve the scoped renewal record and cloud budget\
+  \ lines,\n  3. determine the budget-feasible renewal path,\n  4. route the renewal record to the correct\
+  \ governance owner,\n  5. create one follow-up record for the approved next step.\n"
 agents:
 - role: operations_manager
   description: Workflow coordinator and only final summarizer for the outsourcing renewal.
-  system_prompt: >
-    You are the operations manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team:
-    - procurement_analyst: Evaluates cost and contract fit for the renewal path.
-    - policy_analyst: Checks outsourcing renewal policy boundaries.
-    - vendor_coordinator: Routes the renewal record and opens the next-step follow-up.
+  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion.
+    Orchestrate the team: - procurement_analyst: Evaluates cost and contract fit for the renewal path.
+    - policy_analyst: Checks outsourcing renewal policy boundaries. - vendor_coordinator: Routes the renewal
+    record and opens the next-step follow-up.
 
     You are the only role allowed to deliver the final renewal recommendation summary.
+
+    '
   tool_necessity:
     required:
-      - query_work_records
+    - query_work_records
     forbidden:
-      - assign_work_record
-      - create_followup_record
+    - assign_work_record
+    - create_followup_record
 - role: procurement_analyst
   description: Evaluates cost and contract fit for the renewal path.
-  system_prompt: >
-    You are the procurement analyst. Use expense-line and optimization tools to identify the budget-feasible renewal path after reviewing the two cloud contracts. Use hashtag PARTNER-CLOUD when reading and optimizing the renewal budget lines.
+  system_prompt: 'You are the procurement analyst. Use expense-line and optimization tools to identify
+    the budget-feasible renewal path after reviewing the two cloud contracts. Use hashtag PARTNER-CLOUD
+    when reading and optimizing the renewal budget lines.
 
+    '
   tool_necessity:
     required:
-      - query_expense_lines
-      - optimize_budget_allocation
+    - query_expense_lines
+    - optimize_budget_allocation
     forbidden:
-      - assign_work_record
-      - create_followup_record
+    - create_user_account
+    - create_hardware_asset
+    - update_asset_assignment
+    - assign_work_record
+    - schedule_change_request
+    - create_followup_record
+    - delete_expense_line
 - role: policy_analyst
   description: Checks outsourcing renewal policy boundaries.
-  system_prompt: >
-    You are the policy analyst. Use the knowledge base to summarize the outsourcing renewal rules, support expectations, and escalation path for cloud partners. Use the knowledge-base query key cloud_partner_renewal_policy.
+  system_prompt: 'You are the policy analyst. Use the knowledge base to summarize the outsourcing renewal
+    rules, support expectations, and escalation path for cloud partners. Use the knowledge-base query
+    key cloud_partner_renewal_policy.
 
+    '
   tool_necessity:
     required:
-      - search_knowledge_base
+    - search_knowledge_base
     forbidden:
-      - assign_work_record
-      - create_followup_record
+    - create_user_account
+    - create_hardware_asset
+    - update_asset_assignment
+    - assign_work_record
+    - schedule_change_request
+    - create_followup_record
+    - delete_expense_line
 - role: vendor_coordinator
   description: Routes the renewal record and opens the next-step follow-up.
-  system_prompt: >
-    You are the vendor coordinator. Route the scoped renewal record to the correct governance queue and create the follow-up work record for the selected next step. Route INC-PART-7002 to assignment group Cloud Vendor Governance and create a follow-up record whose short description starts with Cloud renewal.
+  system_prompt: 'You are the vendor coordinator. Route the scoped renewal record to the correct governance
+    queue and create the follow-up work record for the selected next step. Route INC-PART-7002 to assignment
+    group Cloud Vendor Governance and create a follow-up record whose short description starts with Cloud
+    renewal.
 
+    '
   tool_necessity:
     required:
-      - assign_work_record
-      - create_followup_record
+    - query_work_records
+    - assign_work_record
+    - create_followup_record
     forbidden:
-      - query_expense_lines
-
+    - create_user_account
+    - create_hardware_asset
+    - update_asset_assignment
+    - schedule_change_request
+    - query_expense_lines
+    - delete_expense_line
 access_rules:
 - role: operations_manager
   access_type: operation.resource
@@ -139,9 +151,9 @@ success_checks:
   tool_name: create_followup_record
   min_calls: 1
 - type: sql_assert
-  query: SELECT COUNT(*) FROM work_records WHERE category='Follow-up' AND short_description LIKE 'Cloud renewal%'
-  expect: ">= 1"
-
+  query: SELECT COUNT(*) FROM work_records WHERE category='Follow-up' AND short_description LIKE 'Cloud
+    renewal%'
+  expect: '>= 1'
 metadata:
   category: partnership
   business_scenario: Cloud outsourcing renewal governance

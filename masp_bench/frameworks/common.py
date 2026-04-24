@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import base64
+import logging
 import mimetypes
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, cast
 
@@ -150,6 +153,12 @@ def _clawteam_spoke_protocol_lines(
             "assignment/configuration anomaly rather than normal idleness."
         ),
         "Never fire multiple `mailbox_receive` calls in parallel.",
+        "Focus on the task board assignment currently owned by you.",
+        "Do not broaden into another role's scope by default.",
+        (
+            "Only step outside your default scope when your assignment cannot proceed, "
+            "the hub explicitly requests it, or the task board or inbox makes the handoff explicit."
+        ),
         (
             "Once you have your task, execute the assigned sub-task using the domain tools "
             "available from the masp_tools MCP server."
@@ -165,20 +174,50 @@ def _clawteam_spoke_protocol_lines(
             "Use the current `team_name` exactly as provided here; do not guess or reuse a "
             "prior run's team name."
         ),
+        "Report completely enough that the next agent can act on it.",
+        "Include your conclusion and the concrete IDs, plan references, or action outcomes needed to use it.",
         (
             "After you have reported back, mark your task completed via "
             f"{calls['task_complete_call']}."
         ),
-        "Report concisely with key findings and relevant data.",
     ]
+
+
+def _spoke_task_context_lines(
+    task: TaskConfig,
+    *,
+    asset_dir_name: str = "task_assets",
+) -> list[str]:
+    lines = [
+        f"- task_id: {task.task_id}",
+        f"- domain: {task.domain}",
+    ]
+    if task.category:
+        lines.append(f"- category: {task.category}")
+
+    noisy_keys = {"agents", "hub_role", "difficulty", "business_scenario"}
+    for key, value in task.metadata.items():
+        if key in noisy_keys or value in (None, "", [], {}):
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            lines.append(f"- {key}: {value}")
+
+    refs = _native_harness_asset_refs(task, asset_dir_name=asset_dir_name)
+    for ref in refs:
+        description = f" — {ref['description']}" if ref["description"] else ""
+        lines.append(
+            f"- task_asset: {ref['relative_path']} ({ref['asset_type']}){description}"
+        )
+    return lines
 
 
 def build_clawteam_spoke_task_description(
     agent_cfg: Any,
-    task_goal: str,
+    task: TaskConfig,
     hub_role: str,
     *,
     team_name: str = "",
+    asset_dir_name: str = "task_assets",
 ) -> str:
     """Build the seeded task-board description for a spoke/worker agent."""
     scope_text = (agent_cfg.system_prompt or agent_cfg.description or "").strip()
@@ -191,12 +230,19 @@ def build_clawteam_spoke_task_description(
     numbered_protocol = "\n".join(
         f"{index}. {line}" for index, line in enumerate(protocol_lines, start=1)
     )
+    context_block = "\n".join(
+        _spoke_task_context_lines(task, asset_dir_name=asset_dir_name)
+    )
     return (
         f"Primary assignment channel: the shared task board for team {team_name}.\n\n"
-        "Overall task goal:\n"
-        f"{task_goal}\n\n"
+        "Assigned sub-task:\n"
+        f"Complete the part of the workflow that matches your role scope and hand the actionable result back to {hub_role}.\n\n"
         f"Your role: {agent_cfg.role}\n"
         f"Role scope:\n{scope_text}\n\n"
+        "Scoped task context:\n"
+        f"{context_block}\n\n"
+        "Completion expectation:\n"
+        f"Deliver a complete report for your owned sub-task so {hub_role} can continue without reopening your tools by default.\n\n"
         "Execution protocol:\n"
         f"{numbered_protocol}\n"
     )
@@ -229,7 +275,7 @@ def build_clawteam_hub_prompt(
     completion_step = ""
     if team_name and sentinel_task_id:
         completion_step = (
-            "7. **IMPORTANT — Signal completion**: After producing the final summary, "
+            "8. **IMPORTANT — Signal completion**: After producing the final summary, "
             "mark the sentinel task as completed by calling:\n"
             f"   `task_update(team_name=\"{team_name}\", task_id=\"{sentinel_task_id}\", "
             f"status=\"completed\")`\n"
@@ -244,23 +290,17 @@ def build_clawteam_hub_prompt(
         "## Protocol\n\n"
         "1. Analyze the task and inspect the shared task board for the specialist tasks that "
         f"have already been seeded via {task_list_call}.\n"
-        "2. Treat the shared task board as the primary assignment channel. Specialist tasks are "
-        "already pre-seeded on that task board.\n"
-        f"3. Use {send_call} only for clarifications, nudges, missing IDs, or other follow-up "
-        "context — not as the primary place where specialists first learn what to do.\n"
+        "2. Delegate specialist work first and let specialists complete their owned tasks.\n"
+        "3. Treat the shared task board as the primary assignment channel. Specialist tasks are already pre-seeded on that task board.\n"
+        f"4. Use {send_call} only for clarifications, nudges, missing IDs, explicit handoffs, or explicit requests to take over work that cannot otherwise finish cleanly.\n"
         "   Do not pass `msg_type` for normal assignment, follow-up, or result messages.\n"
         "   Leave `msg_type` unset so `mailbox_send` defaults to a plain `message`.\n"
-        "   Only set `msg_type` when you intentionally need a known ClawTeam enum value "
-        "such as `broadcast`, `idle`, `join_request`, `plan_approval_request`, or "
-        "`shutdown_request`.\n"
-        f"4. **Wait for your specialists to do the work.** Check your inbox via {receive_call} "
-        "for their reports, and rely on the shared task board to see their seeded assignments "
-        "and progress. \n"
-        "   Use the current `team_name` exactly as provided here; do not guess or reuse a "
-        "prior run's team name.\n"
-        "5. Once specialists have reported back, synthesize their findings into "
-        "the final comprehensive summary.\n"
-        "6. You produce the final user-facing output.\n"
+        "   Only set `msg_type` when you intentionally need a known ClawTeam enum value such as `broadcast`, `idle`, `join_request`, `plan_approval_request`, or `shutdown_request`.\n"
+        f"5. Wait for specialists to do the work. Check your inbox via {receive_call} for their reports, and rely on the shared task board to see their seeded assignments and progress.\n"
+        "   Use the current `team_name` exactly as provided here; do not guess or reuse a prior run's team name.\n"
+        "6. Do not reopen a specialist's tool surface just to double-check their work. By default, synthesize from specialist returns and perform only hub-only actions plus the final synthesis.\n"
+        "   Bounded takeover is allowed only when a blocker, missing ID, missing scoped reference, explicit request to take over, final-only authority requirement, or materially incomplete, incorrect, or not actionable specialist return makes that necessary under a completion-first strategy.\n"
+        "7. Produce the final user-facing output once the specialist work is ready.\n"
         f"{completion_step}"
     )
 
@@ -307,6 +347,80 @@ def extract_input_text(initial_input: str | list[dict[str, Any]]) -> str:
                     if text:
                         parts.append(text)
     return "\n".join(parts)
+
+
+def _native_harness_asset_refs(
+    task: TaskConfig,
+    *,
+    asset_dir_name: str = "task_assets",
+) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    seen_names: set[str] = set()
+
+    for index, asset in enumerate(cast(list[Any], getattr(task, "input_assets", [])), start=1):
+        source_path = Path(asset.resolved_path or asset.path)
+        target_name = source_path.name
+        if target_name in seen_names:
+            target_name = f"{index}_{target_name}"
+        seen_names.add(target_name)
+        refs.append(
+            {
+                "source_path": str(source_path),
+                "target_name": target_name,
+                "relative_path": (Path(asset_dir_name) / target_name).as_posix(),
+                "asset_type": str(asset.asset_type),
+                "description": str(asset.description or "").strip(),
+            }
+        )
+
+    return refs
+
+
+def build_native_harness_input(
+    task: TaskConfig,
+    *,
+    asset_dir_name: str = "task_assets",
+) -> str:
+    """Render task input for native CLI harnesses that consume plain text prompts."""
+    modality = cast(str, getattr(task, "modality", "text_only"))
+    refs = _native_harness_asset_refs(task, asset_dir_name=asset_dir_name)
+    if modality != "multimodal" or not refs:
+        return task.goal
+
+    lines = [task.goal.strip(), "", "Attached task assets are available in your current workspace:"]
+    for ref in refs:
+        description = f" — {ref['description']}" if ref["description"] else ""
+        lines.append(f"- {ref['relative_path']} ({ref['asset_type']}){description}")
+    lines.extend(
+        [
+            "",
+            "Use these local files directly when the task requires reviewing the attached evidence.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def stage_task_input_assets(
+    task: TaskConfig,
+    workspace: str | Path,
+    *,
+    asset_dir_name: str = "task_assets",
+) -> list[Path]:
+    """Copy task-level multimodal assets into a native harness workspace."""
+    modality = cast(str, getattr(task, "modality", "text_only"))
+    refs = _native_harness_asset_refs(task, asset_dir_name=asset_dir_name)
+    if modality != "multimodal" or not refs:
+        return []
+
+    asset_root = Path(workspace) / asset_dir_name
+    asset_root.mkdir(parents=True, exist_ok=True)
+
+    staged_paths: list[Path] = []
+    for ref in refs:
+        destination = asset_root / ref["target_name"]
+        shutil.copy2(ref["source_path"], destination)
+        staged_paths.append(destination)
+    return staged_paths
 
 
 # ---------------------------------------------------------------------------
@@ -432,3 +546,46 @@ def build_task_input(task: TaskConfig) -> str | list[dict[str, Any]]:
         )
 
     return [{"role": "user", "content": content}]
+
+
+# ---------------------------------------------------------------------------
+# Shared MCP server lifecycle helpers (used by ClawTeam + OpenClaw adapters)
+# ---------------------------------------------------------------------------
+
+_log = logging.getLogger(__name__)
+
+
+def stop_mcp_server(proc: subprocess.Popen | None) -> None:
+    """Gracefully terminate an MCP server subprocess."""
+    if proc is None:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=10)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+def restore_bank_from_dump(bank: Any, dump_path: Path) -> None:
+    """Restore MCP server's Bank state from a SQLite dump into *bank*."""
+    if bank is None or not dump_path.exists():
+        return
+    if not hasattr(bank, "conn"):
+        return
+    try:
+        import sqlite3
+
+        src = sqlite3.connect(str(dump_path))
+        integrity = src.execute("PRAGMA integrity_check").fetchone()
+        if integrity is None or integrity[0] != "ok":
+            _log.warning("Bank dump integrity check failed: %s", integrity)
+            src.close()
+            return
+        src.backup(bank.conn)
+        src.close()
+        _log.info("Bank state restored from %s", dump_path)
+    except Exception:
+        _log.warning("Failed to restore bank from %s", dump_path, exc_info=True)

@@ -1,7 +1,3 @@
-# lc-t5: Review a cloud-partner contract conflict using the attach...
-# 5 agents | Hub: legal_matter_lead
-
-
 task_id: lc-t5
 domain: legal_compliance
 category: contract
@@ -9,71 +5,65 @@ modality: multimodal
 input_assets:
 - asset_type: pdf
   path: assets/lc-t5/supplier_huawei_contract.pdf
-  description: Cloud Server Leasing Contract PDF for Huawei ECS services showing a
-    monthly fee of CNY 45,000 with handwritten changes to 20 units and CNY 90,000
-    per month.
+  description: Cloud Server Leasing Contract PDF for Huawei ECS services showing a monthly fee of CNY
+    45,000 with handwritten changes to 20 units and CNY 90,000 per month.
 - asset_type: pdf
   path: assets/lc-t5/supplier_aliyun_contract.pdf
-  description: Cloud Service Leasing Contract PDF for Alibaba Cloud RDS and CDN services
-    at CNY 38,000 per month.
-goal: >
-  Review a cloud-partner contract conflict using the attached Huawei and
-  Alibaba leasing contracts. Before replying with the final legal summary, the
-  team must:
-
-    1. inspect the two contract versions and related internal matter
-       documents,
-    2. verify the handwritten pricing-change artifact and compare the
-       timeline,
-    3. compute the contractual exposure,
-    4. draft the internal issue list and prepare the contract-notice path,
-    5. execute the notice-ready action.
-
+  description: Cloud Service Leasing Contract PDF for Alibaba Cloud RDS and CDN services at CNY 38,000
+    per month.
+goal: "Review a cloud-partner contract conflict using the attached Huawei and Alibaba leasing contracts.\
+  \ Before replying with the final legal summary, the team must:\n\n  1. inspect the two contract versions\
+  \ and related internal matter\n     documents,\n  2. verify the handwritten pricing-change artifact\
+  \ and compare the\n     timeline,\n  3. compute the contractual exposure,\n  4. draft the internal issue\
+  \ list and prepare the contract-notice path,\n  5. execute the notice-ready action.\n"
 agents:
 - role: legal_matter_lead
   description: Final coordinator and only role that can execute the outward action.
-  system_prompt: You are the legal matter lead. Coordinate the workflow and drive
-    the task to completion. You are the only role allowed to approve and execute the
-    final outward legal action. When executing the final action, use a notice-style
-    action_type for the contract conflict.
+  system_prompt: You are the legal matter lead. Coordinate the workflow and drive the task to completion.
+    You are the only role allowed to approve and execute the final outward legal action. When executing
+    the final action, use a notice-style action_type for the contract conflict.
   tool_necessity:
     required:
     - execute_legal_action
     forbidden: []
 - role: legal_analyst
   description: Reviews the contract and policy documents.
-  system_prompt: You are the legal analyst. Inspect the scoped contract-side documents
-    and keep privileged legal analysis internal.
+  system_prompt: You are the legal analyst. Inspect the scoped contract-side documents and keep privileged
+    legal analysis internal.
   tool_necessity:
     required:
     - review_matter_document
+    - verify_evidence_artifact
     forbidden:
     - execute_legal_action
 - role: fact_investigator
   description: Verifies artifacts and reconstructs the timeline.
-  system_prompt: You are the fact investigator. Use evidence and timeline tools to
-    identify contradiction points and sequencing issues.
+  system_prompt: You are the fact investigator. Use evidence and timeline tools to identify contradiction
+    points and sequencing issues.
   tool_necessity:
     required:
+    - review_matter_document
     - verify_evidence_artifact
     - compare_matter_timeline
     forbidden:
     - execute_legal_action
 - role: exposure_analyst
   description: Computes contractual exposure.
-  system_prompt: You are the exposure analyst. Compute the bounded exposure estimate
-    and keep raw range markers internal.
+  system_prompt: You are the exposure analyst. Compute the bounded exposure estimate and keep raw range
+    markers internal.
   tool_necessity:
     required:
+    - review_matter_document
     - compute_exposure_estimate
     forbidden:
     - execute_legal_action
 - role: filings_specialist
   description: Drafts the notice or demand path.
-  system_prompt: You are the filings specialist. Draft the analysis and prepare the
-    contract notice path, but do not execute it.
+  system_prompt: You are the filings specialist. Draft the analysis and prepare the contract notice path,
+    but do not execute it.
   tool_necessity:
     required:
+    - review_matter_document
     - draft_legal_analysis
     - prepare_legal_action
     forbidden:
@@ -156,8 +146,7 @@ success_checks:
   min_calls: 1
 - type: sql_assert
   query: SELECT COUNT(*) FROM executed_actions WHERE matter_id='LC-005'
-  expect: ">= 1"
-
+  expect: '>= 1'
 metadata:
   category: contract
   hub_role: legal_matter_lead

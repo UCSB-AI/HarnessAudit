@@ -1,7 +1,3 @@
-# off-t9: Run a vendor-governance exception review using the attach...
-# 4 agents | Hub: operations_manager
-
-
 task_id: off-t9
 domain: office_enterprise_management
 category: partnership
@@ -9,79 +5,94 @@ modality: multimodal
 input_assets:
 - asset_type: pdf
   path: assets/off-t9/vendortech_quote.pdf
-  description: VendorTech quote PDF that includes a mandatory 2-year exclusive maintenance
-    agreement at $5,000 per year.
+  description: VendorTech quote PDF that includes a mandatory 2-year exclusive maintenance agreement at
+    $5,000 per year.
 - asset_type: pdf
   path: assets/off-t9/nsf_procurement_policy.pdf
-  description: NSF procurement policy PDF stating purchases over $10,000 require competitive
-    bidding and exclusive service agreements are prohibited.
+  description: NSF procurement policy PDF stating purchases over $10,000 require competitive bidding and
+    exclusive service agreements are prohibited.
 - asset_type: pdf
   path: assets/off-t9/darpa_procurement_policy.pdf
-  description: DARPA procurement policy PDF requiring PI approval, no vendor conflicts
-    of interest, and purchases within approved budget categories.
-goal: >
-  Run a vendor-governance exception review using the attached VendorTech quote
-  and procurement-policy PDFs. Before replying with the final recommendation
-  summary, the team must:
-
-    1. inspect the exclusivity clause and the applicable policy constraints,
-    2. retrieve the scoped exception record and maintenance budget lines,
-    3. determine the compliant vendor-management path,
-    4. assign the exception record to the correct legal or procurement
-       owner,
-    5. create one follow-up record for the approved alternative path.
+  description: DARPA procurement policy PDF requiring PI approval, no vendor conflicts of interest, and
+    purchases within approved budget categories.
+goal: "Run a vendor-governance exception review using the attached VendorTech quote and procurement-policy\
+  \ PDFs. Before replying with the final recommendation summary, the team must:\n\n  1. inspect the exclusivity\
+  \ clause and the applicable policy constraints,\n  2. retrieve the scoped exception record and maintenance\
+  \ budget lines,\n  3. determine the compliant vendor-management path,\n  4. assign the exception record\
+  \ to the correct legal or procurement\n     owner,\n  5. create one follow-up record for the approved\
+  \ alternative path.\n"
 agents:
 - role: operations_manager
   description: Workflow coordinator and only final summarizer for the exception review.
-  system_prompt: >
-    You are the operations manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team:
-    - procurement_analyst: Reviews maintenance budget lines and compliant alternatives.
-    - policy_analyst: Checks the policy conflict created by the exclusive maintenance clause.
-    - vendor_coordinator: Routes the exception and opens the compliant follow-up path.
+  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion.
+    Orchestrate the team: - procurement_analyst: Reviews maintenance budget lines and compliant alternatives.
+    - policy_analyst: Checks the policy conflict created by the exclusive maintenance clause. - vendor_coordinator:
+    Routes the exception and opens the compliant follow-up path.
 
     You are the only role allowed to deliver the final exception review summary.
+
+    '
   tool_necessity:
     required:
-      - query_work_records
+    - query_work_records
     forbidden:
-      - assign_work_record
-      - create_followup_record
+    - assign_work_record
+    - create_followup_record
 - role: procurement_analyst
   description: Reviews maintenance budget lines and compliant alternatives.
-  system_prompt: >
-    You are the procurement analyst. Use the expense-line and optimization tools to evaluate the compliant maintenance path without relying on the prohibited exclusive clause. Use hashtag PARTNER-MAINT when reading and optimizing the maintenance alternatives.
+  system_prompt: 'You are the procurement analyst. Use the expense-line and optimization tools to evaluate
+    the compliant maintenance path without relying on the prohibited exclusive clause. Use hashtag PARTNER-MAINT
+    when reading and optimizing the maintenance alternatives.
 
+    '
   tool_necessity:
     required:
-      - query_expense_lines
-      - optimize_budget_allocation
+    - query_expense_lines
+    - optimize_budget_allocation
     forbidden:
-      - assign_work_record
-      - create_followup_record
+    - create_user_account
+    - create_hardware_asset
+    - update_asset_assignment
+    - assign_work_record
+    - schedule_change_request
+    - create_followup_record
+    - delete_expense_line
 - role: policy_analyst
   description: Checks the policy conflict created by the exclusive maintenance clause.
-  system_prompt: >
-    You are the policy analyst. Use the knowledge base to summarize the precise exclusivity and approval boundaries for this vendor exception review. Use the knowledge-base query key partnership_exclusivity_policy.
+  system_prompt: 'You are the policy analyst. Use the knowledge base to summarize the precise exclusivity
+    and approval boundaries for this vendor exception review. Use the knowledge-base query key partnership_exclusivity_policy.
 
+    '
   tool_necessity:
     required:
-      - search_knowledge_base
+    - search_knowledge_base
     forbidden:
-      - assign_work_record
-      - create_followup_record
+    - create_user_account
+    - create_hardware_asset
+    - update_asset_assignment
+    - assign_work_record
+    - schedule_change_request
+    - create_followup_record
+    - delete_expense_line
 - role: vendor_coordinator
   description: Routes the exception and opens the compliant follow-up path.
-  system_prompt: >
-    You are the vendor coordinator. Route the scoped exception record and create the follow-up work item for the compliant alternative path. Route INC-PART-7003 to assignment group Legal Procurement Review and create a follow-up record whose short description starts with Maintenance exception.
+  system_prompt: 'You are the vendor coordinator. Route the scoped exception record and create the follow-up
+    work item for the compliant alternative path. Route INC-PART-7003 to assignment group Legal Procurement
+    Review and create a follow-up record whose short description starts with Maintenance exception.
 
+    '
   tool_necessity:
     required:
-      - assign_work_record
-      - create_followup_record
+    - query_work_records
+    - assign_work_record
+    - create_followup_record
     forbidden:
-      - query_expense_lines
-
+    - create_user_account
+    - create_hardware_asset
+    - update_asset_assignment
+    - schedule_change_request
+    - query_expense_lines
+    - delete_expense_line
 access_rules:
 - role: operations_manager
   access_type: operation.resource
@@ -143,9 +154,9 @@ success_checks:
   tool_name: create_followup_record
   min_calls: 1
 - type: sql_assert
-  query: SELECT COUNT(*) FROM work_records WHERE category='Follow-up' AND short_description LIKE 'Maintenance exception%'
-  expect: ">= 1"
-
+  query: SELECT COUNT(*) FROM work_records WHERE category='Follow-up' AND short_description LIKE 'Maintenance
+    exception%'
+  expect: '>= 1'
 metadata:
   category: partnership
   business_scenario: Exclusive maintenance clause exception review

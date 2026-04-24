@@ -194,6 +194,8 @@ class FinanceBank:
         self._order_counter = 98300
         self._report_counter = 20250900
         self._current_agent_role: str | None = None
+        self._active_client_id: str | None = None
+        self._active_portfolio_id: str | None = None
 
     # ------------------------------------------------------------------
     # Seed loading
@@ -330,12 +332,14 @@ class FinanceBank:
         self.conn.close()
 
     def apply_task_metadata(self, metadata: dict[str, Any]) -> None:
-        """Apply task-specific state mutations after seed loading.
+        """Apply task-specific state mutations after seed loading."""
+        metadata = metadata or {}
+        client_id = str(metadata.get("client_id") or "").strip()
+        portfolio_id = str(metadata.get("portfolio_id") or "").strip()
+        self._active_client_id = client_id or None
+        self._active_portfolio_id = portfolio_id or None
 
-        Currently supports ``metadata.seed_trades`` for scenario tasks that need
-        a pre-existing executed trade history before the first live tool call.
-        """
-        seed_trades = metadata.get("seed_trades", []) if metadata else []
+        seed_trades = metadata.get("seed_trades", [])
         if not seed_trades:
             return
 
@@ -347,7 +351,7 @@ class FinanceBank:
                     action=trade.get("action", ""),
                     ticker=trade.get("ticker", ""),
                     quantity=trade.get("quantity", 0),
-                    portfolio_id=trade.get("portfolio_id", "PF-4821"),
+                    portfolio_id=trade.get("portfolio_id", portfolio_id or "PF-4821"),
                     timestamp=trade.get("timestamp"),
                     submitted_by=trade.get("submitted_by"),
                     order_id=trade.get("order_id") or f"SEED-TXN-{idx}",
@@ -359,6 +363,24 @@ class FinanceBank:
         finally:
             self._current_agent_role = previous_role
 
+    def _resolve_portfolio_id(self, portfolio_id: str = "") -> str:
+        resolved = str(portfolio_id or self._active_portfolio_id or "PF-4821").strip()
+        return resolved or "PF-4821"
+
+    def _resolve_client_id(self, client_id: str = "", *, portfolio_id: str = "") -> str:
+        resolved = str(client_id or self._active_client_id or "").strip()
+        if resolved:
+            return resolved
+
+        resolved_portfolio_id = self._resolve_portfolio_id(portfolio_id)
+        row = self.conn.execute(
+            "SELECT client_id FROM portfolios WHERE portfolio_id = ?",
+            (resolved_portfolio_id,),
+        ).fetchone()
+        if row is not None:
+            return str(row["client_id"]).strip()
+        return ""
+
     # ==================================================================
     # MUTATING HANDLERS (3)
     # ==================================================================
@@ -368,7 +390,7 @@ class FinanceBank:
         action: str = "",
         ticker: str = "",
         quantity: Any = 0,
-        portfolio_id: str = "PF-4821",
+        portfolio_id: str = "",
         timestamp: str | None = None,
         submitted_by: str | None = None,
         order_id: str | None = None,
@@ -387,6 +409,8 @@ class FinanceBank:
             return f"Trade rejected: invalid quantity '{quantity}'"
         if qty <= 0:
             return f"Trade rejected: quantity must be positive, got {qty}"
+
+        portfolio_id = self._resolve_portfolio_id(portfolio_id)
 
         price_row = self.conn.execute(
             "SELECT price FROM prices WHERE ticker = ?", (ticker,)
@@ -501,7 +525,7 @@ class FinanceBank:
         max_position_pct: Any = None,
         max_sector_pct: Any = None,
         stop_loss_pct: Any = None,
-        portfolio_id: str = "PF-4821",
+        portfolio_id: str = "",
         client_id: str = "",
         risk_tolerance: str = "",
         **kwargs: Any,
@@ -516,6 +540,8 @@ class FinanceBank:
         propagates the new profile to the clients table, so subsequent
         check_suitability calls reflect the change.
         """
+        portfolio_id = self._resolve_portfolio_id(portfolio_id)
+
         row = self.conn.execute(
             "SELECT max_position_pct, max_sector_pct, stop_loss_pct FROM risk_limits WHERE portfolio_id = ?",
             (portfolio_id,),
@@ -539,13 +565,7 @@ class FinanceBank:
         client_line = ""
         if risk_tolerance:
             # Resolve client_id from portfolio if not given
-            resolved_client_id = client_id
-            if not resolved_client_id:
-                p_row = self.conn.execute(
-                    "SELECT client_id FROM portfolios WHERE portfolio_id = ?", (portfolio_id,)
-                ).fetchone()
-                if p_row:
-                    resolved_client_id = p_row["client_id"]
+            resolved_client_id = self._resolve_client_id(client_id, portfolio_id=portfolio_id)
 
             if resolved_client_id:
                 c_row = self.conn.execute(
@@ -616,6 +636,7 @@ class FinanceBank:
 
     def tool_get_client_profile(self, client_id: str = "", **kwargs: Any) -> str:
         """Return full client profile from the clients table."""
+        client_id = self._resolve_client_id(client_id)
         row = self.conn.execute(
             "SELECT client_id, name, ssn, dob, phone, email, net_worth, risk_tolerance, "
             "account_since, kyc_status, aml_risk, source_of_funds "
@@ -650,6 +671,7 @@ class FinanceBank:
         set_risk_limits in the same run) and the risk_tolerance_history.
         If no asset_class is given, returns the full suitability profile.
         """
+        client_id = self._resolve_client_id(client_id)
         row = self.conn.execute(
             "SELECT client_id, name, risk_tolerance, risk_tolerance_history, "
             "investment_horizon_years, kyc_status "
@@ -688,13 +710,14 @@ class FinanceBank:
         return "\n".join(lines)
 
     def tool_get_portfolio_summary(
-        self, portfolio_id: str = "PF-4821", **kwargs: Any
+        self, portfolio_id: str = "", **kwargs: Any
     ) -> str:
         """Return current portfolio state with sector concentration and limit check.
 
         Reflects all state changes in this run (trades, risk_limits updates).
         Used by risk_officer for concentration checks, PM for overview, etc.
         """
+        portfolio_id = self._resolve_portfolio_id(portfolio_id)
         port = self.conn.execute(
             "SELECT client_id, client_name, cash FROM portfolios WHERE portfolio_id = ?",
             (portfolio_id,),
@@ -759,9 +782,10 @@ class FinanceBank:
         return "\n".join(lines)
 
     def tool_get_trade_history(
-        self, portfolio_id: str = "PF-4821", days: Any = 30, **kwargs: Any
+        self, portfolio_id: str = "", days: Any = 30, **kwargs: Any
     ) -> str:
         """Return actual trade history for this portfolio from the trades table."""
+        portfolio_id = self._resolve_portfolio_id(portfolio_id)
         rows = self.conn.execute(
             "SELECT order_id, timestamp, action, ticker, quantity, price, commission, status, submitted_by, blotter_note, call_reference "
             "FROM trades WHERE portfolio_id = ? ORDER BY timestamp",

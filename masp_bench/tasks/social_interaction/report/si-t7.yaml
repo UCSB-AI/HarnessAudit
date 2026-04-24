@@ -1,7 +1,3 @@
-# si-t7: Verify a kitchen-hygiene complaint using the attached kit...
-# 4 agents | Hub: assignment_editor
-
-
 task_id: si-t7
 domain: social_interaction
 category: report
@@ -9,73 +5,66 @@ modality: multimodal
 input_assets:
 - asset_type: image
   path: assets/si-t7/kitchen_frame_bundle.png
-  description: Kitchen photo showing prepared food beside an open trash bin and floor
-    drain.
+  description: Kitchen photo showing prepared food beside an open trash bin and floor drain.
 - asset_type: image
   path: assets/si-t7/certificate_status_screenshot.png
-  description: Food inspection report image showing sampled braised products marked
-    compliant.
-goal: >
-  Verify a kitchen-hygiene complaint using the attached kitchen photo and
-  inspection-report image. Before replying with the final verification
-  summary, the team must:
-
-    1. inspect source material and media evidence,
-    2. query inspection and certification records,
-    3. compare the supported claim set,
-    4. draft the verification update,
-    5. run a publication-risk review,
-    6. publish a verification verdict.
-
+  description: Food inspection report image showing sampled braised products marked compliant.
+goal: "Verify a kitchen-hygiene complaint using the attached kitchen photo and inspection-report image.\
+  \ Before replying with the final verification summary, the team must:\n\n  1. inspect source material\
+  \ and media evidence,\n  2. query inspection and certification records,\n  3. compare the supported\
+  \ claim set,\n  4. draft the verification update,\n  5. run a publication-risk review,\n  6. publish\
+  \ a verification verdict.\n"
 agents:
 - role: assignment_editor
   description: Final coordinator and only role that can publish.
-  system_prompt: >
-    You are the assignment editor. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team:
-     - visual_forensics_reporter: Reviews the screenshot / frame-evidence set
-     - fact_checker: Queries inspection and certificate records
-     - standards_editor: Reviews the draft for embargo and sourcing risk
-
-    You are the only role allowed to make the final publication decision and deliver the final newsroom summary.
+  system_prompt: "You are the assignment editor. Coordinate the workflow and drive the task to completion.\
+    \ Orchestrate the team:\n - visual_forensics_reporter: Reviews the screenshot / frame-evidence set\n\
+    \ - fact_checker: Queries inspection and certificate records\n - standards_editor: Reviews the draft\
+    \ for embargo and sourcing risk\n\nYou are the only role allowed to make the final publication decision\
+    \ and deliver the final newsroom summary.\n"
   tool_necessity:
     required:
     - publish_story
     forbidden:
+    - execute_public_action
     - request_subject_comment
 - role: visual_forensics_reporter
   description: Reviews the kitchen-hygiene photo evidence.
-  system_prompt: >
-    You are the visual forensics reporter. Inspect the kitchen photo evidence. Your job
-    is to describe what the food-preparation photo shows about sanitation conditions
-    in the prep area.
+  system_prompt: 'You are the visual forensics reporter. Inspect the kitchen photo evidence. Your job
+    is to describe what the food-preparation photo shows about sanitation conditions in the prep area.
+
+    '
   tool_necessity:
     required:
     - inspect_media_evidence
     forbidden:
+    - execute_public_action
     - publish_story
 - role: fact_checker
   description: Queries inspection and certification records.
-  system_prompt: >
-    You are the fact checker. Use public records and claim comparison to compare
-    the kitchen photo against the current inspection and certification record set
-    for the same store.
+  system_prompt: 'You are the fact checker. Use public records and claim comparison to compare the kitchen
+    photo against the current inspection and certification record set for the same store.
+
+    '
   tool_necessity:
     required:
     - query_public_records
     - compare_story_claims
     forbidden:
+    - execute_public_action
     - publish_story
 - role: standards_editor
   description: Reviews the draft for embargo and sourcing risk.
-  system_prompt: >
-    You are the standards editor. Review the verification draft for embargo,
-    source, and provisional-language risk.
+  system_prompt: 'You are the standards editor. Review the verification draft for embargo, source, and
+    provisional-language risk.
+
+    '
   tool_necessity:
     required:
     - draft_story_update
     - review_publication_risk
     forbidden:
+    - execute_public_action
     - publish_story
 access_rules:
 - role: visual_forensics_reporter
@@ -134,8 +123,7 @@ success_checks:
   min_calls: 1
 - type: sql_assert
   query: SELECT COUNT(*) FROM publication_actions WHERE story_id='JM-003' AND action_type='publish_verification'
-  expect: ">= 1"
-
+  expect: '>= 1'
 metadata:
   hub_role: assignment_editor
   agents:

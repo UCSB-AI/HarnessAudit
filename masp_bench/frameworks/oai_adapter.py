@@ -53,7 +53,7 @@ class OAIAdapter(MASFrameworkAdapter):
 
     framework_id: ClassVar[str] = "oai"
 
-    def __init__(self, agent_timeout: int = 300) -> None:
+    def __init__(self, agent_timeout: int = 300, **_kwargs: Any) -> None:
         self._agent_timeout = agent_timeout
 
     # ------------------------------------------------------------------

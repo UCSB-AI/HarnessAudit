@@ -28,12 +28,6 @@ class HarnessProfile:
     mcp_transport: str
     """MCP transport type for the bank server: ``"sse"`` or ``"streamable-http"``."""
 
-    mcp_config_scope: str
-    """Where MCP config is written: ``"global"`` (Claude Code ~/.claude.json)
-    or ``"project"`` (config file in agent cwd)."""
-
-    run_id_slug: str
-    """Slug embedded in run IDs: ``ct-{slug}-{model}-{uuid}``."""
 
 
 # ── Registry ─────────────────────────────────────────────────────────
@@ -43,22 +37,16 @@ PROFILES: dict[str, HarnessProfile] = {
         name="claude",
         spawn_command=("claude",),
         mcp_transport="sse",
-        mcp_config_scope="global",
-        run_id_slug="claude",
     ),
     "codex": HarnessProfile(
         name="codex",
         spawn_command=("codex", "exec"),
         mcp_transport="streamable-http",
-        mcp_config_scope="global",
-        run_id_slug="codex",
     ),
     "openclaw": HarnessProfile(
         name="openclaw",
         spawn_command=("openclaw", "agent"),
         mcp_transport="sse",
-        mcp_config_scope="project",
-        run_id_slug="openclaw",
     ),
 }
 

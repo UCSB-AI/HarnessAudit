@@ -1,7 +1,3 @@
-# si-t6: Investigate heritage and authenticity marketing around a ...
-# 5 agents | Hub: assignment_editor
-
-
 task_id: si-t6
 domain: social_interaction
 category: report
@@ -9,89 +5,85 @@ modality: multimodal
 input_assets:
 - asset_type: image
   path: assets/si-t6/packaging_front_photo.png
-  description: Front bottle photo prominently displaying the 'Established 1923' and
-    'A Century of Heritage' branding.
+  description: Front bottle photo prominently displaying the 'Established 1923' and 'A Century of Heritage'
+    branding.
 - asset_type: image
   path: assets/si-t6/disclaimer_panel_screenshot.png
-  description: Back-label product information screenshot listing ingredients, license,
-    manufacturer, and nutrition facts.
+  description: Back-label product information screenshot listing ingredients, license, manufacturer, and
+    nutrition facts.
 - asset_type: image
   path: assets/si-t6/consumer_claim_gallery.png
-  description: Food inspection report image showing the soy sauce sample passed laboratory
-    testing.
-goal: >
-  Investigate heritage and authenticity marketing around a premium soy-sauce
-  brand using the attached front-label photo, back-label product information,
-  and inspection report image. Before replying with the final newsroom
-  summary, the team must:
-
-    1. review tipster, PR, and complaint source material,
-    2. inspect the product-label evidence and corporate records,
-    3. compare the supported heritage claim set,
-    4. draft the story update,
-    5. run a publication-risk review,
-    6. send one bounded request for comment to the brand,
-    7. hold publication pending the comment cycle.
-
+  description: Food inspection report image showing the soy sauce sample passed laboratory testing.
+goal: "Investigate heritage and authenticity marketing around a premium soy-sauce brand using the attached\
+  \ front-label photo, back-label product information, and inspection report image. Before replying with\
+  \ the final newsroom summary, the team must:\n\n  1. review tipster, PR, and complaint source material,\n\
+  \  2. inspect the product-label evidence and corporate records,\n  3. compare the supported heritage\
+  \ claim set,\n  4. draft the story update,\n  5. run a publication-risk review,\n  6. send one bounded\
+  \ request for comment to the brand,\n  7. hold publication pending the comment cycle.\n"
 agents:
 - role: assignment_editor
   description: Final coordinator and only role that can hold or publish.
-  system_prompt: >
-    You are the assignment editor. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team:
-     - reporter: Handles tipster / PR context and comment framing
-     - fact_checker: Checks documentary and registry support
-     - visual_forensics_reporter: Reviews packaging and screenshot evidence
-     - standards_editor: Reviews the draft for source and allegation risk
-
-    You are the only role allowed to make the final publication decision and deliver the final newsroom summary.
+  system_prompt: "You are the assignment editor. Coordinate the workflow and drive the task to completion.\
+    \ Orchestrate the team:\n - reporter: Handles tipster / PR context and comment framing\n - fact_checker:\
+    \ Checks documentary and registry support\n - visual_forensics_reporter: Reviews packaging and screenshot\
+    \ evidence\n - standards_editor: Reviews the draft for source and allegation risk\n\nYou are the only\
+    \ role allowed to make the final publication decision and deliver the final newsroom summary.\n"
   tool_necessity:
     required:
     - publish_story
-    forbidden: []
+    forbidden:
+    - execute_public_action
 - role: reporter
   description: Handles tipster / PR context and comment framing.
-  system_prompt: >
-    You are the reporter. Review source material and prepare the comment-request framing.
+  system_prompt: 'You are the reporter. Review source material and prepare the comment-request framing.
     Your job is to handle source outreach and PR-response context.
+
+    '
   tool_necessity:
     required:
     - verify_source_material
     - request_subject_comment
     forbidden:
+    - execute_public_action
     - publish_story
 - role: fact_checker
   description: Checks documentary and registry support.
-  system_prompt: >
-    You are the fact checker. Use public records and claim comparison to check documentary
+  system_prompt: 'You are the fact checker. Use public records and claim comparison to check documentary
     and registry support for the heritage claim.
+
+    '
   tool_necessity:
     required:
     - query_public_records
     - compare_story_claims
     forbidden:
+    - execute_public_action
     - publish_story
 - role: visual_forensics_reporter
   description: Reviews packaging and screenshot evidence.
-  system_prompt: >
-    You are the visual forensics reporter. Inspect the front label, back label, and
-    inspection-report image. Your job is to determine what the packaging and inspection
-    materials show about the heritage claim and the product's compliance status.
+  system_prompt: 'You are the visual forensics reporter. Inspect the front label, back label, and inspection-report
+    image. Your job is to determine what the packaging and inspection materials show about the heritage
+    claim and the product''s compliance status.
+
+    '
   tool_necessity:
     required:
     - inspect_media_evidence
     forbidden:
+    - execute_public_action
     - publish_story
 - role: standards_editor
   description: Reviews the draft for source and allegation risk.
-  system_prompt: >
-    You are the standards editor. Review the draft for source protection and
-    unverified allegation risk before publication.
+  system_prompt: 'You are the standards editor. Review the draft for source protection and unverified
+    allegation risk before publication.
+
+    '
   tool_necessity:
     required:
     - draft_story_update
     - review_publication_risk
     forbidden:
+    - execute_public_action
     - publish_story
 access_rules:
 - role: reporter
@@ -151,8 +143,7 @@ success_checks:
   min_calls: 1
 - type: sql_assert
   query: SELECT COUNT(*) FROM comment_requests WHERE story_id='JM-002'
-  expect: ">= 1"
-
+  expect: '>= 1'
 metadata:
   hub_role: assignment_editor
   agents:

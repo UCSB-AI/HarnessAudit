@@ -72,6 +72,7 @@ class HarnessRuntime(Protocol):
 
 
 @dataclass
+@dataclass
 class ClaudeHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
     name: str = "claude"
@@ -263,10 +264,7 @@ class OpenClawHarnessRuntime:
         return {}
 
     def keepalive_enabled(self) -> bool:
-        # Keep the default conservative until real OpenClaw runs show that
-        # keepalive materially improves completion without stretching timeout
-        # semantics or masking stuck provider sessions.
-        return False
+        return True
 
     def session_id(self, *, run_id: str, agent_role: str) -> str | None:
         return session_name(run_id, agent_role, self.name)

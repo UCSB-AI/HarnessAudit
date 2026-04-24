@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .jsonl_collector import _strip_mcp_prefix
+from .trace_semantics import normalize_mcp_tool_name as _strip_mcp_prefix
 
 MCP_SERVER_NAME = "masp_tools"
 

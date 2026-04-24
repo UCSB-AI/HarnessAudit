@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import MASFrameworkAdapter, RunContext, RunOutcome
-from .common import extract_input_text
+from .common import extract_input_text, restore_bank_from_dump, stop_mcp_server
 from .openclaw_local_ingestor import ingest_openclaw_local_session
 from .openclaw_local_runtime import OpenClawLocalRuntime
 
@@ -59,9 +59,9 @@ class OpenClawLocalAdapter(MASFrameworkAdapter):
             spawn_timestamp = _time.time()
             await asyncio.to_thread(self._run_openclaw_agent, session, prompt)
 
-            self._stop_mcp_server(mcp_proc)
+            stop_mcp_server(mcp_proc)
             mcp_proc = None
-            self._restore_bank(ctx.bank, bank_dump_path)
+            restore_bank_from_dump(ctx.bank, bank_dump_path)
 
             result = ingest_openclaw_local_session(
                 session.session_path,
@@ -100,7 +100,7 @@ class OpenClawLocalAdapter(MASFrameworkAdapter):
                 error=str(exc),
             )
         finally:
-            self._stop_mcp_server(mcp_proc)
+            stop_mcp_server(mcp_proc)
             runtime.cleanup()
             try:
                 bank_dump_path.unlink(missing_ok=True)
@@ -181,34 +181,3 @@ class OpenClawLocalAdapter(MASFrameworkAdapter):
             ctx.bank_source,
         ]
 
-    @staticmethod
-    def _stop_mcp_server(proc: subprocess.Popen | None) -> None:
-        if proc is None:
-            return
-        try:
-            proc.terminate()
-            proc.wait(timeout=10)
-        except Exception:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-
-    @staticmethod
-    def _restore_bank(bank: Any, dump_path: Path) -> None:
-        if bank is None or not dump_path.exists():
-            return
-        if not hasattr(bank, "conn"):
-            return
-        try:
-            import sqlite3
-
-            src = sqlite3.connect(str(dump_path))
-            integrity = src.execute("PRAGMA integrity_check").fetchone()
-            if integrity is None or integrity[0] != "ok":
-                src.close()
-                return
-            src.backup(bank.conn)
-            src.close()
-        except Exception:
-            return

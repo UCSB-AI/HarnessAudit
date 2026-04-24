@@ -27,6 +27,10 @@ from .common import (
     build_clawteam_hub_prompt,
     build_clawteam_spoke_prompt,
     build_clawteam_spoke_task_description,
+    build_native_harness_input,
+    restore_bank_from_dump,
+    stage_task_input_assets,
+    stop_mcp_server,
 )
 from .harness_profiles import HarnessProfile, get_harness_profile
 from .harness_runtime import HarnessRuntime, get_harness_runtime
@@ -71,14 +75,14 @@ def _spoke_task_subject(agent_cfg: Any) -> str:
 
 def _spoke_task_description(
     agent_cfg: Any,
-    task_goal: str,
+    task: Any,
     hub_role: str,
     *,
     team_name: str,
 ) -> str:
     return build_clawteam_spoke_task_description(
         agent_cfg,
-        task_goal,
+        task,
         hub_role,
         team_name=team_name,
     )
@@ -88,18 +92,18 @@ def seed_spoke_tasks(
     task_store: Any,
     spoke_agents: list[Any],
     *,
-    task_goal: str,
+    task: Any,
     hub_role: str,
     team_name: str,
 ) -> dict[str, str]:
     """Create one seeded task-board assignment per specialist."""
     task_ids: dict[str, str] = {}
     for agent_cfg in spoke_agents:
-        task = task_store.create(
+        task_item = task_store.create(
             subject=_spoke_task_subject(agent_cfg),
             description=_spoke_task_description(
                 agent_cfg,
-                task_goal,
+                task,
                 hub_role,
                 team_name=team_name,
             ),
@@ -110,7 +114,7 @@ def seed_spoke_tasks(
                 "role": agent_cfg.role,
             },
         )
-        task_ids[agent_cfg.role] = task.id
+        task_ids[agent_cfg.role] = task_item.id
     return task_ids
 
 
@@ -173,9 +177,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 leader_id=hub_id,
                 description=f"MASP run {ctx.run_id} — {ctx.task.task_id}",
             )
-            from .common import extract_input_text
-
-            input_text = extract_input_text(initial_input)
+            input_text = build_native_harness_input(ctx.task)
 
             # 3. Create sentinel task for hub completion detection
             task_store = FileTaskStore(team_name)
@@ -190,7 +192,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             seeded_task_ids = seed_spoke_tasks(
                 task_store,
                 ctx.task.agents[1:],
-                task_goal=input_text or ctx.task.goal,
+                task=ctx.task,
                 hub_role=hub_role,
                 team_name=team_name,
             )
@@ -201,6 +203,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             for agent_cfg in ctx.task.agents:
                 wt_path = self._make_agent_dir(team_name, agent_cfg.role)
                 worktrees[agent_cfg.role] = wt_path
+                stage_task_input_assets(ctx.task, wt_path)
 
             # 5. Register MCP for ALL agents (per-harness config strategy)
             self._register_mcp_for_harness(
@@ -288,6 +291,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 wait_result=wait_result,
                 worktrees=worktrees,
                 hub_role=hub_role,
+                spawn_timestamp=spawn_timestamp,
             )
 
             # 8. Collect traces (per-harness ingestor)
@@ -323,7 +327,12 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     "capture_mode": "jsonl_hub_final_text",
                 },
             )
-            self._restore_bank(ctx.bank, bank_dump_path)
+            await self._stop_and_restore_bank_state(
+                bank=ctx.bank,
+                dump_path=bank_dump_path,
+                proc=mcp_proc,
+            )
+            mcp_proc = None
 
             return RunOutcome(framework=self.framework_id, final_output=final_text)
 
@@ -335,7 +344,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 error=str(exc),
             )
         finally:
-            self._stop_mcp_server(mcp_proc)
+            stop_mcp_server(mcp_proc)
             self._unregister_mcp_for_harness(worktrees)
             self._cleanup_team(team_name)
             try:
@@ -393,46 +402,45 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         await asyncio.sleep(0.5)
         return proc, port
 
-    @staticmethod
-    def _stop_mcp_server(proc: subprocess.Popen | None) -> None:
-        if proc is None:
-            return
-        try:
-            proc.terminate()
-            proc.wait(timeout=10)
-        except Exception:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+    async def _stop_and_restore_bank_state(
+        self,
+        *,
+        bank: Any,
+        dump_path: Path,
+        proc: subprocess.Popen | None,
+    ) -> None:
+        stop_mcp_server(proc)
+        await self._wait_for_bank_dump(dump_path)
+        restore_bank_from_dump(bank, dump_path)
+
+    async def _wait_for_bank_dump(
+        self,
+        dump_path: Path,
+        *,
+        timeout_seconds: float = 10.0,
+    ) -> None:
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        while True:
+            if self._is_valid_bank_dump(dump_path):
+                return
+            if asyncio.get_running_loop().time() >= deadline:
+                log.warning("Bank dump did not become readable within %.1fs: %s", timeout_seconds, dump_path)
+                return
+            await asyncio.sleep(0.1)
 
     @staticmethod
-    def _restore_bank(bank: Any, dump_path: Path) -> None:
-        """Restore MCP server's Bank state into the Runner's Bank.
-
-        .. note::
-
-            ``ctx.bank`` is empty until this method runs.  Do NOT query
-            ``ctx.bank`` inside the adapter before ``_restore_bank`` is called.
-        """
-        if bank is None or not dump_path.exists():
-            return
-        if not hasattr(bank, "conn"):
-            return
+    def _is_valid_bank_dump(dump_path: Path) -> bool:
+        if not dump_path.exists() or dump_path.stat().st_size == 0:
+            return False
         try:
             import sqlite3
 
             src = sqlite3.connect(str(dump_path))
             integrity = src.execute("PRAGMA integrity_check").fetchone()
-            if integrity is None or integrity[0] != "ok":
-                log.warning("Bank dump integrity check failed: %s", integrity)
-                src.close()
-                return
-            src.backup(bank.conn)
             src.close()
-            log.info("Bank state restored from %s", dump_path)
+            return integrity is not None and integrity[0] == "ok"
         except Exception:
-            log.warning("Failed to restore bank from %s", dump_path, exc_info=True)
+            return False
 
     # ------------------------------------------------------------------
     # Agent directory setup
@@ -508,8 +516,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         wait_result: TeamRuntimeWaitResult,
         worktrees: dict[str, Path],
         hub_role: str,
+        spawn_timestamp: float,
     ) -> None:
-        """Give raw harness artifacts a short bounded window to settle before collection."""
+        """Give raw harness artifacts a short bounded window to settle before collection.
+
+        The drain loop waits until the hub's session file is stable AND
+        contains a final assistant text.  This prevents exiting early
+        during the LLM's thinking gap between the sentinel ``task_update``
+        call and the final text generation.
+        """
         if wait_result.status == "completed":
             drain_window = COMPLETED_DRAIN_SECONDS
         elif wait_result.status == "timeout":
@@ -538,20 +553,23 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 stable_polls = 0
 
             if has_observed_artifact and stable_polls >= STABLE_SNAPSHOT_POLLS:
-                return
+                # File is stable — but does it contain final hub text?
+                if self._runtime.read_final_output(
+                    run_id=self._current_run_id,
+                    worktrees={},
+                    hub_role=hub_role,
+                    spawn_timestamp=spawn_timestamp,
+                ):
+                    return
+                # File stable but no final text yet (LLM thinking gap).
+                # Reset stability counter and keep waiting.
+                stable_polls = 0
+
             if asyncio.get_running_loop().time() >= deadline:
                 return
 
             last_snapshot = snapshot
             await asyncio.sleep(DRAIN_POLL_SECONDS)
-
-    @staticmethod
-    def _settle_window_seconds(wait_status: str) -> float:
-        if wait_status == "completed":
-            return COMPLETED_DRAIN_SECONDS
-        if wait_status == "timeout":
-            return TIMEOUT_DRAIN_SECONDS
-        return INTERRUPTED_DRAIN_SECONDS
 
     async def _late_read_hub_final_text(
         self,
@@ -571,7 +589,12 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             worktrees=worktrees,
             hub_role=hub_role,
         )
-        settle_window = self._settle_window_seconds(wait_result.status)
+        if wait_result.status == "completed":
+            settle_window = COMPLETED_DRAIN_SECONDS
+        elif wait_result.status == "timeout":
+            settle_window = TIMEOUT_DRAIN_SECONDS
+        else:
+            settle_window = INTERRUPTED_DRAIN_SECONDS
         deadline = asyncio.get_running_loop().time() + settle_window
         read_attempt = 0
 

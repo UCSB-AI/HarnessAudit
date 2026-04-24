@@ -132,13 +132,13 @@ def _search_codebase(args: dict, ws: Path) -> str:
     # Normalise the file_glob for grep --include:
     #  - Strip path prefixes: "**/*.py" → "*.py" (--include is filename-only)
     #  - Expand brace syntax: "*.{py,js}" → ["*.py", "*.js"] (not supported by grep)
-    import posixpath, re as _re
+    import posixpath, re
     file_glob = posixpath.basename(file_glob)  # "**/*.py" → "*.py"
     if not file_glob or file_glob == "**":
         file_glob = "*"
 
     # Expand "{a,b,c}" brace patterns into multiple --include flags
-    brace_match = _re.match(r"^(.*)\{([^}]+)\}(.*)$", file_glob)
+    brace_match = re.match(r"^(.*)\{([^}]+)\}(.*)$", file_glob)
     if brace_match:
         prefix, alts, suffix = brace_match.groups()
         include_flags: list[str] = []

@@ -40,8 +40,14 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .jsonl_collector import _is_mailbox_broadcast, _is_mailbox_send, _strip_mcp_prefix
-from .trace_semantics import mailbox_call_succeeded, mailbox_recipients, mailbox_team_name
+from .trace_semantics import (
+    is_mailbox_broadcast as _is_mailbox_broadcast,
+    is_mailbox_send as _is_mailbox_send,
+    mailbox_call_succeeded,
+    mailbox_recipients,
+    mailbox_team_name,
+    normalize_mcp_tool_name as _strip_mcp_prefix,
+)
 
 log = logging.getLogger(__name__)
 
@@ -87,7 +93,8 @@ def _find_codex_sessions(
     agent_cwd = str(agent_dir)
     for f in candidates:
         try:
-            first_line = f.open().readline()
+            with f.open() as handle:
+                first_line = handle.readline()
             meta = json.loads(first_line)
             if meta.get("type") == "session_meta":
                 rollout_cwd = meta.get("payload", {}).get("cwd", "")
