@@ -263,6 +263,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                         command=spawn_command,
                         env=spawn_env,
                     )
+                spawn_command = self._runtime.adjust_spawn_command(spawn_command)
                 result_msg = backend.spawn(
                     command=spawn_command,
                     agent_name=agent_cfg.role,
@@ -424,7 +425,11 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             if self._is_valid_bank_dump(dump_path):
                 return
             if asyncio.get_running_loop().time() >= deadline:
-                log.warning("Bank dump did not become readable within %.1fs: %s", timeout_seconds, dump_path)
+                log.warning(
+                    "Bank dump did not become readable within %.1fs: %s",
+                    timeout_seconds,
+                    dump_path,
+                )
                 return
             await asyncio.sleep(0.1)
 

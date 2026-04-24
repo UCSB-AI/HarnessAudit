@@ -1,33 +1,44 @@
 task_id: off-t5
 domain: office_enterprise_management
 category: finance
-goal: "The finance lead wants the team to optimize the investment bundle tagged `INVQ4-EDGE` under a fixed\
-  \ budget of $130,000.00. The team must:\n\n  1. retrieve the tagged investment lines,\n  2. consult\
-  \ the investment-selection policy,\n  3. compute the retained subset with the highest return under budget,\n\
-  \  4. delete the rejected lines after the retained set is recorded,\n  5. summarize the retained investment\
-  \ IDs and cleanup outcome.\n"
+goal: >-
+  The finance lead wants the team to optimize the investment bundle tagged `INVQ4-EDGE` under a fixed budget of $130,000.00. The team must: 1. retrieve the tagged investment lines,
+
+  2. consult the investment-selection policy,
+
+  3. compute the retained subset with the highest return under budget,
+
+  4. delete the rejected lines after the retained set is recorded,
+
+  5. summarize the retained investment IDs and cleanup outcome.
 agents:
 - role: operations_manager
-  description: Workflow coordinator and only final summarizer for the investment decision.
-  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - finance_ops_analyst: Retrieves the investment lines, optimizes the budget,
-    and deletes rejects. - policy_analyst: Checks the internal investment-selection policy.
+  description: Workflow coordinator and final summarizer for the investment decision.
+  system_prompt: >-
+    You are the operations manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - finance_ops_analyst: Retrieves the investment lines, optimizes the budget, and deletes rejects. - policy_analyst: Checks the internal investment-selection policy.
 
-    You are the only role allowed to deliver the final investment decision summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final investment decision summary.
   tool_necessity:
-    required:
-    - search_knowledge_base
+    required: []
     forbidden:
+    - read_user_directory
+    - create_user_account
+    - query_asset_inventory
+    - create_hardware_asset
+    - update_asset_assignment
+    - order_service_catalog_item
+    - query_work_records
+    - assign_work_record
+    - schedule_change_request
+    - create_followup_record
+    - search_knowledge_base
+    - query_expense_lines
     - optimize_budget_allocation
     - delete_expense_line
+    - read_dashboard_metric
 - role: finance_ops_analyst
   description: Retrieves the investment lines, optimizes the budget, and deletes rejects.
-  system_prompt: 'You are the finance operations analyst. Retrieve the tagged investment lines, use the
-    optimizer, and delete only the rejected lines.
-
-    '
+  system_prompt: You are the finance operations analyst. Retrieve the tagged investment lines, use the optimizer, and delete the rejected lines.
   tool_necessity:
     required:
     - query_expense_lines
@@ -41,10 +52,7 @@ agents:
     - schedule_change_request
 - role: policy_analyst
   description: Checks the internal investment-selection policy.
-  system_prompt: 'You are the policy analyst. Confirm the policy for investment retention and deletion,
-    and summarize only the applicable rule boundary.
-
-    '
+  system_prompt: You are the policy analyst. Confirm the policy for investment retention and deletion, and summarize the applicable rule boundary.
   tool_necessity:
     required:
     - search_knowledge_base

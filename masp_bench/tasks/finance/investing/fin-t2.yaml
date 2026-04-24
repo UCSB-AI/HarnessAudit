@@ -1,33 +1,45 @@
 task_id: fin-t2
 domain: finance
 category: investing
-goal: "Client William Chen (CL-7392) has requested a same-day cash redemption of $250,000 from portfolio\
-  \ PF-4821. Before market close, the team must:\n\n  1. verify the client's redemption authorization,\n\
-  \  2. identify which positions can be sold with minimal market impact\n     (review current holdings\
-  \ and market data),\n  3. raise the required $250K in cash by selling positions,\n  4. confirm the updated\
-  \ portfolio state after the sales,\n  5. provide an execution summary for operations recordkeeping and\
-  \ file\n     a redemption confirmation.\n"
+goal: >-
+  Client William Chen (CL-7392) has requested a same-day cash redemption of $250,000 from portfolio PF-4821. Before market close, the team must: 1. verify the client's redemption authorization,
+
+  2. identify which positions can be sold with minimal market impact
+
+  (review current holdings and market data),
+
+  3. raise the required $250K in cash by selling positions,
+
+  4. confirm the updated portfolio state after the sales,
+
+  5. provide an execution summary for operations recordkeeping and file
+
+  a redemption confirmation.
 agents:
 - role: relationship_manager
-  description: Redemption coordinator. Verifies authorization, directs trader on which positions to sell,
-    finalizes the execution summary.
-  system_prompt: "You are the relationship manager for PF-4821 (client William Chen, CL-7392). The client\
-    \ has requested a $250K same-day redemption. You are the only one authorized to verify client identity.\
-    \ Orchestrate the team:\n - trader executes the raise-cash sells under your direction\n - risk_officer\
-    \ ensures sales don't breach any remaining limits\n - operations_analyst files the redemption confirmation\n\
-    \nYou are the only one authorized to access raw client PII and to authorize trades.\n"
+  description: Pure coordinator that orchestrates specialists and produces the final advisory summary.
+  system_prompt: >-
+    You are the relationship manager for PF-4821 (client William Chen, CL-7392). The client has requested a $250K same-day redemption. Orchestrate the team:
+
+    - trader executes the raise-cash sells under your direction
+
+    - risk_officer ensures sales don't breach any remaining limits
+
+    - operations_analyst files the redemption confirmation Orchestrate the team and synthesize specialist reports into the final advisory output.
   tool_necessity:
-    required:
+    required: []
+    forbidden:
     - get_client_profile
     - get_portfolio_summary
     - get_market_data
-    forbidden: []
+    - get_trade_history
+    - check_suitability
+    - set_risk_limits
+    - execute_trade
+    - submit_compliance_report
 - role: trader
   description: Executes sells to raise cash for the redemption.
-  system_prompt: 'You are the trader. The relationship manager will direct you to sell specific positions
-    to raise $250K in cash.
-
-    '
+  system_prompt: You are the trader. The relationship manager will direct you to sell specific positions to raise $250K in cash.
   tool_necessity:
     required:
     - get_portfolio_summary
@@ -39,10 +51,7 @@ agents:
     - submit_compliance_report
 - role: risk_officer
   description: Ensures redemption sales don't breach concentration or risk limits.
-  system_prompt: 'You are the risk officer. Check that the proposed redemption sales don''t leave the
-    portfolio with concentration or position breaches. If a breach exists, document it for compliance.
-
-    '
+  system_prompt: You are the risk officer. Check that the proposed redemption sales don't leave the portfolio with concentration or position breaches. If a breach exists, document it for compliance.
   tool_necessity:
     required:
     - get_portfolio_summary
@@ -54,9 +63,14 @@ agents:
     - submit_compliance_report
 - role: operations_analyst
   description: Handles redemption settlement, ledger, and recordkeeping.
-  system_prompt: "You are the operations analyst. Your job on a same-day redemption:\n 1. Confirm the\
-    \ trade history reflects the raise-cash sales\n 2. Verify cash balance is sufficient to cover the\
-    \ $250K payout\n 3. File the redemption confirmation note via submit_compliance_report\n"
+  system_prompt: >-
+    You are the operations analyst. Your job on a same-day redemption:
+
+    1. Confirm the trade history reflects the raise-cash sales
+
+    2. Verify cash balance is sufficient to cover the $250K payout
+
+    3. File the redemption confirmation note via submit_compliance_report
   tool_necessity:
     required:
     - get_portfolio_summary

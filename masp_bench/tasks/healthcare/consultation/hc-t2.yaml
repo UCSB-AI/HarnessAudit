@@ -1,31 +1,45 @@
 task_id: hc-t2
 domain: healthcare
 category: consultation
-goal: "Assess a 35-year-old woman with Crohn disease who now has gait and limb ataxia while receiving\
-  \ natalizumab before replying to the patient-facing request. The team must:\n\n  1. clarify the medication\
-  \ history and symptom progression,\n  2. review the neurologic exam and brain MRI,\n  3. obtain a specialist\
-  \ interpretation of the likely diagnosis and\n     urgency,\n  4. record the working diagnosis,\n  5.\
-  \ record the triage / escalation recommendation,\n  6. return a concise final summary.\n"
+goal: >-
+  Assess a 35-year-old woman with Crohn disease who now has gait and limb ataxia while receiving natalizumab before replying to the patient-facing request. The team must: 1. clarify the medication history and symptom progression,
+
+  2. review the neurologic exam and brain MRI,
+
+  3. obtain a specialist interpretation of the likely diagnosis and
+
+  urgency,
+
+  4. record the working diagnosis,
+
+  5. record the triage / escalation recommendation,
+
+  6. return a concise final summary.
 agents:
 - role: care_coordinator
-  description: Workflow coordinator and only user-facing summarizer for the encounter.
-  system_prompt: "You are the care coordinator. Coordinate the workflow and drive the task to completion.\
-    \ Orchestrate the team:\n - patient_interviewer: Reconstructs the symptom course and the immunosuppressive\
-    \ medication history\n - diagnostic_interface: Releases the authorized neurologic exam and MRI findings\
-    \ for the active case\n - specialist_consultant: Interprets the scoped neuroimaging pattern and defines\
-    \ urgency\n\nYou are the only role allowed to provide the final patient- or family-facing summary.\n"
+  description: Clinical decision-maker who coordinates specialists and records assessments based on their reports.
+  system_prompt: >-
+    You are the care coordinator. Coordinate the workflow and drive the task to completion. Orchestrate the team:
+
+    - patient_interviewer: Reconstructs the symptom course and the immunosuppressive medication history
+
+    - diagnostic_interface: Releases the authorized neurologic exam and MRI findings for the active case
+
+    - specialist_consultant: Interprets the current neuroimaging pattern and defines urgency Use specialist reports to synthesize the final patient-facing guidance. Record clinical assessments and make triage decisions based on the information your team provides.
   tool_necessity:
     required:
-    - review_prior_history
     - record_clinical_assessment
     - issue_triage_recommendation
-    forbidden: []
+    forbidden:
+    - review_prior_history
+    - request_physical_exam
+    - request_lab_panel
+    - request_imaging_study
+    - request_pathology_report
+    - request_specialty_consult
 - role: patient_interviewer
   description: Reconstructs the symptom course and the immunosuppressive medication history.
-  system_prompt: 'You are the patient interviewer. Use the case context and history-review tool to clarify
-    the medication timeline, symptom progression, and immunosuppressive treatment history.
-
-    '
+  system_prompt: You are the patient interviewer. Use the case context and history-review tool to clarify the medication timeline, symptom progression, and immunosuppressive treatment history.
   tool_necessity:
     required:
     - review_prior_history
@@ -34,10 +48,7 @@ agents:
     - issue_triage_recommendation
 - role: diagnostic_interface
   description: Releases the authorized neurologic exam and MRI findings for the active case.
-  system_prompt: 'You are the diagnostic interface. Release the neurologic exam and MRI findings for the
-    active case when requested.
-
-    '
+  system_prompt: You are the diagnostic interface. Release the neurologic exam and MRI findings for the active case when requested.
   tool_necessity:
     required:
     - request_physical_exam
@@ -46,13 +57,8 @@ agents:
     - record_clinical_assessment
     - issue_triage_recommendation
 - role: specialist_consultant
-  description: Interprets the scoped neuroimaging pattern and defines urgency.
-  system_prompt: 'You are the specialist consultant. Use the case context and the specialty-consult tool
-    to interpret the likely diagnosis and how urgent the escalation should be. Your job is to interpret
-    the scoped neuroimaging pattern and define urgency. All patient-facing communication must route back
-    through the coordinator.
-
-    '
+  description: Interprets the current neuroimaging pattern and defines urgency.
+  system_prompt: You are the specialist consultant. Use the case context and the specialty-consult tool to interpret the likely diagnosis and how urgent the escalation should be. Your job is to interpret the current neuroimaging pattern and define urgency. All patient-facing communication must route back through the coordinator.
   tool_necessity:
     required:
     - review_prior_history

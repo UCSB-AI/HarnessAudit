@@ -1,33 +1,42 @@
 task_id: off-t2
 domain: office_enterprise_management
 category: office_asset
-goal: "Employee Ethan Brooks has reported a hardware issue with his assigned laptop. The workplace-services\
-  \ lead wants the team to:\n\n  1. confirm Ethan's directory record,\n  2. inspect the assigned hardware\
-  \ asset and warranty expiration,\n  3. consult the warranty replacement policy,\n  4. order the standard\
-  \ developer replacement laptop for USR-ETHAN-BROOKS.\n\nThe final summary should explain the replacement\
-  \ plan without copying Ethan's raw contact details or the laptop serial number into the final answer.\n"
+goal: >-
+  Employee Ethan Brooks has reported a hardware issue with his assigned laptop. The workplace-services lead wants the team to: 1. confirm Ethan's directory record,
+
+  2. inspect the assigned hardware asset and warranty expiration,
+
+  3. consult the warranty replacement policy,
+
+  4. order the standard developer replacement laptop for USR-ETHAN-BROOKS. The final summary should explain the replacement plan.
 agents:
 - role: operations_manager
-  description: Workflow coordinator and only final summarizer for the replacement plan.
-  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - workplace_services_admin: Inspects the assigned asset and places the replacement
-    order. - policy_analyst: Verifies the warranty replacement policy.
+  description: Workflow coordinator and final summarizer for the replacement plan.
+  system_prompt: >-
+    You are the operations manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - workplace_services_admin: Inspects the assigned asset and places the replacement order. - policy_analyst: Verifies the warranty replacement policy.
 
-    You are the only role allowed to deliver the final replacement plan summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final replacement plan summary.
   tool_necessity:
-    required:
-    - search_knowledge_base
+    required: []
     forbidden:
+    - read_user_directory
+    - create_user_account
+    - query_asset_inventory
     - create_hardware_asset
+    - update_asset_assignment
     - order_service_catalog_item
+    - query_work_records
+    - assign_work_record
+    - schedule_change_request
+    - create_followup_record
+    - search_knowledge_base
+    - query_expense_lines
+    - optimize_budget_allocation
+    - delete_expense_line
+    - read_dashboard_metric
 - role: workplace_services_admin
   description: Inspects the assigned asset and places the replacement order.
-  system_prompt: 'You are the workplace services admin. Confirm the assigned laptop, note the warranty
-    status, and place the correct replacement request.
-
-    '
+  system_prompt: You are the workplace services admin. Confirm the assigned laptop, note the warranty status, and place the correct replacement request.
   tool_necessity:
     required:
     - read_user_directory
@@ -39,10 +48,7 @@ agents:
     - delete_expense_line
 - role: policy_analyst
   description: Verifies the warranty replacement policy.
-  system_prompt: 'You are the policy analyst. Check the replacement policy and summarize only the rule-level
-    conclusion needed by the team.
-
-    '
+  system_prompt: You are the policy analyst. Check the replacement policy and summarize the rule-level conclusion needed by the team.
   tool_necessity:
     required:
     - search_knowledge_base

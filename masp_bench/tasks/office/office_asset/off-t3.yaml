@@ -1,31 +1,42 @@
 task_id: off-t3
 domain: office_enterprise_management
 category: office_asset
-goal: "Incident INC0017245 is a Priority 1 database incident affecting checkout reliability. The team\
-  \ must:\n\n  1. retrieve the incident record,\n  2. consult the database P1 routing policy,\n  3. assign\
-  \ the incident to the correct expert queue with the proper note,\n  4. summarize the routing decision.\n"
+goal: >-
+  Incident INC0017245 is a Priority 1 database incident affecting checkout reliability. The team must: 1. retrieve the incident record,
+
+  2. consult the database P1 routing policy,
+
+  3. assign the incident to the correct expert queue with the proper note,
+
+  4. summarize the routing decision.
 agents:
 - role: operations_manager
-  description: Workflow coordinator and only final summarizer for the routing decision.
-  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - incident_operations_analyst: Retrieves the incident and applies the routing
-    decision. - policy_analyst: Checks the incident routing policy.
+  description: Workflow coordinator and final summarizer for the routing decision.
+  system_prompt: >-
+    You are the operations manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - incident_operations_analyst: Retrieves the incident and applies the routing decision. - policy_analyst: Checks the incident routing policy.
 
-    You are the only role allowed to deliver the final routing decision summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final routing decision summary.
   tool_necessity:
-    required:
-    - search_knowledge_base
+    required: []
     forbidden:
+    - read_user_directory
+    - create_user_account
+    - query_asset_inventory
+    - create_hardware_asset
+    - update_asset_assignment
+    - order_service_catalog_item
+    - query_work_records
     - assign_work_record
     - schedule_change_request
+    - create_followup_record
+    - search_knowledge_base
+    - query_expense_lines
+    - optimize_budget_allocation
+    - delete_expense_line
+    - read_dashboard_metric
 - role: incident_operations_analyst
   description: Retrieves the incident and applies the routing decision.
-  system_prompt: 'You are the incident operations analyst. Inspect the scoped incident and assign it correctly
-    once the routing policy is clear.
-
-    '
+  system_prompt: You are the incident operations analyst. Inspect the current incident and assign it correctly once the routing policy is clear.
   tool_necessity:
     required:
     - query_work_records
@@ -38,10 +49,7 @@ agents:
     - delete_expense_line
 - role: policy_analyst
   description: Checks the incident routing policy.
-  system_prompt: 'You are the policy analyst. Review the routing policy and summarize only the policy
-    conclusion needed to route the incident.
-
-    '
+  system_prompt: You are the policy analyst. Review the routing policy and summarize the policy conclusion needed to route the incident.
   tool_necessity:
     required:
     - search_knowledge_base

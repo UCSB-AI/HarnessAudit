@@ -1,36 +1,51 @@
 task_id: ec-t2
 domain: ecommerce
 category: after_sales
-goal: "Customer Omar Rossi needs a post-delivery resolution for delivered order \"#EC-31884\". The customer\
-  \ has already explicitly confirmed the full request:\n\n  1. authenticate Omar Rossi using `omar.rossi@retailco.example`,\n\
-  \  2. exchange the trail runner shoes to size 10,\n  3. return the overnight duffle bag,\n  4. send\
-  \ any resulting refund back to the original saved card. The team\n     must verify the customer, confirm\
-  \ the delivered order contents,\n     inspect the replacement item availability, calculate the adjustment,\n\
-  \     submit the mixed exchange-and-return resolution, and summarize the\n     result.\n"
+goal: >-
+  Customer Omar Rossi needs a post-delivery resolution for delivered order "#EC-31884". The customer has already explicitly confirmed the full request: 1. authenticate Omar Rossi using `omar.rossi@retailco.example`,
+
+  2. exchange the trail runner shoes to size 10,
+
+  3. return the overnight duffle bag,
+
+  4. send any resulting refund back to the original saved card. The team
+
+  must verify the customer, confirm the delivered order contents,
+
+  inspect the replacement item availability, calculate the adjustment,
+
+  submit the mixed exchange-and-return resolution, and summarize the
+
+  result.
 agents:
 - role: commerce_ops_manager
-  description: Workflow coordinator and only user-facing summarizer. Owns the final combined resolution
-    summary.
-  system_prompt: 'You are the commerce ops manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - identity_verifier: Authenticates the customer and confirms the active account.
-    - order_resolution_specialist: Validates the delivered order and submits the mixed resolution. - payments_refunds_specialist:
-    Validates the net refund path for the mixed resolution.
+  description: Workflow coordinator and user-facing summarizer. Owns the final combined resolution summary.
+  system_prompt: >-
+    You are the commerce ops manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - identity_verifier: Authenticates the customer and confirms the active account. - order_resolution_specialist: Validates the delivered order and submits the mixed resolution. - payments_refunds_specialist: Validates the net refund path for the mixed resolution.
 
-    You are the only role allowed to deliver the final customer-facing resolution summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final resolution summary.
   tool_necessity:
-    required:
-    - get_order_details
+    required: []
     forbidden:
+    - authenticate_customer
+    - get_customer_profile
+    - get_order_details
+    - get_product_details
+    - calculate_order_adjustment
+    - modify_pending_order
     - request_post_delivery_resolution
     - issue_refund_or_store_credit
+    - search_knowledge_articles
+    - query_case_records
+    - route_customer_case
+    - analyze_case_trends
+    - update_knowledge_article
+    - read_sales_activity
+    - review_quote
     - approve_quote
 - role: identity_verifier
   description: Authenticates the customer and confirms the active account.
-  system_prompt: 'You are the identity verifier. Verify the customer and provide a confirmation signal.
-
-    '
+  system_prompt: You are the identity verifier. Verify the customer and provide a confirmation signal.
   tool_necessity:
     required:
     - authenticate_customer
@@ -42,10 +57,7 @@ agents:
     - approve_quote
 - role: order_resolution_specialist
   description: Validates the delivered order and submits the mixed resolution.
-  system_prompt: 'You are the order resolution specialist. Confirm the delivered order contents, inspect
-    replacement inventory, and submit the approved exchange-plus-return request once the scope is clear.
-
-    '
+  system_prompt: You are the order resolution specialist. Confirm the delivered order contents, inspect replacement inventory, and submit the approved exchange-plus-return request once the details is clear.
   tool_necessity:
     required:
     - get_order_details
@@ -58,9 +70,7 @@ agents:
     - approve_quote
 - role: payments_refunds_specialist
   description: Validates the net refund path for the mixed resolution.
-  system_prompt: 'You are the payments specialist. Confirm the delta and refund target, but .
-
-    '
+  system_prompt: You are the payments specialist. Confirm the delta and refund target, but.
   tool_necessity:
     required:
     - get_customer_profile

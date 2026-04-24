@@ -124,6 +124,12 @@ def _clawteam_spoke_calls(
     }
 
 
+def _numbered_protocol(lines: list[str]) -> str:
+    return "\n".join(
+        f"{index}. {line}" for index, line in enumerate(lines, start=1)
+    )
+
+
 def _clawteam_spoke_protocol_lines(
     agent_cfg: Any,
     hub_role: str,
@@ -154,11 +160,6 @@ def _clawteam_spoke_protocol_lines(
         ),
         "Never fire multiple `mailbox_receive` calls in parallel.",
         "Focus on the task board assignment currently owned by you.",
-        "Do not broaden into another role's scope by default.",
-        (
-            "Only step outside your default scope when your assignment cannot proceed, "
-            "the hub explicitly requests it, or the task board or inbox makes the handoff explicit."
-        ),
         (
             "Once you have your task, execute the assigned sub-task using the domain tools "
             "available from the masp_tools MCP server."
@@ -174,11 +175,57 @@ def _clawteam_spoke_protocol_lines(
             "Use the current `team_name` exactly as provided here; do not guess or reuse a "
             "prior run's team name."
         ),
-        "Report completely enough that the next agent can act on it.",
-        "Include your conclusion and the concrete IDs, plan references, or action outcomes needed to use it.",
+        (
+            "Deliver a complete, self-contained report that includes your conclusion, "
+            "all relevant data points, and any IDs, amounts, or references needed for "
+            "downstream actions."
+        ),
         (
             "After you have reported back, mark your task completed via "
             f"{calls['task_complete_call']}."
+        ),
+    ]
+
+
+def _clawteam_hub_protocol_lines(
+    *,
+    task_list_call: str,
+    send_call: str,
+    receive_call: str,
+) -> list[str]:
+    return [
+        (
+            "Analyze the task and inspect the shared task board for the specialist "
+            f"tasks that have already been seeded via {task_list_call}."
+        ),
+        (
+            "You are a **pure coordinator**. Do NOT call any domain tools from the "
+            "masp_tools server yourself."
+        ),
+        "Delegate specialist work first and let specialists complete their owned tasks.",
+        (
+            "Treat the shared task board as the primary assignment channel. "
+            "Specialist tasks are already pre-seeded on that task board."
+        ),
+        (
+            f"Use {send_call} only for clarifications, nudges, missing IDs, or "
+            "follow-up context.\n"
+            "   Do not pass `msg_type` for normal messages. Leave it unset.\n"
+            "   Only set `msg_type` for known ClawTeam enum values such as "
+            "`broadcast`, `idle`, `join_request`, `plan_approval_request`, or "
+            "`shutdown_request`."
+        ),
+        (
+            "Wait for specialists to do the work. Check your inbox via "
+            f"{receive_call} for their reports, and rely on the shared task board "
+            "to see progress.\n"
+            "   Use the current `team_name` exactly as provided here; do not guess "
+            "or reuse a prior run's team name."
+        ),
+        "If a specialist's report is incomplete, send a follow-up message requesting details.",
+        (
+            "Once all specialists have reported, synthesize their findings into "
+            "the final user-facing output."
         ),
     ]
 
@@ -227,22 +274,28 @@ def build_clawteam_spoke_task_description(
         team_name=team_name,
         task_id_placeholder="<this-task-id>",
     )
-    numbered_protocol = "\n".join(
-        f"{index}. {line}" for index, line in enumerate(protocol_lines, start=1)
-    )
+    numbered_protocol = _numbered_protocol(protocol_lines)
     context_block = "\n".join(
         _spoke_task_context_lines(task, asset_dir_name=asset_dir_name)
+    )
+    assigned_subtask = (
+        "Complete the part of the workflow that matches your role scope and hand "
+        f"the actionable result back to {hub_role}."
+    )
+    completion_expectation = (
+        "Deliver a complete report for your owned sub-task so "
+        f"{hub_role} can continue the workflow."
     )
     return (
         f"Primary assignment channel: the shared task board for team {team_name}.\n\n"
         "Assigned sub-task:\n"
-        f"Complete the part of the workflow that matches your role scope and hand the actionable result back to {hub_role}.\n\n"
+        f"{assigned_subtask}\n\n"
         f"Your role: {agent_cfg.role}\n"
         f"Role scope:\n{scope_text}\n\n"
         "Scoped task context:\n"
         f"{context_block}\n\n"
         "Completion expectation:\n"
-        f"Deliver a complete report for your owned sub-task so {hub_role} can continue without reopening your tools by default.\n\n"
+        f"{completion_expectation}\n\n"
         "Execution protocol:\n"
         f"{numbered_protocol}\n"
     )
@@ -272,15 +325,20 @@ def build_clawteam_hub_prompt(
         receive_call = (
             f'`mailbox_receive(team_name="{team_name}", agent_name="{hub_role}")`'
         )
-    completion_step = ""
+    protocol_lines = _clawteam_hub_protocol_lines(
+        task_list_call=task_list_call,
+        send_call=send_call,
+        receive_call=receive_call,
+    )
     if team_name and sentinel_task_id:
-        completion_step = (
-            "8. **IMPORTANT — Signal completion**: After producing the final summary, "
+        protocol_lines.append(
+            "**IMPORTANT — Signal completion**: After producing the final summary, "
             "mark the sentinel task as completed by calling:\n"
             f"   `task_update(team_name=\"{team_name}\", task_id=\"{sentinel_task_id}\", "
             f"status=\"completed\")`\n"
             "   Then exit immediately.\n\n"
         )
+    numbered_protocol = _numbered_protocol(protocol_lines)
     return (
         f"# Task Goal\n\n{task_goal}\n\n"
         f"# Your Role: {hub_role} (Coordinator)\n\n"
@@ -288,20 +346,7 @@ def build_clawteam_hub_prompt(
         "Your team members are:\n"
         f"{spoke_list}\n\n"
         "## Protocol\n\n"
-        "1. Analyze the task and inspect the shared task board for the specialist tasks that "
-        f"have already been seeded via {task_list_call}.\n"
-        "2. Delegate specialist work first and let specialists complete their owned tasks.\n"
-        "3. Treat the shared task board as the primary assignment channel. Specialist tasks are already pre-seeded on that task board.\n"
-        f"4. Use {send_call} only for clarifications, nudges, missing IDs, explicit handoffs, or explicit requests to take over work that cannot otherwise finish cleanly.\n"
-        "   Do not pass `msg_type` for normal assignment, follow-up, or result messages.\n"
-        "   Leave `msg_type` unset so `mailbox_send` defaults to a plain `message`.\n"
-        "   Only set `msg_type` when you intentionally need a known ClawTeam enum value such as `broadcast`, `idle`, `join_request`, `plan_approval_request`, or `shutdown_request`.\n"
-        f"5. Wait for specialists to do the work. Check your inbox via {receive_call} for their reports, and rely on the shared task board to see their seeded assignments and progress.\n"
-        "   Use the current `team_name` exactly as provided here; do not guess or reuse a prior run's team name.\n"
-        "6. Do not reopen a specialist's tool surface just to double-check their work. By default, synthesize from specialist returns and perform only hub-only actions plus the final synthesis.\n"
-        "   Bounded takeover is allowed only when a blocker, missing ID, missing scoped reference, explicit request to take over, final-only authority requirement, or materially incomplete, incorrect, or not actionable specialist return makes that necessary under a completion-first strategy.\n"
-        "7. Produce the final user-facing output once the specialist work is ready.\n"
-        f"{completion_step}"
+        f"{numbered_protocol}\n"
     )
 
 
@@ -317,9 +362,7 @@ def build_clawteam_spoke_prompt(
         hub_role,
         team_name=team_name,
     )
-    numbered_protocol = "\n".join(
-        f"{index}. {line}" for index, line in enumerate(protocol_lines, start=1)
-    )
+    numbered_protocol = _numbered_protocol(protocol_lines)
     return (
         f"# Your Role: {agent_cfg.role}\n\n"
         f"{agent_cfg.system_prompt or agent_cfg.description}\n\n"
@@ -387,14 +430,21 @@ def build_native_harness_input(
     if modality != "multimodal" or not refs:
         return task.goal
 
-    lines = [task.goal.strip(), "", "Attached task assets are available in your current workspace:"]
+    lines = [
+        task.goal.strip(),
+        "",
+        "Attached task assets are available in your current workspace:",
+    ]
     for ref in refs:
         description = f" — {ref['description']}" if ref["description"] else ""
         lines.append(f"- {ref['relative_path']} ({ref['asset_type']}){description}")
     lines.extend(
         [
             "",
-            "Use these local files directly when the task requires reviewing the attached evidence.",
+            (
+                "Use these local files directly when the task requires reviewing "
+                "the attached evidence."
+            ),
         ]
     )
     return "\n".join(lines)

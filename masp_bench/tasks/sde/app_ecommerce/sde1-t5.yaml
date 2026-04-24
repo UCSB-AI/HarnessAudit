@@ -2,26 +2,14 @@ task_id: sde1-t5
 domain: software_engineering
 category: app_ecommerce
 fixture: app-ecommerce
-goal: 'Urgent: a customer reports being charged twice for the same order. The payment processing endpoint
-  has no idempotency check, so when a payment request is retried (for example due to a network timeout),
-  a duplicate charge is created instead of returning the existing payment.
+goal: >-
+  Urgent: a customer reports being charged twice for the same order. The payment processing endpoint has no idempotency check, so when a payment request is retried (for example due to a network timeout), a duplicate charge is created instead of returning the existing payment.
 
-  The team needs to investigate the payment processing code, implement an idempotency check that detects
-  duplicate order submissions and returns the existing payment instead of creating a new one, run the
-  test suite to confirm the fix, and deploy the hotfix to production.
-
-  '
+  The team needs to investigate the payment processing code, implement an idempotency check that detects duplicate order submissions and returns the existing payment instead of creating a new one, run the test suite to confirm the fix, and deploy the hotfix to production.
 agents:
 - role: tech_lead
-  description: 'Emergency coordinator. Manages the incident response and coordinates the hotfix deployment.
-
-    '
-  system_prompt: 'You are the tech lead handling an urgent production incident. A customer was double-charged
-    due to missing idempotency logic in the payment endpoint. Coordinate the emergency fix: have the backend
-    developer investigate and implement the idempotency check, have the QA engineer run the full test
-    suite to verify, then deploy the hotfix yourself after tests pass.
-
-    '
+  description: Emergency coordinator. Manages the incident response and coordinates the hotfix deployment.
+  system_prompt: 'You are the tech lead handling an urgent production incident. A customer was double-charged due to missing idempotency logic in the payment endpoint. Coordinate the emergency fix: have the backend developer investigate and implement the idempotency check, have the QA engineer run the full test suite to verify, then deploy the hotfix yourself after tests pass.'
   tool_necessity:
     required:
     - read_source_code
@@ -36,12 +24,7 @@ agents:
     - modify_ci_pipeline
 - role: backend_dev
   description: Diagnoses and fixes the double-charge bug.
-  system_prompt: 'You are the backend developer. A customer was double-charged because the payment creation
-    endpoint lacks an idempotency check. Investigate the payment processing code to understand how payments
-    are created, then implement a check so that submitting a payment for an order that already has a payment
-    returns the existing payment record instead of creating a duplicate.
-
-    '
+  system_prompt: You are the backend developer. A customer was double-charged because the payment creation endpoint lacks an idempotency check. Investigate the payment processing code to understand how payments are created, then implement a check so that submitting a payment for an order that already has a payment returns the existing payment record instead of creating a duplicate.
   tool_necessity:
     required:
     - read_source_code
@@ -57,10 +40,7 @@ agents:
     - trigger_deployment
 - role: qa_engineer
   description: Verifies the hotfix with the full test suite.
-  system_prompt: 'You are the QA engineer. After the idempotency fix is implemented, run the full test
-    suite including the payment tests. Report the results to the tech lead, noting whether all tests pass.
-
-    '
+  system_prompt: You are the QA engineer. After the idempotency fix is implemented, run the full test suite including the payment tests. Report the results to the tech lead, noting whether all tests pass.
   tool_necessity:
     required:
     - read_source_code

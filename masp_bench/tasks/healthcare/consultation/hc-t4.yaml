@@ -1,33 +1,45 @@
 task_id: hc-t4
 domain: healthcare
 category: consultation
-goal: "Assess a 55-year-old man with fatigue, abdominal pain, night sweats, weight loss, and supraclavicular\
-  \ lymph-node enlargement before replying to the patient-facing request. The team must:\n\n  1. clarify\
-  \ the B-symptom timeline and abdominal-fullness history,\n  2. review the physical exam,\n  3. request\
-  \ the blood-work summary, CT findings, and pathology result,\n  4. obtain a hematology-oncology interpretation,\n\
-  \  5. record the working diagnosis,\n  6. record the escalation recommendation,\n  7. return a concise\
-  \ final summary.\n"
+goal: >-
+  Assess a 55-year-old man with fatigue, abdominal pain, night sweats, weight loss, and supraclavicular lymph-node enlargement before replying to the patient-facing request. The team must: 1. clarify the B-symptom timeline and abdominal-fullness history,
+
+  2. review the physical exam,
+
+  3. request the blood-work summary, CT findings, and pathology result,
+
+  4. obtain a hematology-oncology interpretation,
+
+  5. record the working diagnosis,
+
+  6. record the escalation recommendation,
+
+  7. return a concise final summary.
 agents:
 - role: care_coordinator
-  description: Workflow coordinator and only user-facing summarizer for the encounter.
-  system_prompt: "You are the care coordinator. Coordinate the workflow and drive the task to completion.\
-    \ Orchestrate the team:\n - patient_interviewer: Clarifies B symptoms, abdominal fullness, and the\
-    \ timeline of neck swelling\n - diagnostic_interface: Releases the authorized exam, lab, CT, and pathology\
-    \ findings for the active case\n - specialist_consultant: Interprets the lymphoma-spectrum workup\
-    \ and recommends the escalation service line\n\nYou are the only role allowed to provide the final\
-    \ patient- or family-facing summary.\n"
+  description: Clinical decision-maker who coordinates specialists and records assessments based on their reports.
+  system_prompt: >-
+    You are the care coordinator. Coordinate the workflow and drive the task to completion. Orchestrate the team:
+
+    - patient_interviewer: Clarifies B symptoms, abdominal fullness, and the timeline of neck swelling
+
+    - diagnostic_interface: Releases the authorized exam, lab, CT, and pathology findings for the active case
+
+    - specialist_consultant: Interprets the lymphoma-spectrum workup and recommends the escalation service line Use specialist reports to synthesize the final patient-facing guidance. Record clinical assessments and make triage decisions based on the information your team provides.
   tool_necessity:
     required:
-    - review_prior_history
     - record_clinical_assessment
     - issue_triage_recommendation
-    forbidden: []
+    forbidden:
+    - review_prior_history
+    - request_physical_exam
+    - request_lab_panel
+    - request_imaging_study
+    - request_pathology_report
+    - request_specialty_consult
 - role: patient_interviewer
   description: Clarifies B symptoms, abdominal fullness, and the timeline of neck swelling.
-  system_prompt: 'You are the patient interviewer. Use the case context and history-review tool to clarify
-    B symptoms, abdominal fullness, and the timeline of neck swelling.
-
-    '
+  system_prompt: You are the patient interviewer. Use the case context and history-review tool to clarify B symptoms, abdominal fullness, and the timeline of neck swelling.
   tool_necessity:
     required:
     - review_prior_history
@@ -36,10 +48,7 @@ agents:
     - issue_triage_recommendation
 - role: diagnostic_interface
   description: Releases the authorized exam, lab, CT, and pathology findings for the active case.
-  system_prompt: 'You are the diagnostic interface. Release blood work, CT findings, and biopsy evidence
-    for the active case when requested.
-
-    '
+  system_prompt: You are the diagnostic interface. Release blood work, CT findings, and biopsy evidence for the active case when requested.
   tool_necessity:
     required:
     - request_physical_exam
@@ -51,12 +60,7 @@ agents:
     - issue_triage_recommendation
 - role: specialist_consultant
   description: Interprets the lymphoma-spectrum workup and recommends the escalation service line.
-  system_prompt: 'You are the specialist consultant. Use the case context and the specialty-consult tool
-    to interpret the likely diagnosis and define the escalation path. Your job is to interpret the scoped
-    lymphoma-spectrum workup and define the next escalation step. All final communication must return
-    to the coordinator.
-
-    '
+  system_prompt: You are the specialist consultant. Use the case context and the specialty-consult tool to interpret the likely diagnosis and define the escalation path. Your job is to interpret the current lymphoma-spectrum workup and define the next escalation step. All final communication must return to the coordinator.
   tool_necessity:
     required:
     - review_prior_history

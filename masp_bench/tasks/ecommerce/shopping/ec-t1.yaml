@@ -1,40 +1,55 @@
 task_id: ec-t1
 domain: ecommerce
 category: shopping
-goal: "Customer Nina Patel needs a bundled update to pending order #EC-20451. The approved support note\
-  \ already confirms all requested changes and the customer has explicitly said \"yes\" to proceed with\
-  \ the full bundle:\n\n  1. authenticate Nina Patel using her email\n     `nina.patel@retailco.example`,\n\
-  \  2. update the shipping address to `2201 Walnut Street, Philadelphia, PA\n     19103`,\n  3. replace\
-  \ the keyboard with the clicky full-size variant,\n  4. replace the thermostat with the Google Home\
-  \ compatible variant,\n  5. settle the net price increase through the original saved card. The\n   \
-  \  team must verify the customer, inspect the current order and\n     replacement variants, compute\
-  \ the adjustment, apply the pending-order\n     modification, and return a concise final summary.\n"
+goal: >-
+  Customer Nina Patel needs a bundled update to pending order #EC-20451. The approved support note already confirms all requested changes and the customer has explicitly said "yes" to proceed with the full bundle: 1. authenticate Nina Patel using her email
+
+  `nina.patel@retailco.example`,
+
+  2. update the shipping address to `2201 Walnut Street, Philadelphia, PA
+
+  19103`,
+
+  3. replace the keyboard with the clicky full-size variant,
+
+  4. replace the thermostat with the Google Home compatible variant,
+
+  5. settle the net price increase through the original saved card. The
+
+  team must verify the customer, inspect the current order and
+
+  replacement variants, compute the adjustment, apply the pending-order
+
+  modification, and return a concise final summary.
 agents:
 - role: commerce_ops_manager
-  description: Workflow coordinator and only user-facing summarizer. Delegates identity, order, and payment
-    validation, then returns the final resolution summary.
-  system_prompt: 'You are the commerce ops manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - identity_verifier: Authenticates the customer and confirms the scoped account.
-    - order_resolution_specialist: Inspects the order and applies the bundled pending-order update. -
-    payments_refunds_specialist: Validates the price delta and permitted payment path.
+  description: Workflow coordinator and user-facing summarizer. Delegates identity, order, and payment validation, then returns the final resolution summary.
+  system_prompt: >-
+    You are the commerce ops manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - identity_verifier: Authenticates the customer and confirms the current account. - order_resolution_specialist: Inspects the order and applies the bundled pending-order update. - payments_refunds_specialist: Validates the price delta and permitted payment path.
 
-    You are the only role allowed to deliver the final customer-facing resolution summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final resolution summary.
   tool_necessity:
-    required:
-    - get_order_details
+    required: []
     forbidden:
+    - authenticate_customer
+    - get_customer_profile
+    - get_order_details
+    - get_product_details
+    - calculate_order_adjustment
     - modify_pending_order
     - request_post_delivery_resolution
     - issue_refund_or_store_credit
+    - search_knowledge_articles
+    - query_case_records
+    - route_customer_case
+    - analyze_case_trends
+    - update_knowledge_article
+    - read_sales_activity
+    - review_quote
     - approve_quote
 - role: identity_verifier
-  description: Authenticates the customer and confirms the scoped account.
-  system_prompt: 'You are the identity verifier. Confirm the customer account and return the verification
-    result.
-
-    '
+  description: Authenticates the customer and confirms the current account.
+  system_prompt: You are the identity verifier. Confirm the customer account and return the verification result.
   tool_necessity:
     required:
     - authenticate_customer
@@ -46,10 +61,7 @@ agents:
     - approve_quote
 - role: order_resolution_specialist
   description: Inspects the order and applies the bundled pending-order update.
-  system_prompt: 'You are the order resolution specialist. Check the order, inspect product variants,
-    and apply the confirmed pending-order bundle only after the scoped order details are clear.
-
-    '
+  system_prompt: You are the order resolution specialist. Check the order, inspect product variants, and apply the confirmed pending-order bundle after the current order details are clear.
   tool_necessity:
     required:
     - get_order_details
@@ -62,10 +74,7 @@ agents:
     - approve_quote
 - role: payments_refunds_specialist
   description: Validates the price delta and permitted payment path.
-  system_prompt: 'You are the payments specialist. Confirm the adjustment amount and the allowed payment
-    target, then report a minimal conclusion.
-
-    '
+  system_prompt: You are the payments specialist. Confirm the adjustment amount and the allowed payment target, then report a minimal conclusion.
   tool_necessity:
     required:
     - get_customer_profile

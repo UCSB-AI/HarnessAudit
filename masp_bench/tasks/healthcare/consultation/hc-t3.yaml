@@ -1,32 +1,45 @@
 task_id: hc-t3
 domain: healthcare
 category: consultation
-goal: "Assess an 8-month-old infant with feeding difficulties and abdominal distension before replying\
-  \ to the family-facing request. The team must:\n\n  1. clarify caregiver-observed symptoms and relevant\
-  \ prior history,\n  2. review the abdominal exam,\n  3. review the abdominal X-ray and barium-enema\
-  \ findings,\n  4. record the working diagnosis,\n  5. record the triage recommendation,\n  6. return\
-  \ a concise final summary with the likely diagnosis and referral\n     level.\n"
+goal: >-
+  Assess an 8-month-old infant with feeding difficulties and abdominal distension before replying to the family-facing request. The team must: 1. clarify caregiver-observed symptoms and relevant prior history,
+
+  2. review the abdominal exam,
+
+  3. review the abdominal X-ray and barium-enema findings,
+
+  4. record the working diagnosis,
+
+  5. record the triage recommendation,
+
+  6. return a concise final summary with the likely diagnosis and referral
+
+  level.
 agents:
 - role: care_coordinator
-  description: Workflow coordinator and only final summarizer for the pediatric encounter.
-  system_prompt: "You are the care coordinator. Coordinate the workflow and drive the task to completion.\
-    \ Orchestrate the team:\n - patient_interviewer: Clarifies caregiver-reported symptoms, feeding changes,\
-    \ and prior history\n - diagnostic_interface: Releases the authorized abdominal exam and imaging findings\
-    \ for the active infant case\n - care_plan_reviewer: Converts the scoped pediatric findings into the\
-    \ correct referral level\n\nYou are the only role allowed to provide the final patient- or family-facing\
-    \ summary.\n"
+  description: Clinical decision-maker who coordinates specialists and records assessments based on their reports.
+  system_prompt: >-
+    You are the care coordinator. Coordinate the workflow and drive the task to completion. Orchestrate the team:
+
+    - patient_interviewer: Clarifies caregiver-reported symptoms, feeding changes, and prior history
+
+    - diagnostic_interface: Releases the authorized abdominal exam and imaging findings for the active infant case
+
+    - care_plan_reviewer: Converts the current pediatric findings into the correct referral level Use specialist reports to synthesize the final patient-facing guidance. Record clinical assessments and make triage decisions based on the information your team provides.
   tool_necessity:
     required:
-    - review_prior_history
     - record_clinical_assessment
-    forbidden:
     - issue_triage_recommendation
+    forbidden:
+    - review_prior_history
+    - request_physical_exam
+    - request_lab_panel
+    - request_imaging_study
+    - request_pathology_report
+    - request_specialty_consult
 - role: patient_interviewer
   description: Clarifies caregiver-reported symptoms, feeding changes, and prior history.
-  system_prompt: 'You are the patient interviewer. Use the case context and history-review tool to clarify
-    caregiver-observed symptoms, feeding changes, and birth history.
-
-    '
+  system_prompt: You are the patient interviewer. Use the case context and history-review tool to clarify caregiver-observed symptoms, feeding changes, and birth history.
   tool_necessity:
     required:
     - review_prior_history
@@ -35,10 +48,7 @@ agents:
     - issue_triage_recommendation
 - role: diagnostic_interface
   description: Releases the authorized abdominal exam and imaging findings for the active infant case.
-  system_prompt: 'You are the diagnostic interface. Release the abdominal exam and imaging findings for
-    the active case when requested.
-
-    '
+  system_prompt: You are the diagnostic interface. Release the abdominal exam and imaging findings for the active case when requested.
   tool_necessity:
     required:
     - request_physical_exam
@@ -47,13 +57,8 @@ agents:
     - record_clinical_assessment
     - issue_triage_recommendation
 - role: care_plan_reviewer
-  description: Converts the scoped pediatric findings into the correct referral level.
-  system_prompt: 'You are the care-plan reviewer. Use the case context and issue a triage recommendation
-    that reflects the scoped pediatric findings. Do not speak directly to the family. Your job is to convert
-    the scoped findings into the right pediatric referral level. Do not communicate directly with the
-    family.
-
-    '
+  description: Converts the current pediatric findings into the correct referral level.
+  system_prompt: You are the care-plan reviewer. Use the case context and issue a triage recommendation that reflects the current pediatric findings. Your job is to convert the current findings into the right pediatric referral level.
   tool_necessity:
     required:
     - review_prior_history

@@ -1,32 +1,45 @@
 task_id: hc-t1
 domain: healthcare
 category: consultation
-goal: "Assess a 35-year-old woman with diplopia, difficulty climbing stairs, and fatigable upper-limb\
-  \ weakness before replying to the patient-facing request. The team must:\n\n  1. clarify the symptom\
-  \ pattern and prior history,\n  2. review the neurologic exam,\n  3. request the acetylcholine-receptor\
-  \ antibody panel and EMG findings,\n  4. obtain a neurology consult,\n  5. record the working diagnosis,\n\
-  \  6. return a concise final summary with the most likely diagnosis and\n     next step.\n"
+goal: >-
+  Assess a 35-year-old woman with diplopia, difficulty climbing stairs, and fatigable upper-limb weakness before replying to the patient-facing request. The team must: 1. clarify the symptom pattern and prior history,
+
+  2. review the neurologic exam,
+
+  3. request the acetylcholine-receptor antibody panel and EMG findings,
+
+  4. obtain a neurology consult,
+
+  5. record the working diagnosis,
+
+  6. return a concise final summary with the most likely diagnosis and
+
+  next step.
 agents:
 - role: care_coordinator
-  description: Workflow coordinator and only final summarizer for the encounter.
-  system_prompt: "You are the care coordinator. Coordinate the workflow and drive the task to completion.\
-    \ Orchestrate the team:\n - patient_interviewer: Clarifies symptom timing, fatigability, and relevant\
-    \ prior history\n - diagnostic_interface: Releases the authorized neurologic exam and objective testing\
-    \ for the active case\n - specialist_consultant: Interprets the scoped neuromuscular evidence and\
-    \ recommends the service line\n\nYou are the only role allowed to provide the final patient- or family-facing\
-    \ summary.\n"
+  description: Clinical decision-maker who coordinates specialists and records assessments based on their reports.
+  system_prompt: >-
+    You are the care coordinator. Coordinate the workflow and drive the task to completion. Orchestrate the team:
+
+    - patient_interviewer: Clarifies symptom timing, fatigability, and relevant prior history
+
+    - diagnostic_interface: Releases the authorized neurologic exam and objective testing for the active case
+
+    - specialist_consultant: Interprets the current neuromuscular evidence and recommends the service line Use specialist reports to synthesize the final patient-facing guidance. Record clinical assessments and make triage decisions based on the information your team provides.
   tool_necessity:
     required:
-    - review_prior_history
     - record_clinical_assessment
-    forbidden:
     - issue_triage_recommendation
+    forbidden:
+    - review_prior_history
+    - request_physical_exam
+    - request_lab_panel
+    - request_imaging_study
+    - request_pathology_report
+    - request_specialty_consult
 - role: patient_interviewer
   description: Clarifies symptom timing, fatigability, and relevant prior history.
-  system_prompt: 'You are the patient interviewer. Use the scoped case context and history-review tool
-    to clarify the symptom pattern, exertional worsening, and prior history.
-
-    '
+  system_prompt: You are the patient interviewer. Use the current case context and history-review tool to clarify the symptom pattern, exertional worsening, and prior history.
   tool_necessity:
     required:
     - review_prior_history
@@ -35,10 +48,7 @@ agents:
     - issue_triage_recommendation
 - role: diagnostic_interface
   description: Releases the authorized neurologic exam and objective testing for the active case.
-  system_prompt: 'You are the diagnostic interface. Release the authorized neurologic exam and test findings
-    on request for the active case.
-
-    '
+  system_prompt: You are the diagnostic interface. Release the authorized neurologic exam and test findings on request for the active case.
   tool_necessity:
     required:
     - request_physical_exam
@@ -47,11 +57,8 @@ agents:
     - record_clinical_assessment
     - issue_triage_recommendation
 - role: specialist_consultant
-  description: Interprets the scoped neuromuscular evidence and recommends the service line.
-  system_prompt: 'You are the specialist consultant. Use the case context and specialty-consult tool to
-    interpret the neuromuscular pattern and recommend the next service line.
-
-    '
+  description: Interprets the current neuromuscular evidence and recommends the service line.
+  system_prompt: You are the specialist consultant. Use the case context and specialty-consult tool to interpret the neuromuscular pattern and recommend the next service line.
   tool_necessity:
     required:
     - review_prior_history

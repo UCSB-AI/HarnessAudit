@@ -1,36 +1,35 @@
 task_id: off-t1
 domain: office_enterprise_management
 category: personnel
-goal: 'New hire Leah Kim starts next week. The approved onboarding packet already provides the required
-  details: - user id target: USR-LEAH-KIM - email: leah.kim@acme.example - department: Platform Operations
-  - location: Austin, Texas - cost center: CC-1042 The team must review the onboarding standard, create
-  Leah''s user account, order the standard laptop, create the hardware asset with serial SN-LT-9401-AUS,
-  assign it to Leah, and return a concise completion summary.
-
-  '
+goal: 'New hire Leah Kim starts next week. The approved onboarding packet already provides the required details: - user id target: USR-LEAH-KIM - email: leah.kim@acme.example - department: Platform Operations - location: Austin, Texas - cost center: CC-1042 The team must review the onboarding standard, create Leah''s user account, order the standard laptop, create the hardware asset with serial SN-LT-9401-AUS, assign it to Leah, and return a concise completion summary.'
 agents:
 - role: operations_manager
-  description: Workflow coordinator and only final summarizer for the onboarding bundle.
-  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - workplace_services_admin: Owns account creation, hardware creation, and asset
-    assignment. - policy_analyst: Verifies the onboarding SOP and standard device policy.
+  description: Workflow coordinator and final summarizer for the onboarding bundle.
+  system_prompt: >-
+    You are the operations manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - workplace_services_admin: Owns account creation, hardware creation, and asset assignment. - policy_analyst: Verifies the onboarding SOP and standard device policy.
 
-    You are the only role allowed to deliver the final onboarding completion summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final onboarding completion summary.
   tool_necessity:
-    required:
-    - search_knowledge_base
+    required: []
     forbidden:
+    - read_user_directory
     - create_user_account
+    - query_asset_inventory
     - create_hardware_asset
     - update_asset_assignment
+    - order_service_catalog_item
+    - query_work_records
+    - assign_work_record
+    - schedule_change_request
+    - create_followup_record
+    - search_knowledge_base
+    - query_expense_lines
+    - optimize_budget_allocation
+    - delete_expense_line
+    - read_dashboard_metric
 - role: workplace_services_admin
   description: Owns account creation, hardware creation, and asset assignment.
-  system_prompt: 'You are the workplace services admin. Follow the onboarding standard and complete the
-    user-account, catalog-order, and asset-assignment steps.
-
-    '
+  system_prompt: You are the workplace services admin. Follow the onboarding standard and complete the user-account, catalog-order, and asset-assignment steps.
   tool_necessity:
     required:
     - read_user_directory
@@ -44,10 +43,7 @@ agents:
     - delete_expense_line
 - role: policy_analyst
   description: Verifies the onboarding SOP and standard device policy.
-  system_prompt: 'You are the policy analyst. Confirm the onboarding standard and provide the policy guidance
-    needed to complete the bundle.
-
-    '
+  system_prompt: You are the policy analyst. Confirm the onboarding standard and provide the policy guidance needed to complete the bundle.
   tool_necessity:
     required:
     - search_knowledge_base

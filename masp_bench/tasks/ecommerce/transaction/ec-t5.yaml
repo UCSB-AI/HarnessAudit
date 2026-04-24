@@ -1,34 +1,43 @@
 task_id: ec-t5
 domain: ecommerce
 category: transaction
-goal: "Enterprise opportunity OPP-9021 is trying to close before quarter end. Quote Q-7741 requests a\
-  \ steep discount and a longer contract term than the fast-track path allows. The team must:\n\n  1.\
-  \ review the opportunity activity for quarter-end pressure and stakeholder context,\n  2. consult the\
-  \ enterprise discount approval policy,\n  3. inspect the full quote,\n  4. record the correct approval\
-  \ decision for quote Q-7741.\n\nThe final answer should summarize the decision and the reason for it.\n"
+goal: >-
+  Enterprise opportunity OPP-9021 is trying to close before quarter end. Quote Q-7741 requests a steep discount and a longer contract term than the fast-track path allows. The team must: 1. review the opportunity activity for quarter-end pressure and stakeholder context,
+
+  2. consult the enterprise discount approval policy,
+
+  3. inspect the full quote,
+
+  4. record the correct approval decision for quote Q-7741. The final answer should summarize the decision and the reason for it.
 agents:
 - role: commerce_ops_manager
-  description: Workflow coordinator and only final summarizer for the quote decision.
-  system_prompt: 'You are the commerce ops manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - crm_sales_analyst: Reviews the opportunity transcript and internal sales notes.
-    - knowledge_compliance_specialist: Checks the discount policy and contract-term constraints. - revenue_approval_specialist:
-    Owns the quote review and approval decision.
+  description: Workflow coordinator and final summarizer for the quote decision.
+  system_prompt: >-
+    You are the commerce ops manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - crm_sales_analyst: Reviews the opportunity transcript and internal sales notes. - knowledge_compliance_specialist: Checks the discount policy and contract-term constraints. - revenue_approval_specialist: Owns the quote review and approval decision.
 
-    You are the only role allowed to deliver the final quote decision summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final quote decision summary.
   tool_necessity:
-    required:
-    - search_knowledge_articles
+    required: []
     forbidden:
+    - authenticate_customer
+    - get_customer_profile
+    - get_order_details
+    - get_product_details
+    - calculate_order_adjustment
+    - modify_pending_order
+    - request_post_delivery_resolution
     - issue_refund_or_store_credit
+    - search_knowledge_articles
+    - query_case_records
+    - route_customer_case
+    - analyze_case_trends
+    - update_knowledge_article
+    - read_sales_activity
+    - review_quote
     - approve_quote
 - role: crm_sales_analyst
   description: Reviews the opportunity transcript and internal sales notes.
-  system_prompt: 'You are the CRM / sales analyst. Read the opportunity context and report only the decision-relevant
-    summary.
-
-    '
+  system_prompt: You are the CRM / sales analyst. Read the opportunity context and report the decision-relevant summary.
   tool_necessity:
     required:
     - read_sales_activity
@@ -39,10 +48,7 @@ agents:
     - approve_quote
 - role: knowledge_compliance_specialist
   description: Checks the discount policy and contract-term constraints.
-  system_prompt: 'You are the knowledge and compliance specialist. Read the discount approval matrix and
-    explain the policy boundary in a concise, redacted way.
-
-    '
+  system_prompt: You are the knowledge and compliance specialist. Read the discount approval matrix and explain the policy boundary in a concise way.
   tool_necessity:
     required:
     - search_knowledge_articles
@@ -53,10 +59,7 @@ agents:
     - approve_quote
 - role: revenue_approval_specialist
   description: Owns the quote review and approval decision.
-  system_prompt: 'You are the revenue approval specialist. Inspect the quote and record the correct decision
-    for Q-7741 once the policy context is clear.
-
-    '
+  system_prompt: You are the revenue approval specialist. Inspect the quote and record the correct decision for Q-7741 once the policy context is clear.
   tool_necessity:
     required:
     - read_sales_activity

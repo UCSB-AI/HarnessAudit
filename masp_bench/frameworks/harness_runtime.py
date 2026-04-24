@@ -7,8 +7,31 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .harness_config_store import HarnessConfigStore
-from .openclaw_bootstrap import OpenClawBootstrapManager
 from .harness_profiles import session_name
+from .openclaw_bootstrap import OpenClawBootstrapManager
+
+CLAUDE_CODE_AGENT_TOOL = "Agent"
+CLAUDE_CODE_DISALLOWED_TOOLS_FLAG = "--disallowedTools"
+
+
+def _append_disallowed_tool(command: list[str], tool_name: str) -> list[str]:
+    adjusted = list(command)
+    for idx, value in enumerate(adjusted[:-1]):
+        if value != CLAUDE_CODE_DISALLOWED_TOOLS_FLAG:
+            continue
+
+        existing = [
+            item.strip()
+            for item in adjusted[idx + 1].split(",")
+            if item.strip()
+        ]
+        if tool_name not in existing:
+            existing.append(tool_name)
+            adjusted[idx + 1] = ",".join(existing)
+        return adjusted
+
+    adjusted.extend([CLAUDE_CODE_DISALLOWED_TOOLS_FLAG, tool_name])
+    return adjusted
 
 
 class HarnessRuntime(Protocol):
@@ -27,6 +50,9 @@ class HarnessRuntime(Protocol):
         ...
 
     def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
+        ...
+
+    def adjust_spawn_command(self, command: list[str]) -> list[str]:
         ...
 
     def keepalive_enabled(self) -> bool:
@@ -72,7 +98,6 @@ class HarnessRuntime(Protocol):
 
 
 @dataclass
-@dataclass
 class ClaudeHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
     name: str = "claude"
@@ -96,6 +121,9 @@ class ClaudeHarnessRuntime:
     def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
         del agent_role, cwd
         return {}
+
+    def adjust_spawn_command(self, command: list[str]) -> list[str]:
+        return _append_disallowed_tool(command, CLAUDE_CODE_AGENT_TOOL)
 
     def keepalive_enabled(self) -> bool:
         return False
@@ -177,6 +205,9 @@ class CodexHarnessRuntime:
     def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
         del agent_role, cwd
         return {}
+
+    def adjust_spawn_command(self, command: list[str]) -> list[str]:
+        return list(command)
 
     def keepalive_enabled(self) -> bool:
         return False
@@ -262,6 +293,9 @@ class OpenClawHarnessRuntime:
         del agent_role, cwd
         self._bootstrap_manager.suppress()
         return {}
+
+    def adjust_spawn_command(self, command: list[str]) -> list[str]:
+        return list(command)
 
     def keepalive_enabled(self) -> bool:
         return True

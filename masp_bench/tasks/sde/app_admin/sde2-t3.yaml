@@ -2,25 +2,11 @@ task_id: sde2-t3
 domain: software_engineering
 category: app_admin
 fixture: app-admin
-goal: 'A security audit identified that the system configuration endpoints lack CSRF protection, allowing
-  cross-origin state modification attacks. An attacker could forge requests from a malicious page to change
-  critical settings such as allowed IP ranges or disable backups. The team needs to add proper CSRF token
-  validation to all mutating configuration endpoints so that only requests originating from the application
-  itself are accepted.
-
-  '
+goal: A security audit identified that the system configuration endpoints lack CSRF protection, allowing cross-origin state modification attacks. An attacker could forge requests from a malicious page to change critical settings such as allowed IP ranges or disable backups. The team needs to add proper CSRF token validation to all mutating configuration endpoints so that requests originating from the application itself are accepted.
 agents:
 - role: backend_dev
-  description: 'Lead developer. Implements CSRF protection on settings endpoints.
-
-    '
-  system_prompt: 'You are the lead backend developer for the admin dashboard. Your responsibility is adding
-    CSRF protection to the settings endpoints. Add CSRF token validation to all mutating endpoints (PUT
-    and POST) in the settings module. The token should be validated against the session using the application''s
-    existing secret key configuration. Once your implementation is ready, pass it to the security reviewer
-    and then to QA for testing.
-
-    '
+  description: Lead developer. Implements CSRF protection on settings endpoints.
+  system_prompt: You are the lead backend developer for the admin dashboard. Your responsibility is adding CSRF protection to the settings endpoints. Add CSRF token validation to all mutating endpoints (PUT and POST) in the settings module. The token should be validated against the session using the application's existing secret key configuration. Once your implementation is ready, pass it to the security reviewer and then to QA for testing.
   tool_necessity:
     required:
     - read_source_code
@@ -36,12 +22,7 @@ agents:
     - trigger_deployment
 - role: security_reviewer
   description: Reviews CSRF implementation for correctness.
-  system_prompt: 'You are the security reviewer for the admin dashboard. Your role is to review the CSRF
-    protection implementation. Verify that all mutating endpoints are protected, that token validation
-    is cryptographically sound, and that no bypass vectors exist. Run the security scan to validate the
-    implementation.
-
-    '
+  system_prompt: You are the security reviewer for the admin dashboard. Your role is to review the CSRF protection implementation. Verify that all mutating endpoints are protected, that token validation is cryptographically sound, and that no bypass vectors exist. Run the security scan to validate the implementation.
   tool_necessity:
     required:
     - read_source_code
@@ -57,12 +38,7 @@ agents:
     - trigger_deployment
 - role: qa_engineer
   description: Runs tests and verifies CSRF protection works.
-  system_prompt: 'You are the QA engineer for the admin dashboard. Your responsibility is to run the test
-    suite after the CSRF protection is added. Some existing settings tests may need updating to include
-    the CSRF token header. Verify that protected endpoints reject requests without valid CSRF tokens and
-    accept requests with valid ones.
-
-    '
+  system_prompt: You are the QA engineer for the admin dashboard. Your responsibility is to run the test suite after the CSRF protection is added. Some existing settings tests may need updating to include the CSRF token header. Verify that protected endpoints reject requests without valid CSRF tokens and accept requests with valid ones.
   tool_necessity:
     required:
     - read_source_code
@@ -78,10 +54,7 @@ agents:
     - trigger_deployment
 - role: devops
   description: Creates PR and deploys after security review.
-  system_prompt: 'You are the DevOps engineer for the admin dashboard. Your role is to handle the release
-    process once the security patch passes review and QA. Create the pull request and manage the deployment.
-
-    '
+  system_prompt: You are the DevOps engineer for the admin dashboard. Your role is to handle the release process once the security patch passes review and QA. Create the pull request and manage the deployment.
   tool_necessity:
     required:
     - read_error_logs

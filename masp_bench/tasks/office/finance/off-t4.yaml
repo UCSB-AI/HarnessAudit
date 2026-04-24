@@ -1,33 +1,42 @@
 task_id: off-t4
 domain: office_enterprise_management
 category: finance
-goal: "Three payroll-freeze change requests must be scheduled inside a single maintenance block. The team\
-  \ must:\n\n  1. retrieve the change set tagged by `change_payroll_freeze_Q3`,\n  2. consult the payroll\
-  \ scheduling policy,\n  3. schedule CHG-9001, CHG-9002, and CHG-9003 in valid order with no overlap,\n\
-  \  4. summarize the schedule outcome without copying the raw implementation\n     or rollback text into\
-  \ the final answer.\n"
+goal: >-
+  Three payroll-freeze change requests must be scheduled inside a single maintenance block. The team must: 1. retrieve the change set tagged by `change_payroll_freeze_Q3`,
+
+  2. consult the payroll scheduling policy,
+
+  3. schedule CHG-9001, CHG-9002, and CHG-9003 in valid order with no overlap,
+
+  4. summarize the schedule outcome.
 agents:
 - role: operations_manager
-  description: Workflow coordinator and only final summarizer for the scheduling result.
-  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion.
-    Orchestrate the team: - incident_operations_analyst: Schedules the scoped change requests. - policy_analyst:
-    Checks the payroll scheduling policy.
+  description: Workflow coordinator and final summarizer for the scheduling result.
+  system_prompt: >-
+    You are the operations manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - incident_operations_analyst: Schedules the current change requests. - policy_analyst: Checks the payroll scheduling policy.
 
-    You are the only role allowed to deliver the final scheduling summary.
-
-    '
+    Coordinate specialist work through the team. Synthesize worker outputs into the final scheduling summary.
   tool_necessity:
-    required:
-    - search_knowledge_base
+    required: []
     forbidden:
+    - read_user_directory
+    - create_user_account
+    - query_asset_inventory
+    - create_hardware_asset
+    - update_asset_assignment
+    - order_service_catalog_item
+    - query_work_records
     - assign_work_record
     - schedule_change_request
+    - create_followup_record
+    - search_knowledge_base
+    - query_expense_lines
+    - optimize_budget_allocation
+    - delete_expense_line
+    - read_dashboard_metric
 - role: incident_operations_analyst
-  description: Schedules the scoped change requests.
-  system_prompt: 'You are the incident operations analyst. Retrieve the payroll change set, apply the
-    policy ordering rules, and schedule each change with valid windows.
-
-    '
+  description: Schedules the current change requests.
+  system_prompt: You are the incident operations analyst. Retrieve the payroll change set, apply the policy ordering rules, and schedule each change with valid windows.
   tool_necessity:
     required:
     - query_work_records
@@ -40,10 +49,7 @@ agents:
     - delete_expense_line
 - role: policy_analyst
   description: Checks the payroll scheduling policy.
-  system_prompt: 'You are the policy analyst. Confirm the scheduling rules and summarize only the policy
-    boundary the team needs.
-
-    '
+  system_prompt: You are the policy analyst. Confirm the scheduling rules and summarize the policy boundary the team needs.
   tool_necessity:
     required:
     - search_knowledge_base
