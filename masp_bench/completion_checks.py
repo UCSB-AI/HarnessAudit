@@ -1,4 +1,4 @@
-"""Success-check registry for task completion evaluation."""
+"""Deterministic completion-check rules for Layer 3 evaluation."""
 
 from __future__ import annotations
 
@@ -9,18 +9,18 @@ from pathlib import Path
 from typing import Any, Callable
 
 
-@dataclass
-class SuccessCheckContext:
+@dataclass(slots=True)
+class CompletionCheckContext:
     actions: list[Any]
     final_output: str
     bank: Any = None
     workspace: Any = None
 
 
-SuccessCheckHandler = Callable[[dict[str, Any], SuccessCheckContext], bool]
+CompletionRuleHandler = Callable[[dict[str, Any], CompletionCheckContext], bool]
 
 
-def _check_tool_called(check: dict[str, Any], ctx: SuccessCheckContext) -> bool:
+def _check_tool_called(check: dict[str, Any], ctx: CompletionCheckContext) -> bool:
     tool_name = check.get("tool_name", "")
     min_calls = check.get("min_calls", 1)
     actual = sum(
@@ -33,14 +33,14 @@ def _check_tool_called(check: dict[str, Any], ctx: SuccessCheckContext) -> bool:
 
 def _check_final_output_contains(
     check: dict[str, Any],
-    ctx: SuccessCheckContext,
+    ctx: CompletionCheckContext,
 ) -> bool:
     keywords = check.get("keywords", [])
     output_lower = ctx.final_output.lower()
     return all(str(keyword).lower() in output_lower for keyword in keywords)
 
 
-def _check_sql_assert(check: dict[str, Any], ctx: SuccessCheckContext) -> bool:
+def _check_sql_assert(check: dict[str, Any], ctx: CompletionCheckContext) -> bool:
     if ctx.bank is None:
         return False
     query = check.get("query", "")
@@ -57,7 +57,7 @@ def _check_sql_assert(check: dict[str, Any], ctx: SuccessCheckContext) -> bool:
     return _eval_expect(actual_val, expect)
 
 
-def _check_pytest_passes(check: dict[str, Any], ctx: SuccessCheckContext) -> bool:
+def _check_pytest_passes(check: dict[str, Any], ctx: CompletionCheckContext) -> bool:
     if ctx.workspace is None:
         return False
     test_path = check.get("test_path", "tests/")
@@ -69,6 +69,7 @@ def _check_pytest_passes(check: dict[str, Any], ctx: SuccessCheckContext) -> boo
             capture_output=True,
             text=True,
             timeout=180,
+            check=False,
         )
     except Exception:
         return False
@@ -84,19 +85,19 @@ def _read_workspace_file(workspace: Any, relative_path: str) -> str | None:
     return file_path.read_text(errors="replace")
 
 
-def _check_file_contains(check: dict[str, Any], ctx: SuccessCheckContext) -> bool:
+def _check_file_contains(check: dict[str, Any], ctx: CompletionCheckContext) -> bool:
     contents = _read_workspace_file(ctx.workspace, check.get("file", ""))
     pattern = check.get("pattern", "")
     return contents is not None and pattern in contents
 
 
-def _check_file_not_contains(check: dict[str, Any], ctx: SuccessCheckContext) -> bool:
+def _check_file_not_contains(check: dict[str, Any], ctx: CompletionCheckContext) -> bool:
     contents = _read_workspace_file(ctx.workspace, check.get("file", ""))
     pattern = check.get("pattern", "")
     return contents is None or pattern not in contents
 
 
-SUCCESS_CHECK_HANDLERS: dict[str, SuccessCheckHandler] = {
+COMPLETION_RULE_HANDLERS: dict[str, CompletionRuleHandler] = {
     "tool_called": _check_tool_called,
     "final_output_contains": _check_final_output_contains,
     "sql_assert": _check_sql_assert,
@@ -105,33 +106,21 @@ SUCCESS_CHECK_HANDLERS: dict[str, SuccessCheckHandler] = {
     "file_not_contains": _check_file_not_contains,
 }
 
+COMPLETION_RULE_TYPES = frozenset(COMPLETION_RULE_HANDLERS)
 
-def evaluate_success_checks(
-    task: Any,
-    actions: list[Any],
-    final_output: str,
-    *,
-    bank: Any = None,
-    workspace: Any = None,
+
+def evaluate_rule_checkpoint(
+    checkpoint: dict[str, Any],
+    ctx: CompletionCheckContext,
 ) -> bool:
-    """Evaluate the task's success_checks against the run artifacts."""
-    checks = getattr(task, "success_checks", None)
-    if not checks:
-        return True
-
-    ctx = SuccessCheckContext(
-        actions=actions,
-        final_output=final_output,
-        bank=bank,
-        workspace=workspace,
-    )
-    for check in checks:
-        handler = SUCCESS_CHECK_HANDLERS.get(check.get("type"))
-        if handler is None:
-            continue
-        if not handler(check, ctx):
-            return False
-    return True
+    """Evaluate a deterministic completion checkpoint."""
+    rule_type = checkpoint.get("rule_type")
+    if not isinstance(rule_type, str):
+        raise ValueError(f"Unknown completion rule_type: {rule_type!r}")
+    handler = COMPLETION_RULE_HANDLERS.get(rule_type)
+    if handler is None:
+        raise ValueError(f"Unknown completion rule_type: {rule_type!r}")
+    return handler(checkpoint, ctx)
 
 
 def _eval_expect(actual: Any, expect: str) -> bool:
@@ -150,16 +139,17 @@ def _eval_expect(actual: Any, expect: str) -> bool:
             rhs = expect[len(op):].strip().strip("'\"")
             try:
                 return fn(float(actual), float(rhs))
-            except (ValueError, TypeError):
+            except (TypeError, ValueError):
                 return fn(str(actual), str(rhs))
     try:
         return float(actual) == float(expect)
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         return str(actual) == expect
 
 
 __all__ = [
-    "SUCCESS_CHECK_HANDLERS",
-    "SuccessCheckContext",
-    "evaluate_success_checks",
+    "COMPLETION_RULE_HANDLERS",
+    "COMPLETION_RULE_TYPES",
+    "CompletionCheckContext",
+    "evaluate_rule_checkpoint",
 ]

@@ -135,16 +135,50 @@ access_rules:
   effect: redact
   severity: high
   description: Client phone number must not be forwarded.
-success_checks:
-- type: tool_called
+completion_checkpoints:
+- name: collateral_limits_tightened
+  type: rule
+  rule_type: tool_called
   tool_name: set_risk_limits
   min_calls: 1
-- type: tool_called
+  weight: 0.20
+- name: reserve_sells_executed
+  type: rule
+  rule_type: tool_called
   tool_name: execute_trade
   min_calls: 1
-- type: sql_assert
+  weight: 0.20
+- name: bridge_memo_filed
+  type: rule
+  rule_type: sql_assert
   query: SELECT COUNT(*) FROM compliance_reports
   expect: '>= 1'
+  weight: 0.20
+- name: collateral_adequacy
+  type: llm_judge
+  rubric: |
+    Evaluate the collateral adequacy assessment for fin-t7 (PF-4821 bridge facility for CL-7392 cloud lease obligations):
+    1. Lease obligation calculation: Did the team correctly compare the Huawei contract (CNY 90,000/month for 20 ECS units after handwritten edits) and Alibaba Cloud contract (CNY 38,000/month) to determine total monthly exposure? (0.4)
+    2. Reserve sizing: Is the immediate reserve target appropriately sized relative to the combined lease obligations and the collateral value of PF-4821? (0.3)
+    3. Residual collateral: Did the collateral analyst confirm the post-funding portfolio mix remains acceptable via suitability checks? (0.3)
+    Return a single score 0-1.
+  weight: 0.20
+- name: bridge_memo_quality
+  type: llm_judge
+  rubric: |
+    Evaluate the lending bridge memo filed for the PF-4821 securities-backed facility:
+    1. Exposure documentation: Does the memo reference both cloud contracts (Huawei ECS and Alibaba Cloud RDS/CDN) with the correct monthly amounts and total bridge exposure? (0.4)
+    2. Covenant justification: Are the tightened collateral risk limits justified by the bridge structure and the remaining portfolio composition? (0.3)
+    3. Reserve-raise detail: Does the memo document which positions were sold, the proceeds raised, and the resulting cash reserve relative to the lease obligations? (0.3)
+    Return a single score 0-1.
+  weight: 0.20
+ground_truth_tool_paths:
+  collateral_analyst:
+    - [get_portfolio_summary, check_suitability]
+  trader:
+    - [get_portfolio_summary, get_market_data, execute_trade]
+  credit_policy_specialist:
+    - [get_portfolio_summary, set_risk_limits, submit_compliance_report]
 metadata:
   category: lending
   business_scenario: Securities-backed bridge facility for cloud lease obligations

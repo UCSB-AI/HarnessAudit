@@ -3,15 +3,27 @@
 # Coverage: 7 domains × 1 framework = 7 runs.
 set -euo pipefail
 
-BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$BASE" || exit 1
+PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$PKG_ROOT/.." && pwd)"
+cd "$REPO_ROOT" || exit 1
 
-PY=/home/chengzhi.ucsb/.conda/envs/masp-bench/bin/python
-LOG=/tmp/sasp_smoke.log
+PY="${MASP_BENCH_PYTHON:-/home/chengzhi.ucsb/.conda/envs/masp-bench/bin/python}"
+LOG="$PKG_ROOT/smoke.log"
 : > "$LOG"
 
-TIMEOUT=360
-MODEL=openai/gpt-5.4
+TIMEOUT="${AGENT_TIMEOUT:-360}"
+MODEL="${SASP_MODEL:-openai/gpt-5.4}"
+JUDGE_MODEL="${JUDGE_MODEL:-openai/gpt-5.4}"
+SKIP_JUDGE="${SKIP_JUDGE:-1}"
+RESULTS_DIR="$PKG_ROOT/results"
+TRACES_DIR="$PKG_ROOT/traces"
+
+mkdir -p "$RESULTS_DIR" "$TRACES_DIR" "$(dirname "$LOG")"
+
+JUDGE_ARGS=(--judge-model "$JUDGE_MODEL")
+case "${SKIP_JUDGE,,}" in
+  1|true|yes|y) JUDGE_ARGS+=(--skip-judge) ;;
+esac
 
 DOMAIN_DIRS=(
   daily_life
@@ -23,25 +35,29 @@ DOMAIN_DIRS=(
   social_interaction
 )
 
+run_logged() {
+  "$@" 2>&1 | tee -a "$LOG"
+}
+
 run_one() {
   local rel_yaml=$1
   echo "=== $(date -Iseconds) task=${rel_yaml} model=${MODEL} framework=openclaw_local ===" | tee -a "$LOG"
-  "$PY" -m sasp_bench run "$rel_yaml" \
+  run_logged "$PY" -m sasp_bench run "$rel_yaml" \
     --framework openclaw_local \
     --model "$MODEL" \
     --agent-timeout "$TIMEOUT" \
-    --output "$BASE/results/" \
-    --trace-dir "$BASE/traces/" 2>&1 | tee -a "$LOG"
+    --output "$RESULTS_DIR/" \
+    --trace-dir "$TRACES_DIR/" \
+    "${JUDGE_ARGS[@]}"
 }
 
 shopt -s nullglob
 for domain_dir in "${DOMAIN_DIRS[@]}"; do
-  yamls=(tasks/"${domain_dir}"/*.yaml)
-  IFS=$'\n' yamls=($(printf "%s\n" "${yamls[@]}" | sort))
-  unset IFS
+  yamls=("$PKG_ROOT"/tasks/"${domain_dir}"/*.yaml)
+  mapfile -t yamls < <(printf '%s\n' "${yamls[@]}" | sort)
 
   if [[ ${#yamls[@]} -gt 0 ]]; then
-    rel=${yamls[0]#./}
+    rel=${yamls[0]#"$PKG_ROOT"/}
     run_one "$rel"
   fi
 done

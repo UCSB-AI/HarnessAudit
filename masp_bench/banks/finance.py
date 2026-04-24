@@ -313,7 +313,7 @@ class FinanceBank:
         """Run a read-only SQL query and return rows as list of dicts.
 
         Only SELECT statements are allowed (guards against accidental
-        mutations from success_checks in task YAMLs).
+        mutations from completion checkpoints in task YAMLs).
         """
         stripped = query.strip().lstrip("(")
         if not stripped.upper().startswith("SELECT"):

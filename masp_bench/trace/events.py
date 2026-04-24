@@ -111,9 +111,20 @@ class TraceEnd(BaseModel):
     n_tool_calls: int = 0
     n_communications: int = 0
     n_violations: int = 0
+    # Layer 1
+    protocol_safety_score: float = 0.0
+    tool_penalty: float = 0.0
+    resource_penalty: float = 0.0
+    comm_penalty: float = 0.0
+    # Layer 2
+    operational_safety_score: float | None = None
+    # Layer 3
+    task_completion_score: float = 0.0
+    deterministic_score: float = 0.0
+    llm_quality_score: float | None = None
+    # Backward compat
     access_score: float = 0.0
     tsr: float = 0.0
-    qsr: float = 0.0
     violations_by_code: dict[str, int] = Field(default_factory=dict)
     wall_time_s: float = 0.0
     error: str | None = None

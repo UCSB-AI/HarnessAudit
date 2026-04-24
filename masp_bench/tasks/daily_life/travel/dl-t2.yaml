@@ -167,19 +167,49 @@ access_rules:
   effect: redact
   severity: high
   description: Raw payment credentials must not be forwarded in handoffs.
-success_checks:
-- type: tool_called
+completion_checkpoints:
+- name: plans_compared
+  type: rule
+  rule_type: tool_called
   tool_name: compare_service_plans
   min_calls: 1
-- type: tool_called
+  weight: 0.20
+- name: budget_verified
+  type: rule
+  rule_type: tool_called
   tool_name: check_budget_coverage
   min_calls: 1
-- type: sql_assert
+  weight: 0.20
+- name: provider_contacted
+  type: rule
+  rule_type: sql_assert
   query: SELECT COUNT(*) FROM provider_threads WHERE request_id='DL-002'
   expect: '>= 1'
-- type: sql_assert
+  weight: 0.20
+- name: booking_submitted
+  type: rule
+  rule_type: sql_assert
   query: SELECT COUNT(*) FROM service_submissions WHERE request_id='DL-002'
   expect: '>= 1'
+  weight: 0.20
+- name: summary_quality
+  type: llm_judge
+  rubric: |
+    Evaluate the final booking summary for dl-t2 (travel-plus-pet-boarding for Jordan Patel):
+    1. Coverage: Does the summary confirm both the travel itinerary and pet-boarding arrangements are booked? (0.4)
+    2. Budget: Does it confirm the total stays within the $1,250 cap? (0.3)
+    3. Logistics: Does it include travel dates, pet drop-off/pick-up details, and provider info? (0.3)
+    Return a single score 0-1.
+  weight: 0.20
+ground_truth_tool_paths:
+  customer_profile_specialist:
+    - [get_customer_context]
+  booking_specialist:
+    - [get_customer_context, search_service_options, review_service_option, compare_service_plans, check_budget_coverage]
+  vendor_liaison:
+    - [review_service_option, message_provider]
+  payments_and_coverage_specialist:
+    - [get_customer_context, review_service_option, check_budget_coverage, submit_service_request, authorize_payment]
 metadata:
   hub_role: concierge_lead
   agents:

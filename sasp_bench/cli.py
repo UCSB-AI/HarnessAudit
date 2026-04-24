@@ -8,6 +8,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -17,6 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
+from masp_bench.operational_judge import evaluate_operational_governance
 from masp_bench.runner import (
     BenchmarkRunner,
     framework_run_id_slug,
@@ -79,6 +81,8 @@ def cmd_run(args: argparse.Namespace) -> None:
             bank_factory=sa_banks.get_bank,
             harness="openclaw",
             agent_timeout=args.agent_timeout,
+            judge_model=args.judge_model,
+            skip_judge=args.skip_judge,
         )
 
         metrics = None
@@ -122,22 +126,53 @@ def cmd_run(args: argparse.Namespace) -> None:
                 print("  No violations detected.")
             print()
 
+            scope_keys = {t.name: t.dedup_scope_keys for t in catalog.tools if t.dedup_scope_keys}
+            hub_role = task.metadata.get("hub_role")
+            if not isinstance(hub_role, str):
+                hub_role = task.agents[0].role
+            operational_safety_score = asyncio.run(
+                evaluate_operational_governance(
+                    trace.actions,
+                    task.ground_truth_tool_paths or {},
+                    hub_role,
+                    model=args.judge_model,
+                    skip=args.skip_judge,
+                )
+            )
+
             metrics = compute_metrics(
                 trace.run_id, trace.actions, decisions,
                 trace.task_completed or False,
+                tool_scope_keys=scope_keys,
+                resource_tools={t.name for t in catalog.tools if t.is_resource},
+                task_completion_score=trace.task_completion_score,
+                deterministic_score=trace.deterministic_score,
+                llm_quality_score=trace.llm_quality_score,
+                operational_safety_score=operational_safety_score,
             )
-            op = (f"{metrics.op_privacy_score:.2f}"
-                  if metrics.op_privacy_score is not None else "n/a")
-            info = (f"{metrics.info_privacy_score:.2f}"
-                    if metrics.info_privacy_score is not None else "n/a")
+            op_gov = (
+                f"{metrics.operational_safety_score:.2f}"
+                if metrics.operational_safety_score is not None else "n/a"
+            )
+            llm_quality = (
+                f"{metrics.llm_quality_score:.2f}"
+                if metrics.llm_quality_score is not None else "n/a"
+            )
             print("Metrics:")
-            print(f"    access_score:        {metrics.access_score:.2f}")
-            print(f"    op_privacy_score:    {op}")
-            print(f"    info_privacy_score:  {info}")
-            print(f"    tsr:                 {metrics.tsr:.0f}")
-            print(f"    pqsr@0.7:            {metrics.pqsr:.0f}")
+            print("  Layer 1 — Protocol Integrity:")
+            print(f"    protocol_safety_score: {metrics.protocol_safety_score:.2f}")
+            print(f"    tool_penalty:          {metrics.tool_penalty:.2f}")
+            print(f"    resource_penalty:      {metrics.resource_penalty:.2f}")
+            print(f"    comm_penalty:          {metrics.comm_penalty:.2f}")
+            print("  Layer 2 — Operational Governance:")
+            print(f"    operational_safety:    {op_gov}")
+            print("  Layer 3 — Decision Outcome:")
+            print(f"    task_completion:       {metrics.task_completion_score:.2f}")
+            print(f"    deterministic_score:   {metrics.deterministic_score:.2f}")
+            print(f"    llm_quality_score:     {llm_quality}")
+            print(f"    tsr (binary):          {metrics.tsr:.0f}")
             if metrics.violations_by_code:
-                print(f"    violations:          {metrics.violations_by_code}")
+                print(f"  violations:             {metrics.violations_by_code}")
             print()
 
             writer.write_event(TraceEnd(
@@ -146,9 +181,16 @@ def cmd_run(args: argparse.Namespace) -> None:
                 n_tool_calls=trace.n_tool_calls,
                 n_communications=trace.n_communications,
                 n_violations=len(violations),
-                access_score=metrics.access_score,
+                protocol_safety_score=metrics.protocol_safety_score,
+                tool_penalty=metrics.tool_penalty,
+                resource_penalty=metrics.resource_penalty,
+                comm_penalty=metrics.comm_penalty,
+                operational_safety_score=metrics.operational_safety_score,
+                task_completion_score=metrics.task_completion_score,
+                deterministic_score=metrics.deterministic_score,
+                llm_quality_score=metrics.llm_quality_score,
+                access_score=metrics.protocol_safety_score,
                 tsr=metrics.tsr,
-                qsr=metrics.pqsr,
                 violations_by_code=metrics.violations_by_code,
                 wall_time_s=trace.duration_seconds or 0.0,
                 error=trace.error,
@@ -193,11 +235,16 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "n_tool_calls": trace.n_tool_calls,
                 "n_communications": trace.n_communications,
                 "n_violations": len(violations),
-                "access_score": metrics.access_score,
-                "op_privacy_score": metrics.op_privacy_score,
-                "info_privacy_score": metrics.info_privacy_score,
+                "protocol_safety_score": metrics.protocol_safety_score,
+                "tool_penalty": metrics.tool_penalty,
+                "resource_penalty": metrics.resource_penalty,
+                "comm_penalty": metrics.comm_penalty,
+                "operational_safety_score": metrics.operational_safety_score,
+                "task_completion_score": metrics.task_completion_score,
+                "deterministic_score": metrics.deterministic_score,
+                "llm_quality_score": metrics.llm_quality_score,
                 "tsr": metrics.tsr,
-                "pqsr": metrics.pqsr,
+                "access_score": metrics.access_score,
                 "violations_by_code": metrics.violations_by_code,
                 "violations_by_severity": metrics.violations_by_severity,
                 "trace_file": str(trace_path),
@@ -234,6 +281,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--max-turns", type=int, default=15)
     run_p.add_argument("--repeat", type=int, default=1)
     run_p.add_argument("--agent-timeout", type=int, default=300)
+    run_p.add_argument(
+        "--skip-judge",
+        action="store_true",
+        help="Skip all LLM-as-judge scoring; deterministic checkpoints still run",
+    )
+    run_p.add_argument(
+        "--judge-model",
+        default="openai/gpt-5.4",
+        help="Model name for completion and operational judges (default: openai/gpt-5.4)",
+    )
     return parser
 
 

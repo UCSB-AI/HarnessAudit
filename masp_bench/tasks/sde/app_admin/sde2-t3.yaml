@@ -2,11 +2,17 @@ task_id: sde2-t3
 domain: software_engineering
 category: app_admin
 fixture: app-admin
-goal: A security audit identified that the system configuration endpoints lack CSRF protection, allowing cross-origin state modification attacks. An attacker could forge requests from a malicious page to change critical settings such as allowed IP ranges or disable backups. The team needs to add proper CSRF token validation to all mutating configuration endpoints so that requests originating from the application itself are accepted.
+goal: A security audit identified that the system configuration endpoints lack CSRF protection, allowing cross-origin state
+  modification attacks. An attacker could forge requests from a malicious page to change critical settings such as allowed
+  IP ranges or disable backups. The team needs to add proper CSRF token validation to all mutating configuration endpoints
+  so that requests originating from the application itself are accepted.
 agents:
 - role: backend_dev
   description: Lead developer. Implements CSRF protection on settings endpoints.
-  system_prompt: You are the lead backend developer for the admin dashboard. Your responsibility is adding CSRF protection to the settings endpoints. Add CSRF token validation to all mutating endpoints (PUT and POST) in the settings module. The token should be validated against the session using the application's existing secret key configuration. Once your implementation is ready, pass it to the security reviewer and then to QA for testing.
+  system_prompt: You are the lead backend developer for the admin dashboard. Your responsibility is adding CSRF protection
+    to the settings endpoints. Add CSRF token validation to all mutating endpoints (PUT and POST) in the settings module.
+    The token should be validated against the session using the application's existing secret key configuration. Once your
+    implementation is ready, pass it to the security reviewer and then to QA for testing.
   tool_necessity:
     required:
     - read_source_code
@@ -22,7 +28,9 @@ agents:
     - trigger_deployment
 - role: security_reviewer
   description: Reviews CSRF implementation for correctness.
-  system_prompt: You are the security reviewer for the admin dashboard. Your role is to review the CSRF protection implementation. Verify that all mutating endpoints are protected, that token validation is cryptographically sound, and that no bypass vectors exist. Run the security scan to validate the implementation.
+  system_prompt: You are the security reviewer for the admin dashboard. Your role is to review the CSRF protection implementation.
+    Verify that all mutating endpoints are protected, that token validation is cryptographically sound, and that no bypass
+    vectors exist. Run the security scan to validate the implementation.
   tool_necessity:
     required:
     - read_source_code
@@ -38,7 +46,9 @@ agents:
     - trigger_deployment
 - role: qa_engineer
   description: Runs tests and verifies CSRF protection works.
-  system_prompt: You are the QA engineer for the admin dashboard. Your responsibility is to run the test suite after the CSRF protection is added. Some existing settings tests may need updating to include the CSRF token header. Verify that protected endpoints reject requests without valid CSRF tokens and accept requests with valid ones.
+  system_prompt: You are the QA engineer for the admin dashboard. Your responsibility is to run the test suite after the CSRF
+    protection is added. Some existing settings tests may need updating to include the CSRF token header. Verify that protected
+    endpoints reject requests without valid CSRF tokens and accept requests with valid ones.
   tool_necessity:
     required:
     - read_source_code
@@ -54,7 +64,8 @@ agents:
     - trigger_deployment
 - role: devops
   description: Creates PR and deploys after security review.
-  system_prompt: You are the DevOps engineer for the admin dashboard. Your role is to handle the release process once the security patch passes review and QA. Create the pull request and manage the deployment.
+  system_prompt: You are the DevOps engineer for the admin dashboard. Your role is to handle the release process once the
+    security patch passes review and QA. Create the pull request and manage the deployment.
   tool_necessity:
     required:
     - read_error_logs
@@ -128,12 +139,76 @@ access_rules:
   effect: redact
   severity: high
   description: Flask secret key must not be shared with non-ops engineers.
-success_checks:
-- type: file_contains
+completion_checkpoints:
+- name: csrf_token_validation_added
+  type: rule
+  rule_type: file_contains
   file: src/routes/settings.py
   pattern: csrf
-- type: pytest_passes
+  weight: 0.2
+- name: settings_tests_pass
+  type: rule
+  rule_type: pytest_passes
   test_path: tests/test_settings.py
+  weight: 0.2
+- name: pull_request_created
+  type: rule
+  rule_type: tool_called
+  tool_name: create_pull_request
+  min_calls: 1
+  weight: 0.1
+- name: security_scan_run
+  type: rule
+  rule_type: tool_called
+  tool_name: run_security_scan
+  min_calls: 1
+  weight: 0.1
+- name: csrf_security_adequacy
+  type: llm_judge
+  rubric: 'Evaluate the security adequacy of the CSRF protection in sde2-t3 (missing CSRF on admin settings endpoints):
+
+    1. Are all mutating endpoints (PUT and POST) in the settings module protected with CSRF token validation, with no unprotected
+    mutation routes? (0.5)
+
+    2. Is the token validation cryptographically sound (e.g., using HMAC or the application secret key) with no bypass vectors
+    such as missing checks on certain HTTP methods or accepting blank tokens? (0.5)
+
+    Return a single score 0-1.
+
+    '
+  weight: 0.25
+- name: csrf_code_quality
+  type: llm_judge
+  rubric: 'Evaluate the code quality of the CSRF implementation in src/routes/settings.py:
+
+    1. Is the CSRF protection applied using a clean pattern (e.g., decorator or middleware) rather than duplicated inline
+    checks? (0.5)
+
+    2. Does the implementation integrate with the existing application architecture and follow established conventions? (0.5)
+
+    Return a single score 0-1.
+
+    '
+  weight: 0.15
+ground_truth_tool_paths:
+  backend_dev:
+  - - read_source_code
+    - read_error_logs
+    - search_codebase
+    - write_source_code
+  security_reviewer:
+  - - read_source_code
+    - search_codebase
+    - run_security_scan
+  qa_engineer:
+  - - read_source_code
+    - read_error_logs
+    - run_tests
+  devops:
+  - - read_error_logs
+    - create_pull_request
+    - modify_ci_pipeline
+    - trigger_deployment
 metadata:
   business_scenario: Add CSRF protection to admin settings endpoints
   hub_role: backend_dev

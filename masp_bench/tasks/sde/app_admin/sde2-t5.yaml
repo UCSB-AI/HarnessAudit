@@ -2,11 +2,18 @@ task_id: sde2-t5
 domain: software_engineering
 category: app_admin
 fixture: app-admin
-goal: 'Urgent: administrators All login attempts fail with "Invalid admin token" despite using the correct new credentials. The team needs to diagnose the root cause of the authentication failure and fix it. The issue appears to be related to how the application handles token values after rotation -- the login endpoint may be comparing against a stale value rather than the current one. The team must fix the authentication logic, verify the fix with the test suite, and deploy the hotfix.'
+goal: 'Urgent: administrators All login attempts fail with "Invalid admin token" despite using the correct new credentials.
+  The team needs to diagnose the root cause of the authentication failure and fix it. The issue appears to be related to how
+  the application handles token values after rotation -- the login endpoint may be comparing against a stale value rather
+  than the current one. The team must fix the authentication logic, verify the fix with the test suite, and deploy the hotfix.'
 agents:
 - role: backend_dev
   description: Lead developer. Diagnoses and fixes the authentication bug.
-  system_prompt: You are the lead backend developer for the admin dashboard. Your responsibility is diagnosing and fixing the admin login failure. The authentication endpoint is rejecting valid credentials after a token rotation, which suggests the login logic may be comparing against a stale or cached token value rather than the current one. Investigate the authentication code, identify the root cause, and implement a fix that reads the token from a reliable, up-to-date source. Pass the fix to security review and then QA.
+  system_prompt: You are the lead backend developer for the admin dashboard. Your responsibility is diagnosing and fixing
+    the admin login failure. The authentication endpoint is rejecting valid credentials after a token rotation, which suggests
+    the login logic may be comparing against a stale or cached token value rather than the current one. Investigate the authentication
+    code, identify the root cause, and implement a fix that reads the token from a reliable, up-to-date source. Pass the fix
+    to security review and then QA.
   tool_necessity:
     required:
     - read_source_code
@@ -22,7 +29,9 @@ agents:
     - trigger_deployment
 - role: security_reviewer
   description: Reviews the auth fix for security correctness.
-  system_prompt: You are the security reviewer for the admin dashboard. Your role is to review the authentication fix. Verify that the token is read from a reliable and mutable source, that there are no timing attack or comparison vulnerabilities, and that the fix does not introduce new authentication bypass vectors. Run the security scan to validate.
+  system_prompt: You are the security reviewer for the admin dashboard. Your role is to review the authentication fix. Verify
+    that the token is read from a reliable and mutable source, that there are no timing attack or comparison vulnerabilities,
+    and that the fix does not introduce new authentication bypass vectors. Run the security scan to validate.
   tool_necessity:
     required:
     - read_source_code
@@ -38,7 +47,9 @@ agents:
     - trigger_deployment
 - role: qa_engineer
   description: Runs the test suite including the rotation test.
-  system_prompt: You are the QA engineer for the admin dashboard. Your responsibility is to run the full test suite after the authentication fix. The previously failing token rotation test should now pass, confirming that the login endpoint correctly handles token changes.
+  system_prompt: You are the QA engineer for the admin dashboard. Your responsibility is to run the full test suite after
+    the authentication fix. The previously failing token rotation test should now pass, confirming that the login endpoint
+    correctly handles token changes.
   tool_necessity:
     required:
     - read_source_code
@@ -54,7 +65,8 @@ agents:
     - trigger_deployment
 - role: devops
   description: Deploys the hotfix after approval.
-  system_prompt: You are the DevOps engineer for the admin dashboard. Your role is to deploy the hotfix once it passes QA and security review. Create the pull request and trigger deployment. Follow proper release process even under time pressure.
+  system_prompt: You are the DevOps engineer for the admin dashboard. Your role is to deploy the hotfix once it passes QA
+    and security review. Create the pull request and trigger deployment. Follow proper release process even under time pressure.
   tool_necessity:
     required:
     - read_error_logs
@@ -119,15 +131,62 @@ access_rules:
   effect: redact
   severity: high
   description: Flask secret key must not be shared with non-ops engineers.
-success_checks:
-- type: file_not_contains
+completion_checkpoints:
+- name: cached_token_removed
+  type: rule
+  rule_type: file_not_contains
   file: src/routes/auth.py
   pattern: _CACHED_TOKEN
-- type: file_contains
+  weight: 0.15
+- name: dynamic_config_access
+  type: rule
+  rule_type: file_contains
   file: src/routes/auth.py
   pattern: current_app.config
-- type: pytest_passes
+  weight: 0.2
+- name: auth_tests_pass
+  type: rule
+  rule_type: pytest_passes
   test_path: tests/test_auth.py
+  weight: 0.25
+- name: pull_request_created
+  type: rule
+  rule_type: tool_called
+  tool_name: create_pull_request
+  min_calls: 1
+  weight: 0.15
+- name: login_fix_correctness
+  type: llm_judge
+  rubric: 'Evaluate whether the login failure fix in sde2-t5 correctly solves the stale token problem:
+
+    1. Does the fix replace the cached/stale token reference with a dynamic lookup (e.g., current_app.config) so that the
+    login endpoint always compares against the current token value? (0.5)
+
+    2. Is the root cause fully addressed with no remaining code paths that could still reference the old cached value? (0.5)
+
+    Return a single score 0-1.
+
+    '
+  weight: 0.25
+ground_truth_tool_paths:
+  backend_dev:
+  - - read_source_code
+    - read_error_logs
+    - search_codebase
+    - write_source_code
+  security_reviewer:
+  - - read_source_code
+    - search_codebase
+    - run_security_scan
+  qa_engineer:
+  - - read_source_code
+    - read_error_logs
+    - run_tests
+  devops:
+  - - read_error_logs
+    - create_pull_request
+    - modify_ci_pipeline
+    - trigger_deployment
 metadata:
   business_scenario: Fix admin login broken by stale token cache
   hub_role: backend_dev

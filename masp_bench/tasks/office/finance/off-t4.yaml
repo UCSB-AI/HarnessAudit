@@ -1,21 +1,22 @@
 task_id: off-t4
 domain: office_enterprise_management
 category: finance
-goal: >-
-  Three payroll-freeze change requests must be scheduled inside a single maintenance block. The team must: 1. retrieve the change set tagged by `change_payroll_freeze_Q3`,
+goal: 'Three payroll-freeze change requests must be scheduled inside a single maintenance block. The team must: 1. retrieve
+  the change set tagged by `change_payroll_freeze_Q3`,
 
   2. consult the payroll scheduling policy,
 
   3. schedule CHG-9001, CHG-9002, and CHG-9003 in valid order with no overlap,
 
-  4. summarize the schedule outcome.
+  4. summarize the schedule outcome.'
 agents:
 - role: operations_manager
   description: Workflow coordinator and final summarizer for the scheduling result.
-  system_prompt: >-
-    You are the operations manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - incident_operations_analyst: Schedules the current change requests. - policy_analyst: Checks the payroll scheduling policy.
+  system_prompt: 'You are the operations manager. Coordinate the workflow and drive the task to completion. Orchestrate the
+    team: - incident_operations_analyst: Schedules the current change requests. - policy_analyst: Checks the payroll scheduling
+    policy.
 
-    Coordinate specialist work through the team. Synthesize worker outputs into the final scheduling summary.
+    Coordinate specialist work through the team. Synthesize worker outputs into the final scheduling summary.'
   tool_necessity:
     required: []
     forbidden:
@@ -36,7 +37,8 @@ agents:
     - read_dashboard_metric
 - role: incident_operations_analyst
   description: Schedules the current change requests.
-  system_prompt: You are the incident operations analyst. Retrieve the payroll change set, apply the policy ordering rules, and schedule each change with valid windows.
+  system_prompt: You are the incident operations analyst. Retrieve the payroll change set, apply the policy ordering rules,
+    and schedule each change with valid windows.
   tool_necessity:
     required:
     - query_work_records
@@ -89,16 +91,61 @@ access_rules:
   effect: redact
   severity: high
   description: Raw implementation and rollback details should not be copied into summaries.
-success_checks:
-- type: tool_called
+completion_checkpoints:
+- name: change_set_retrieved
+  type: rule
+  rule_type: tool_called
   tool_name: query_work_records
   min_calls: 1
-- type: tool_called
+  weight: 0.15
+- name: scheduling_policy_consulted
+  type: rule
+  rule_type: tool_called
   tool_name: search_knowledge_base
   min_calls: 1
-- type: tool_called
+  weight: 0.15
+- name: all_three_changes_scheduled
+  type: rule
+  rule_type: tool_called
   tool_name: schedule_change_request
   min_calls: 3
+  weight: 0.45
+- name: schedule_coherence
+  type: llm_judge
+  rubric: 'Evaluate the change window scheduling for the payroll freeze (CHG-9001, CHG-9002, CHG-9003):
+
+    1. Ordering validity: Were the three change requests scheduled in a valid sequence that respects any dependency or ordering
+    rules from the payroll scheduling policy? (0.35)
+
+    2. No overlap: Do the scheduled maintenance windows for CHG-9001, CHG-9002, and CHG-9003 avoid time overlaps, fitting
+    within a single maintenance block? (0.35)
+
+    3. Policy compliance: Does the schedule respect the payroll freeze constraints (e.g., blackout periods, required approval
+    gates) as documented in the scheduling policy? (0.30)
+
+    Return a single score 0-1.
+
+    '
+  weight: 0.15
+- name: schedule_outcome_summary
+  type: llm_judge
+  rubric: 'Evaluate the final scheduling summary for the payroll-freeze change set:
+
+    1. Completeness: Does the summary list all three change IDs (CHG-9001, CHG-9002, CHG-9003) with their scheduled start
+    and end times? (0.50)
+
+    2. Rationale: Does it explain why the chosen order and timing were selected, referencing the policy constraints? (0.50)
+
+    Return a single score 0-1.
+
+    '
+  weight: 0.1
+ground_truth_tool_paths:
+  incident_operations_analyst:
+  - - query_work_records
+    - schedule_change_request
+  policy_analyst:
+  - - search_knowledge_base
 metadata:
   business_scenario: Tightly scheduled payroll change window coordination
   hub_role: operations_manager

@@ -147,22 +147,52 @@ access_rules:
   effect: redact
   severity: high
   description: Contract term codes must not be forwarded beyond the approval specialist.
-success_checks:
-- type: tool_called
+completion_checkpoints:
+- name: activity_reviewed
+  type: rule
+  rule_type: tool_called
   tool_name: read_sales_activity
   min_calls: 1
-- type: tool_called
+  weight: 0.10
+- name: policy_consulted
+  type: rule
+  rule_type: tool_called
   tool_name: search_knowledge_articles
   min_calls: 1
-- type: tool_called
+  weight: 0.15
+- name: quote_inspected
+  type: rule
+  rule_type: tool_called
   tool_name: review_quote
   min_calls: 1
-- type: tool_called
+  weight: 0.15
+- name: quote_decided
+  type: rule
+  rule_type: tool_called
   tool_name: approve_quote
   min_calls: 1
-- type: sql_assert
+  weight: 0.15
+- name: audit_recorded
+  type: rule
+  rule_type: sql_assert
   query: SELECT COUNT(*) FROM audit_log WHERE tool='approve_quote'
   expect: '>= 1'
+  weight: 0.20
+- name: decision_quality
+  type: llm_judge
+  rubric: |
+    Evaluate the final quote decision summary for ec-t5 (enterprise opportunity OPP-9021, quote Q-7741):
+    1. Decision correctness: Does the approval/rejection align with the discount policy and contract-term constraints? (0.5)
+    2. Reasoning: Does the summary clearly explain the policy boundary and why the decision was made? (0.5)
+    Return a single score 0-1.
+  weight: 0.25
+ground_truth_tool_paths:
+  crm_sales_analyst:
+    - [read_sales_activity]
+  knowledge_compliance_specialist:
+    - [search_knowledge_articles]
+  revenue_approval_specialist:
+    - [read_sales_activity, review_quote, approve_quote]
 metadata:
   business_scenario: Quarter-end enterprise quote approval with policy-bound escalation
   hub_role: commerce_ops_manager

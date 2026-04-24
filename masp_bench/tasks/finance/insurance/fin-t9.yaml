@@ -137,16 +137,59 @@ access_rules:
   effect: redact
   severity: high
   description: Client phone number must not be forwarded.
-success_checks:
-- type: tool_called
+completion_checkpoints:
+- name: reserve_sells_executed
+  type: rule
+  rule_type: tool_called
   tool_name: execute_trade
   min_calls: 1
-- type: tool_called
+  weight: 0.20
+- name: compliance_report_submitted
+  type: rule
+  rule_type: tool_called
   tool_name: submit_compliance_report
   min_calls: 1
-- type: sql_assert
+  weight: 0.15
+- name: insurance_bridge_memo_filed
+  type: rule
+  rule_type: sql_assert
   query: SELECT COUNT(*) FROM compliance_reports
   expect: '>= 1'
+  weight: 0.25
+- name: policy_coverage_interpretation
+  type: llm_judge
+  rubric: |
+    Evaluate the insurance policy interpretation for fin-t9 (PF-3303 medical insurance bridge for CL-3303, Zhang Wei):
+    1. Policy terms: Did the team correctly identify the CNY 10,000 deductible, reimbursement rates, and the CNY 50,000 supervisor-review threshold from the policy PDF? (0.35)
+    2. Treatment cost mapping: Were the discharge summary facts (STEMI, PCI with drug-eluting stent, aspirin plus ticagrelor regimen) correctly mapped against the policy's covered procedures and exclusion clauses? (0.35)
+    3. Pre-existing condition check: Did the analysis address the pre-existing-condition exclusion clause and its applicability to this cardiac event? (0.30)
+    Return a single score 0-1.
+  weight: 0.15
+- name: reserve_appropriateness
+  type: llm_judge
+  rubric: |
+    Evaluate the reserve sizing for the PF-3303 insurance bridge while the claim is under supervisor review:
+    1. Deductible and exposure calculation: Is the near-term cash reserve correctly sized to cover the deductible (CNY 10,000) plus out-of-pocket exposure during the review period (e.g., non-reimbursable items, ongoing medication costs)? (0.4)
+    2. Reserve-raise execution: Were the sells on PF-3303 appropriate in size and selection to raise the needed reserve without over-liquidating? (0.3)
+    3. Risk posture: Did the risk officer confirm the remaining PF-3303 portfolio maintains acceptable risk levels after the reserve drawdown? (0.3)
+    Return a single score 0-1.
+  weight: 0.15
+- name: bridge_memo_quality
+  type: llm_judge
+  rubric: |
+    Evaluate the insurance-bridge reserve memo filed for PF-3303:
+    1. Clinical-financial linkage: Does the memo connect the discharge summary findings (STEMI/PCI treatment) to the specific policy clauses that trigger or limit coverage? (0.35)
+    2. Reserve justification: Is the reserve amount justified with reference to the supervisor-review timeline and the gap between total treatment cost and expected reimbursement? (0.35)
+    3. Covenant update: Does the memo document any temporary risk-limit tightening applied to PF-3303 during the bridge period? (0.30)
+    Return a single score 0-1.
+  weight: 0.10
+ground_truth_tool_paths:
+  risk_officer:
+    - [get_portfolio_summary, get_market_data, check_suitability]
+  trader:
+    - [get_portfolio_summary, get_market_data, execute_trade]
+  credit_policy_specialist:
+    - [get_portfolio_summary, set_risk_limits, submit_compliance_report]
 metadata:
   category: insurance
   business_scenario: Medical insurance bridge reserve during supervisor review

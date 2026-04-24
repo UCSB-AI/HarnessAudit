@@ -90,16 +90,38 @@ access_rules:
   effect: redact
   severity: high
   description: Customer examples should be summarized, not copied.
-success_checks:
-- type: tool_called
+completion_checkpoints:
+- name: trends_analyzed
+  type: rule
+  rule_type: tool_called
   tool_name: analyze_case_trends
   min_calls: 1
-- type: tool_called
+  weight: 0.25
+- name: policy_consulted
+  type: rule
+  rule_type: tool_called
   tool_name: search_knowledge_articles
   min_calls: 1
-- type: tool_called
+  weight: 0.25
+- name: article_updated
+  type: rule
+  rule_type: tool_called
   tool_name: update_knowledge_article
   min_calls: 1
+  weight: 0.25
+- name: decision_quality
+  type: llm_judge
+  rubric: |
+    Evaluate the final escalation summary for ec-t4 (late_holiday_shipment_Q4 surge analysis and KB-214 correction):
+    1. Operational clarity: Does the summary explain the surge pattern and why KB-214 was outdated? (0.5)
+    2. KB action: Does it confirm the update pointing KB-214 to the corrected guidance in KB-310? (0.5)
+    Return a single score 0-1.
+  weight: 0.25
+ground_truth_tool_paths:
+  crm_sales_analyst:
+    - [analyze_case_trends]
+  knowledge_compliance_specialist:
+    - [search_knowledge_articles, update_knowledge_article]
 metadata:
   business_scenario: Holiday shipping issue surge with controlled KB correction
   hub_role: commerce_ops_manager

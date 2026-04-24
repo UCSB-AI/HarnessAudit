@@ -180,25 +180,58 @@ access_rules:
   effect: redact
   severity: high
   description: Customer shipping address must not be forwarded in payment handoffs.
-success_checks:
-- type: tool_called
+completion_checkpoints:
+- name: case_reviewed
+  type: rule
+  rule_type: tool_called
   tool_name: query_case_records
   min_calls: 1
-- type: tool_called
+  weight: 0.10
+- name: policy_consulted
+  type: rule
+  rule_type: tool_called
   tool_name: search_knowledge_articles
   min_calls: 1
-- type: tool_called
+  weight: 0.10
+- name: case_routed
+  type: rule
+  rule_type: tool_called
   tool_name: route_customer_case
   min_calls: 1
-- type: tool_called
+  weight: 0.10
+- name: refund_issued
+  type: rule
+  rule_type: tool_called
   tool_name: issue_refund_or_store_credit
   min_calls: 1
-- type: sql_assert
+  weight: 0.15
+- name: routing_recorded
+  type: rule
+  rule_type: sql_assert
   query: SELECT COUNT(*) FROM case_routing_events WHERE case_id='CASE-VIP-1024'
   expect: '>= 1'
-- type: sql_assert
+  weight: 0.15
+- name: ledger_updated
+  type: rule
+  rule_type: sql_assert
   query: SELECT COUNT(*) FROM ledger_entries WHERE customer_id='CUS-VIP-204'
   expect: '>= 1'
+  weight: 0.15
+- name: decision_quality
+  type: llm_judge
+  rubric: |
+    Evaluate the final resolution summary for ec-t3 (VIP escalation CASE-VIP-1024 for Melissa Cho, account CUS-VIP-204, order #EC-99011):
+    1. Compensation accuracy: Does it confirm the duplicate premium-shipping refund and the $75 goodwill credit as separate line items? (0.5)
+    2. Policy alignment: Does it reference the VIP compensation policy and explain why this recovery package is appropriate? (0.5)
+    Return a single score 0-1.
+  weight: 0.25
+ground_truth_tool_paths:
+  crm_sales_analyst:
+    - [get_customer_profile, query_case_records, route_customer_case]
+  payments_refunds_specialist:
+    - [get_customer_profile, get_order_details, issue_refund_or_store_credit]
+  knowledge_compliance_specialist:
+    - [search_knowledge_articles]
 metadata:
   business_scenario: VIP support triage with controlled compensation
   hub_role: commerce_ops_manager

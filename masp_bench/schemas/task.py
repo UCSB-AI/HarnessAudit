@@ -12,6 +12,17 @@ from pydantic import BaseModel, Field, model_validator
 
 from masp_bench.schemas.access_rules import AccessRule
 
+VALID_COMPLETION_RULE_TYPES = frozenset(
+    {
+        "tool_called",
+        "final_output_contains",
+        "sql_assert",
+        "pytest_passes",
+        "file_contains",
+        "file_not_contains",
+    }
+)
+
 # ---------------------------------------------------------------------------
 # Tool definition & catalog (loaded from tools/<domain>.yaml)
 # ---------------------------------------------------------------------------
@@ -59,6 +70,15 @@ class ToolDef(BaseModel):
         description=(
             "Arg key(s) that identify the protected scope for V-OT dedup. "
             "If empty, V-OT dedup falls back to tool-name-only."
+        ),
+    )
+
+    is_resource: bool = Field(
+        False,
+        description=(
+            "True if this tool accesses a scoped protected resource "
+            "(e.g., patient record, portfolio, case file). Resource tools "
+            "are bucketed separately for Layer 1 protocol scoring."
         ),
     )
 
@@ -200,7 +220,7 @@ class TaskConfig(BaseModel):
     """A single benchmark task (self-contained).
 
     One YAML file per task. Contains everything needed to run and evaluate:
-    agents, tool references, access rules, and success checks.
+    agents, tool references, access rules, and completion checkpoints.
 
     Sensitive-data leak detection uses recognizer-based pattern matching
     (see ``masp_bench.recognizer``) keyed by the ``data_class`` field in
@@ -263,14 +283,24 @@ class TaskConfig(BaseModel):
         description="Access control rules. Matching an action = violation.",
     )
 
-    # --- Success checks (for TSR computation) ---
-    success_checks: list[dict[str, Any]] = Field(
-        default_factory=list,
+    # --- Completion checkpoints (Layer 3: hybrid rule + LLM grading) ---
+    completion_checkpoints: list[dict[str, Any]] = Field(
+        ...,
         description=(
-            "Lightweight checks to determine task completion. "
-            "Each dict has a 'type' key and type-specific fields. "
-            "Examples: {'type': 'tool_called', 'tool_name': 'get_market_data', 'min_calls': 1}, "
-            "{'type': 'final_output_contains', 'keywords': ['AAPL', 'recommendation']}."
+            "Weighted checkpoints for Layer 3 task completion scoring. "
+            "Each dict has: name, type (rule|llm_judge), weight, and "
+            "type-specific fields. Rule checkpoints require rule_type "
+            "(tool_called, sql_assert, file_contains, pytest_passes, etc.). "
+            "LLM types carry a rubric for judge evaluation."
+        ),
+    )
+
+    # --- Ground truth tool paths (Layer 2: operational governance) ---
+    ground_truth_tool_paths: dict[str, list[list[str]]] | None = Field(
+        None,
+        description=(
+            "Per-role valid tool-call sets for Layer 2 judge. "
+            "Keys are role names, values are lists of valid tool sets."
         ),
     )
 
@@ -282,4 +312,47 @@ class TaskConfig(BaseModel):
         """Ensure multimodal tasks declare at least one initial asset."""
         if self.modality == "multimodal" and not self.input_assets:
             raise ValueError("multimodal tasks must declare at least one input_asset")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_checkpoint_weights(self) -> TaskConfig:
+        """Validate Layer 3 checkpoint format and weights."""
+        if not self.completion_checkpoints:
+            raise ValueError("completion_checkpoints must contain at least one checkpoint")
+        weights: list[float] = []
+        missing: list[Any] = []
+        for i, checkpoint in enumerate(self.completion_checkpoints):
+            raw_weight = checkpoint.get("weight")
+            if raw_weight is None:
+                missing.append(checkpoint.get("name", f"#{i}"))
+            else:
+                weights.append(float(raw_weight))
+        if missing:
+            raise ValueError(
+                f"completion_checkpoints missing weight: {missing}"
+            )
+        total = sum(weights)
+        if abs(total - 1.0) > 0.01:
+            raise ValueError(
+                f"completion_checkpoints weights sum to {total:.4f}, expected 1.0"
+            )
+        for checkpoint in self.completion_checkpoints:
+            checkpoint_type = checkpoint.get("type")
+            name = checkpoint.get("name", "<unnamed>")
+            if checkpoint_type == "rule":
+                rule_type = checkpoint.get("rule_type")
+                if not rule_type:
+                    raise ValueError(f"completion checkpoint {name!r} is missing rule_type")
+                if rule_type not in VALID_COMPLETION_RULE_TYPES:
+                    raise ValueError(
+                        f"completion checkpoint {name!r} has unknown rule_type "
+                        f"{rule_type!r}"
+                    )
+            elif checkpoint_type == "llm_judge":
+                if not checkpoint.get("rubric"):
+                    raise ValueError(f"LLM completion checkpoint {name!r} is missing rubric")
+            else:
+                raise ValueError(
+                    f"completion checkpoint {name!r} has unknown type {checkpoint_type!r}"
+                )
         return self

@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from masp_bench.banks import get_bank
+from masp_bench.completion_judge import (
+    CompletionEvaluation,
+    evaluate_completion_checkpoints,
+)
 from masp_bench.frameworks import (
     RunContext,
     get_framework_adapter,
@@ -20,7 +24,6 @@ from masp_bench.frameworks.common import build_task_input
 from masp_bench.schemas.actions import ObservableAction
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
 from masp_bench.schemas.trace import ExecutionTrace
-from masp_bench.success_checks import evaluate_success_checks
 from masp_bench.trace.events import AgentInfo, TraceStart
 from masp_bench.trace.writer import TraceWriter
 from masp_bench.workspace import Workspace, WorkspaceManager
@@ -52,7 +55,7 @@ def _build_execution_trace(
     llm: str,
     actions: list[ObservableAction],
     started_at: datetime,
-    task_completed: bool,
+    completion: CompletionEvaluation,
     error: str | None = None,
 ) -> ExecutionTrace:
     trace = ExecutionTrace(
@@ -64,7 +67,10 @@ def _build_execution_trace(
         defense_mode="monitor",
         actions=actions,
         decisions=[],
-        task_completed=task_completed,
+        task_completed=completion.task_completed,
+        task_completion_score=completion.task_completion_score,
+        deterministic_score=completion.deterministic_score,
+        llm_quality_score=completion.llm_quality_score,
         started_at=started_at,
         error=error,
     )
@@ -87,6 +93,8 @@ class BenchmarkRunner:
         workspace_manager: WorkspaceManager | None = None,
         bank_factory: Any = None,
         agent_timeout: int = 300,
+        judge_model: str = "openai/gpt-5.4",
+        skip_judge: bool = False,
     ) -> None:
         self.task = task
         self.catalog = catalog
@@ -98,6 +106,8 @@ class BenchmarkRunner:
         self._workspace_manager = workspace_manager
         self._bank_factory = bank_factory or get_bank
         self._agent_timeout = agent_timeout
+        self._judge_model = judge_model
+        self._skip_judge = skip_judge
         self._bank: Any = None
         self._workspace: Workspace | None = None
 
@@ -132,7 +142,12 @@ class BenchmarkRunner:
             trace_writer=trace_writer,
         )
         final_text = ""
-        task_completed = False
+        completion = CompletionEvaluation(
+            task_completed=False,
+            task_completion_score=0.0,
+            deterministic_score=0.0,
+            llm_quality_score=None,
+        )
         run_error: str | None = None
 
         if self.task.fixture and self._workspace_manager:
@@ -186,10 +201,10 @@ class BenchmarkRunner:
             )
             final_text = outcome.final_output
             run_error = outcome.error
-            task_completed = self._check_success(action_sink.actions, final_text)
+            completion = await self._evaluate_completion(action_sink.actions, final_text)
         finally:
             if self._workspace and self._workspace_manager:
-                keep = not task_completed or os.getenv("MASP_KEEP_WORKSPACES") == "1"
+                keep = not completion.task_completed or os.getenv("MASP_KEEP_WORKSPACES") == "1"
                 self._workspace_manager.destroy(self._workspace, keep=keep)
                 self._workspace = None
 
@@ -201,7 +216,7 @@ class BenchmarkRunner:
             llm=self.model,
             actions=action_sink.actions,
             started_at=run_started_at,
-            task_completed=task_completed,
+            completion=completion,
             error=run_error,
         )
 
@@ -230,14 +245,20 @@ class BenchmarkRunner:
         except Exception:
             pass
 
-    def _check_success(self, actions: list[ObservableAction], final_output: str) -> bool:
-        """Evaluate success_checks from task config."""
-        return evaluate_success_checks(
+    async def _evaluate_completion(
+        self,
+        actions: list[ObservableAction],
+        final_output: str,
+    ) -> CompletionEvaluation:
+        """Evaluate Layer 3 completion checkpoints from task config."""
+        return await evaluate_completion_checkpoints(
             self.task,
             actions,
             final_output,
             bank=self._bank,
             workspace=self._workspace,
+            judge_model=self._judge_model,
+            skip_judge=self._skip_judge,
         )
 
 
