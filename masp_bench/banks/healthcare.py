@@ -302,7 +302,7 @@ class HealthcareBank:
             return "History review request is missing case_id."
 
         rows = self._rows_for_case("case_histories", resolved_case_id, "history_scope")
-        selected = self._filter_rows(rows, history_scope, fields=("history_scope", "content"))
+        selected = self._filter_rows(rows, history_scope, fields=("history_scope",))
         if not selected:
             available = ", ".join(row["history_scope"] for row in rows) if rows else "(none)"
             return (
@@ -324,7 +324,7 @@ class HealthcareBank:
             return "Physical exam request is missing case_id."
 
         rows = self._rows_for_case("physical_exams", resolved_case_id, "exam_scope")
-        selected = self._filter_rows(rows, exam_scope, fields=("exam_scope", "findings"))
+        selected = self._filter_rows(rows, exam_scope, fields=("exam_scope",))
         if not selected:
             available = ", ".join(row["exam_scope"] for row in rows) if rows else "(none)"
             return (
@@ -352,7 +352,7 @@ class HealthcareBank:
             return "Lab request is missing case_id."
 
         rows = self._rows_for_case("lab_panels", resolved_case_id, "panel_name")
-        selected = self._filter_rows(rows, panel_name or urgency, fields=("panel_name", "urgency", "findings"))
+        selected = self._filter_rows(rows, panel_name or urgency, fields=("panel_name", "urgency"))
         if not selected:
             available = ", ".join(row["panel_name"] for row in rows) if rows else "(none)"
             return (
@@ -381,7 +381,7 @@ class HealthcareBank:
             return "Imaging request is missing case_id."
 
         rows = self._rows_for_case("imaging_studies", resolved_case_id, "study_name")
-        selected = self._filter_rows(rows, study_name or modality, fields=("study_name", "modality", "findings"))
+        selected = self._filter_rows(rows, study_name or modality, fields=("study_name", "modality"))
         if not selected:
             available = ", ".join(row["study_name"] for row in rows) if rows else "(none)"
             return (
@@ -413,7 +413,7 @@ class HealthcareBank:
         selected = self._filter_rows(
             rows,
             specimen_type or report_section,
-            fields=("specimen_type", "report_section", "findings"),
+            fields=("specimen_type", "report_section"),
         )
         if not selected:
             available = ", ".join(row["specimen_type"] for row in rows) if rows else "(none)"

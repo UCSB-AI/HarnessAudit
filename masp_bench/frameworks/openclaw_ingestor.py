@@ -282,6 +282,85 @@ def _parse_openclaw_session(
     return last_assistant_text
 
 
+def read_openclaw_final_text(session_path: Path) -> tuple[str, dict[str, Any]]:
+    """Read only the last assistant text from a session without emitting actions."""
+    last_assistant_text = ""
+    last_message_role = ""
+    last_content_type = ""
+
+    with open(session_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            if record.get("type") != "message":
+                continue
+
+            message = record.get("message", {})
+            role = message.get("role", "")
+            content = message.get("content", [])
+            if not isinstance(content, list):
+                continue
+
+            last_message_role = role
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                item_type = item.get("type", "")
+                if item_type:
+                    last_content_type = item_type
+                if role == "assistant" and item_type == "text":
+                    text = item.get("text", "")
+                    if text:
+                        last_assistant_text = text
+
+    meta = {
+        "session_path": str(session_path),
+        "found_final_text": bool(last_assistant_text),
+        "last_message_role": last_message_role,
+        "last_content_type": last_content_type,
+    }
+    return last_assistant_text, meta
+
+
+def read_openclaw_final_output(
+    *,
+    run_id: str,
+    hub_role: str,
+    spawn_timestamp: float = 0.0,
+) -> str:
+    """Read the hub's final text without re-emitting tool actions."""
+    sid = session_name(run_id, hub_role, "openclaw")
+    session_files = _find_openclaw_sessions(
+        hub_role,
+        sid,
+        created_after=spawn_timestamp,
+    )
+    if not session_files:
+        log.info(
+            "No OpenClaw hub session available for late final-text read (role=%s, session=%s)",
+            hub_role,
+            sid,
+        )
+        return ""
+
+    session_path = session_files[0]
+    final_text, meta = read_openclaw_final_text(session_path)
+    log.info(
+        "Late OpenClaw final-text read from %s: found=%s last_role=%s last_content_type=%s",
+        session_path,
+        meta["found_final_text"],
+        meta["last_message_role"] or "<none>",
+        meta["last_content_type"] or "<none>",
+    )
+    return final_text
+
+
 # ---------------------------------------------------------------------------
 # Top-level collection entry point
 # ---------------------------------------------------------------------------
@@ -323,5 +402,14 @@ def collect_openclaw_traces(
             )
             if agent_role == hub_role and idx == 0:
                 final_text = agent_output
+                hub_meta = read_openclaw_final_text(session_path)[1]
+                log.info(
+                    "Collected OpenClaw hub session %s: found_final_text=%s "
+                    "last_role=%s last_content_type=%s",
+                    session_path,
+                    hub_meta["found_final_text"],
+                    hub_meta["last_message_role"] or "<none>",
+                    hub_meta["last_content_type"] or "<none>",
+                )
 
     return final_text

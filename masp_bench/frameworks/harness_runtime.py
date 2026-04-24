@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .harness_config_store import HarnessConfigStore
+from .openclaw_bootstrap import OpenClawBootstrapManager
 from .harness_profiles import session_name
 
 
@@ -28,7 +29,19 @@ class HarnessRuntime(Protocol):
     def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
         ...
 
+    def keepalive_enabled(self) -> bool:
+        ...
+
     def session_id(self, *, run_id: str, agent_role: str) -> str | None:
+        ...
+
+    def drain_targets(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
+        hub_role: str,
+    ) -> list[Path]:
         ...
 
     def collect_traces(
@@ -39,6 +52,16 @@ class HarnessRuntime(Protocol):
         catalog_names: set[str],
         all_roles: list[str],
         action_sink: Any,
+        hub_role: str,
+        spawn_timestamp: float,
+    ) -> str:
+        ...
+
+    def read_final_output(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
         hub_role: str,
         spawn_timestamp: float,
     ) -> str:
@@ -73,9 +96,22 @@ class ClaudeHarnessRuntime:
         del agent_role, cwd
         return {}
 
+    def keepalive_enabled(self) -> bool:
+        return False
+
     def session_id(self, *, run_id: str, agent_role: str) -> str | None:
         del run_id, agent_role
         return None
+
+    def drain_targets(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
+        hub_role: str,
+    ) -> list[Path]:
+        del run_id, worktrees, hub_role
+        return []
 
     def collect_traces(
         self,
@@ -99,6 +135,17 @@ class ClaudeHarnessRuntime:
             run_id=run_id,
             spawn_timestamp=spawn_timestamp,
         )
+
+    def read_final_output(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
+        hub_role: str,
+        spawn_timestamp: float,
+    ) -> str:
+        del run_id, worktrees, hub_role, spawn_timestamp
+        return ""
 
     def cleanup(self) -> None:
         return None
@@ -130,9 +177,22 @@ class CodexHarnessRuntime:
         del agent_role, cwd
         return {}
 
+    def keepalive_enabled(self) -> bool:
+        return False
+
     def session_id(self, *, run_id: str, agent_role: str) -> str | None:
         del run_id, agent_role
         return None
+
+    def drain_targets(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
+        hub_role: str,
+    ) -> list[Path]:
+        del run_id, worktrees, hub_role
+        return []
 
     def collect_traces(
         self,
@@ -157,6 +217,17 @@ class CodexHarnessRuntime:
             spawn_timestamp=spawn_timestamp,
         )
 
+    def read_final_output(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
+        hub_role: str,
+        spawn_timestamp: float,
+    ) -> str:
+        del run_id, worktrees, hub_role, spawn_timestamp
+        return ""
+
     def cleanup(self) -> None:
         return None
 
@@ -164,8 +235,10 @@ class CodexHarnessRuntime:
 @dataclass
 class OpenClawHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
+    _bootstrap_manager: OpenClawBootstrapManager = field(
+        default_factory=OpenClawBootstrapManager,
+    )
     name: str = "openclaw"
-    _bootstrap_backup: str | None = None
 
     def register_mcp(
         self,
@@ -186,14 +259,30 @@ class OpenClawHarnessRuntime:
 
     def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
         del agent_role, cwd
-        bootstrap = Path.home() / ".openclaw" / "workspace" / "BOOTSTRAP.md"
-        if bootstrap.exists():
-            self._bootstrap_backup = bootstrap.read_text()
-            bootstrap.unlink()
+        self._bootstrap_manager.suppress()
         return {}
+
+    def keepalive_enabled(self) -> bool:
+        # Keep the default conservative until real OpenClaw runs show that
+        # keepalive materially improves completion without stretching timeout
+        # semantics or masking stuck provider sessions.
+        return False
 
     def session_id(self, *, run_id: str, agent_role: str) -> str | None:
         return session_name(run_id, agent_role, self.name)
+
+    def drain_targets(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
+        hub_role: str,
+    ) -> list[Path]:
+        del worktrees
+        from .openclaw_ingestor import _OPENCLAW_SESSIONS_DIR
+
+        sid = session_name(run_id, hub_role, self.name)
+        return [_OPENCLAW_SESSIONS_DIR / f"{sid}.jsonl"]
 
     def collect_traces(
         self,
@@ -218,13 +307,26 @@ class OpenClawHarnessRuntime:
             spawn_timestamp=spawn_timestamp,
         )
 
+    def read_final_output(
+        self,
+        *,
+        run_id: str,
+        worktrees: dict[str, Path],
+        hub_role: str,
+        spawn_timestamp: float,
+    ) -> str:
+        del worktrees
+        from .openclaw_ingestor import read_openclaw_final_output
+
+        return read_openclaw_final_output(
+            run_id=run_id,
+            hub_role=hub_role,
+            spawn_timestamp=spawn_timestamp,
+        )
+
     def cleanup(self) -> None:
-        if self._bootstrap_backup is None:
-            return
-        bootstrap = Path.home() / ".openclaw" / "workspace" / "BOOTSTRAP.md"
-        bootstrap.parent.mkdir(parents=True, exist_ok=True)
-        bootstrap.write_text(self._bootstrap_backup)
-        self._bootstrap_backup = None
+        self._bootstrap_manager.restore()
+        return None
 
 
 def get_harness_runtime(

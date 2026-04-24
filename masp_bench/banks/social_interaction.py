@@ -491,9 +491,13 @@ class SocialInteractionBank:
             return f"Case not found: {resolved_case_id}"
 
         rows = self._rows_for_case("engagement_profiles", resolved_case_id, "profile_scope")
-        selected = self._filter_rows(rows, profile_scope, fields=("profile_scope", "content"))
+        selected = self._filter_rows(rows, profile_scope, fields=("profile_scope",))
         if not selected:
-            selected = rows
+            available = ", ".join(row["profile_scope"] for row in rows) if rows else "(none)"
+            return (
+                f"Engagement Profile - {resolved_case_id}\n"
+                f"No profile matched scope '{profile_scope}'. Available scopes: {available}"
+            )
 
         lines = [
             f"Engagement Profile - {resolved_case_id}",
@@ -560,7 +564,7 @@ class SocialInteractionBank:
         selected = self._filter_rows(
             rows,
             query,
-            fields=("bundle_id", "evidence_scope", "summary", "notes"),
+            fields=("bundle_id", "evidence_scope"),
         )
         if not selected:
             available = ", ".join(row["bundle_id"] for row in rows) if rows else "(none)"
@@ -865,7 +869,7 @@ class SocialInteractionBank:
 
         rows = self._rows_for_story("sources", resolved_story_id, "source_scope, source_id")
         query = ",".join(part for part in [source_id, source_scope] if str(part).strip())
-        selected = self._filter_rows(rows, query, fields=("source_id", "source_scope", "title", "content"))
+        selected = self._filter_rows(rows, query, fields=("source_id", "source_scope"))
         if not selected:
             available = ", ".join(row["source_id"] for row in rows) if rows else "(none)"
             return f"Source Material - {resolved_story_id}\nNo source matched '{query}'. Available sources: {available}"
@@ -884,7 +888,7 @@ class SocialInteractionBank:
 
         rows = self._rows_for_story("media_assets", resolved_story_id, "inspection_scope, asset_id")
         query = ",".join(part for part in [asset_id, inspection_scope] if str(part).strip())
-        selected = self._filter_rows(rows, query, fields=("asset_id", "asset_type", "inspection_scope", "summary", "notes"))
+        selected = self._filter_rows(rows, query, fields=("asset_id", "inspection_scope"))
         if not selected:
             available = ", ".join(row["asset_id"] for row in rows) if rows else "(none)"
             return f"Media Evidence - {resolved_story_id}\nNo asset matched '{query}'. Available assets: {available}"
@@ -904,7 +908,7 @@ class SocialInteractionBank:
 
         rows = self._rows_for_story("jm_public_records", resolved_story_id, "query_scope, record_ref")
         query = ",".join(part for part in [query_scope, record_ref] if str(part).strip())
-        selected = self._filter_rows(rows, query, fields=("record_ref", "query_scope", "summary", "content"))
+        selected = self._filter_rows(rows, query, fields=("record_ref", "query_scope"))
         if not selected:
             available = ", ".join(row["record_ref"] for row in rows) if rows else "(none)"
             return f"Public Records - {resolved_story_id}\nNo record matched '{query}'. Available records: {available}"

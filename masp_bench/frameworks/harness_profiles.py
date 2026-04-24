@@ -49,7 +49,6 @@ PROFILES: dict[str, HarnessProfile] = {
     "codex": HarnessProfile(
         name="codex",
         spawn_command=("codex", "exec"),
-        # Codex rmcp uses streamable-http (verified working in run 863f3867).
         mcp_transport="streamable-http",
         mcp_config_scope="global",
         run_id_slug="codex",

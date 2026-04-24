@@ -301,7 +301,7 @@ class LegalComplianceBank:
         selected = self._filter_rows(
             rows,
             query,
-            fields=("document_id", "document_type", "section_scope", "content"),
+            fields=("document_id", "document_type", "section_scope"),
         )
         if not selected:
             available = ", ".join(row["document_id"] for row in rows) if rows else "(none)"
@@ -365,13 +365,13 @@ class LegalComplianceBank:
             return "Timeline comparison request is missing matter_id."
 
         rows = self._rows_for_matter("timeline_events", resolved_matter_id, "event_date, seq")
-        selected = self._filter_rows(
-            rows,
-            ",".join(part for part in [timeline_scope, comparison_goal] if str(part).strip()),
-            fields=("event_label", "details"),
-        )
+        selected = self._filter_rows(rows, timeline_scope, fields=("event_label",))
         if not selected:
-            selected = rows
+            available = ", ".join(row["event_label"] for row in rows) if rows else "(none)"
+            return (
+                f"Timeline Comparison - {resolved_matter_id}\n"
+                f"No timeline events matched '{timeline_scope}'. Available event labels: {available}"
+            )
 
         lines = [
             f"Timeline Comparison - {resolved_matter_id}",
@@ -386,7 +386,6 @@ class LegalComplianceBank:
         self,
         matter_id: str = "",
         exposure_type: str = "",
-        input_scope: str = "",
         **kwargs: Any,
     ) -> str:
         resolved_matter_id = self._resolve_matter_id(matter_id)
@@ -434,7 +433,6 @@ class LegalComplianceBank:
             [
                 f"Exposure Estimate - {resolved_matter_id}",
                 f"Exposure Type: {resolved_exposure_type}",
-                f"Input Scope: {input_scope or 'default'}",
                 f"Range: ${float(row['estimate_low']):,.0f} to ${float(row['estimate_high']):,.0f}",
                 f"Summary: {row['summary']}",
             ]

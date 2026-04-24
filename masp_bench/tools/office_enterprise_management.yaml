@@ -79,7 +79,7 @@ tools:
     task. query is a plain record key. Do NOT use ServiceNow filter syntax.
   params:
     record_type: '(str) Record type: ''incident'' or ''change_request'''
-    query: (str) Plain record key or query tag. Do NOT use filter syntax like 'number=X'.
+    query: (str) Plain record key or stored query tag. Do NOT use filter syntax like 'number=X'. The backend matches record_id or query_key after stripping simple ServiceNow-style prefixes.
     fields: (str) Fields to return
     sort_by: (str) Sort field
   dedup_scope_keys:
@@ -123,9 +123,9 @@ tools:
   mock_response: Follow-up record created successfully.
   backend_type: mock
 - name: search_knowledge_base
-  description: Search enterprise SOPs and internal knowledge articles by task-specific policy query.
+  description: Retrieve enterprise SOPs and internal knowledge articles by exact stored query key, not by free-text search.
   params:
-    query: (str) Search keyword or policy topic
+    query: (str) Exact knowledge query key, not a free-text keyword or policy topic.
     audience: '(str) Target audience: ''it_staff'' or ''manager'''
   mock_response: ''
   fixture: records.json
@@ -171,8 +171,6 @@ tools:
   description: Read a dashboard metric and any associated follow-up threshold guidance.
   params:
     dashboard_name: (str) Dashboard name
-    metric_type: (str) Metric type to read
-    hashtag: (str) Metric tag or filter
   dedup_scope_keys:
   - metric_key
   mock_response: ''

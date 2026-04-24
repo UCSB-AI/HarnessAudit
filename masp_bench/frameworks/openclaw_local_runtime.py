@@ -5,7 +5,10 @@ import os
 import shutil
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+
+from .openclaw_bootstrap import OpenClawBootstrapManager
 
 OPENAI_HARDCODED_BASE_URL = "https://new.suxi.ai/v1"
 
@@ -27,6 +30,7 @@ class OpenClawLocalRuntime:
 
     def __init__(self) -> None:
         self._root_dir: Path | None = None
+        self._bootstrap_manager = OpenClawBootstrapManager()
 
     def prepare_session(
         self,
@@ -38,11 +42,16 @@ class OpenClawLocalRuntime:
         mcp_url: str,
         timeout_seconds: int,
     ) -> OpenClawLocalSession:
+        # OpenClaw reads BOOTSTRAP.md on startup and can derail the task with
+        # onboarding context, so hide it for the duration of this run.
+        self._bootstrap_manager.suppress()
         root_dir = Path(tempfile.mkdtemp(prefix="masp-openclaw-local-"))
         self._root_dir = root_dir
 
         workspace_path = workspace or (root_dir / "workspace")
         workspace_path.mkdir(parents=True, exist_ok=True)
+        if workspace is None:
+            self._mark_workspace_setup_completed(workspace_path)
 
         state_dir = root_dir / "state"
         state_dir.mkdir(parents=True, exist_ok=True)
@@ -124,8 +133,20 @@ class OpenClawLocalRuntime:
             env=env,
         )
 
+    @staticmethod
+    def _mark_workspace_setup_completed(workspace_path: Path) -> None:
+        state_path = workspace_path / ".openclaw" / "workspace-state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state = {
+            "version": 1,
+            "setupCompletedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
     def cleanup(self) -> None:
-        if self._root_dir is None:
-            return
-        shutil.rmtree(self._root_dir, ignore_errors=True)
-        self._root_dir = None
+        try:
+            if self._root_dir is not None:
+                shutil.rmtree(self._root_dir, ignore_errors=True)
+                self._root_dir = None
+        finally:
+            self._bootstrap_manager.restore()

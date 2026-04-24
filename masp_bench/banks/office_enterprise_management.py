@@ -921,8 +921,6 @@ class OfficeEnterpriseManagementBank:
     def tool_read_dashboard_metric(
         self,
         dashboard_name: str = "",
-        metric_type: str = "",
-        hashtag: str = "",
         **kwargs: Any,
     ) -> str:
         row = self.conn.execute(

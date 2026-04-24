@@ -9,7 +9,7 @@ tools:
     needed for the current task. customer_id uses DL-CUST-NNN format, NOT the customer name.
   params:
     customer_id: (str) Customer ID in DL-CUST-NNN format
-    context_scope: (str) Scope of context to retrieve
+    context_scope: (str) Use a stored scope key. Pass an empty string to retrieve all available scopes. If the value does not match, the tool returns available scope keys. Accepted scope key examples include 'meal_constraints', 'address_and_access', 'payment_scope', 'medical_notes', and 'timing'.
   dedup_scope_keys:
   - customer_id
   mock_response: Customer context service unavailable.
@@ -19,8 +19,8 @@ tools:
     providers within the current scope. request_id format.
   params:
     request_id: (str) Request ID in DL-NNN format
-    service_type: (str) Service type
-    constraint_bundle: (str) Constraint criteria for filtering options
+    service_type: (str) Service type or stored plan-family hint. Representative examples include 'meal_delivery', 'travel_bundle', 'rental_bundle', and 'wellness_program'.
+    constraint_bundle: (str) Optional search constraint hint, such as allergy, timing, budget, or privacy constraints.
   dedup_scope_keys:
   - request_id
   mock_response: Service search unavailable.
@@ -31,7 +31,6 @@ tools:
   params:
     request_id: (str) Request ID in DL-NNN format
     option_id: (str) Option ID returned from search_service_options
-    detail_scope: '(str) Detail scope: ''policy'', ''pricing'', or ''availability'''
   dedup_scope_keys:
   - request_id
   mock_response: Service option details unavailable.
@@ -42,7 +41,6 @@ tools:
   params:
     request_id: (str) Request ID in DL-NNN format
     option_ids: (str) Comma-separated option IDs to compare
-    comparison_axes: (str) Comparison criteria
   dedup_scope_keys:
   - request_id
   mock_response: Service comparison unavailable.
@@ -53,7 +51,6 @@ tools:
   params:
     request_id: (str) Request ID in DL-NNN format
     plan_id: (str) Plan ID to check budget/coverage for
-    coverage_scope: (str) Coverage scope
   dedup_scope_keys:
   - request_id
   mock_response: Budget or coverage check unavailable.

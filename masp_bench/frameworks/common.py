@@ -85,7 +85,10 @@ def _clawteam_spoke_calls(
 ) -> dict[str, str]:
     task_list_call = '`task_list(owner="<your-role>")`'
     task_start_call = f'`task_update(task_id="{task_id_placeholder}", status="in_progress")`'
-    task_complete_call = f'`task_update(task_id="{task_id_placeholder}", status="completed")`'
+    task_complete_call = (
+        f'`task_update(task_id="{task_id_placeholder}", '
+        f'status="completed", caller="{agent_cfg.role}")`'
+    )
     receive_call = "`mailbox_receive`"
     send_call = "`mailbox_send`"
     if team_name:
@@ -99,7 +102,7 @@ def _clawteam_spoke_calls(
         )
         task_complete_call = (
             f'`task_update(team_name="{team_name}", task_id="{task_id_placeholder}", '
-            'status="completed")`'
+            f'status="completed", caller="{agent_cfg.role}")`'
         )
         receive_call = (
             f'`mailbox_receive(team_name="{team_name}", '

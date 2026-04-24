@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,29 @@ log = logging.getLogger(__name__)
 
 DEFAULT_AGENT_TIMEOUT = 300
 SENTINEL_SUBJECT = "[SENTINEL] Mark completed when final output is ready"
+COMPLETED_DRAIN_SECONDS = 15.0
+TIMEOUT_DRAIN_SECONDS = 30.0
+INTERRUPTED_DRAIN_SECONDS = 8.0
+DRAIN_POLL_SECONDS = 1.0
+STABLE_SNAPSHOT_POLLS = 2
+
+
+@dataclass(slots=True)
+class TeamRuntimeWaitResult:
+    status: str
+    elapsed: float
+    total_tasks: int
+    completed_tasks: int
+    in_progress_tasks: int
+    pending_tasks: int
+    blocked_tasks: int
+    messages_received: int
+    sentinel_completed: bool
+
+
+def _status_value(status: Any) -> Any:
+    value = getattr(status, "value", None)
+    return status if value is None else value
 
 
 def _spoke_task_subject(agent_cfg: Any) -> str:
@@ -112,6 +136,8 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         self, ctx: RunContext, initial_input: str | list[dict[str, Any]]
     ) -> RunOutcome:
         try:
+            from clawteam.config import AgentProfile
+            from clawteam.spawn.profiles import apply_profile
             from clawteam.spawn.subprocess_backend import SubprocessBackend
             from clawteam.store.file import FileTaskStore
             from clawteam.team.manager import TeamManager
@@ -122,12 +148,11 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
         team_name = f"masp-{ctx.run_id}"
         self._current_run_id = ctx.run_id
+        run_model = getattr(ctx, "model", "")
         mcp_proc: subprocess.Popen | None = None
         bank_dump_path = Path(f"/tmp/masp_bank_{ctx.run_id}.db")
         final_text = ""
         worktrees: dict[str, Path] = {}
-        expected_agent_count = len(ctx.task.agents)
-
         try:
             # 0. Clean up stale team from previous failed run
             if TeamManager.team_exists(team_name):
@@ -226,6 +251,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 )
                 if runtime_session_id:
                     spawn_command.extend(["--session-id", runtime_session_id])
+                if run_model:
+                    # Reuse ClawTeam's own profile resolution semantics so the
+                    # benchmark model string controls the real CLI backbone
+                    # instead of only affecting trace metadata.
+                    spawn_command, spawn_env, _ = apply_profile(
+                        AgentProfile(model=run_model),
+                        command=spawn_command,
+                        env=spawn_env,
+                    )
                 result_msg = backend.spawn(
                     command=spawn_command,
                     agent_name=agent_cfg.role,
@@ -238,25 +272,25 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     skip_permissions=True,
                     system_prompt=sys_prompt,
                     is_leader=is_leader,
-                    keepalive=False,
+                    keepalive=self._runtime.keepalive_enabled(),
                 )
                 log.info("Spawned %s (%s): %s",
                          agent_cfg.role, self._profile.name, result_msg)
 
-            # 7. Wait for completion (sentinel task OR PID death OR timeout)
-            await self._wait_for_agents(
+            # 7. Wait for runtime convergence, then give artifacts time to settle
+            wait_result = await self._wait_for_team_runtime(
                 team_name,
-                expected_count=expected_agent_count,
+                hub_role=hub_role,
                 sentinel_task_id=sentinel_id,
                 timeout=self._agent_timeout,
             )
+            await self._drain_harness_outputs(
+                wait_result=wait_result,
+                worktrees=worktrees,
+                hub_role=hub_role,
+            )
 
-            # 8. Stop MCP server and restore Bank state
-            self._stop_mcp_server(mcp_proc)
-            mcp_proc = None
-            self._restore_bank(ctx.bank, bank_dump_path)
-
-            # 9. Collect traces (per-harness ingestor)
+            # 8. Collect traces (per-harness ingestor)
             catalog_names = {t.name for t in ctx.catalog.tools}
             all_roles = [a.role for a in all_agents]
 
@@ -268,8 +302,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 hub_role=hub_role,
                 spawn_timestamp=spawn_timestamp,
             )
+            final_text = await self._late_read_hub_final_text(
+                current_text=final_text,
+                wait_result=wait_result,
+                worktrees=worktrees,
+                hub_role=hub_role,
+                spawn_timestamp=spawn_timestamp,
+            )
 
-            # 10. Emit final user_output
+            # 9. Emit final user_output
             ctx.action_sink.emit_communication(
                 agent_id=hub_role,
                 agent_role=hub_role,
@@ -282,6 +323,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     "capture_mode": "jsonl_hub_final_text",
                 },
             )
+            self._restore_bank(ctx.bank, bank_dump_path)
 
             return RunOutcome(framework=self.framework_id, final_output=final_text)
 
@@ -410,59 +452,166 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def _wait_for_agents(
+    async def _wait_for_team_runtime(
         team_name: str,
         *,
-        expected_count: int,
+        hub_role: str,
         sentinel_task_id: str,
         timeout: int = DEFAULT_AGENT_TIMEOUT,
-    ) -> None:
-        """Wait until hub completes (sentinel task) or all PIDs die or timeout.
-
-        Priority order:
-        1. Sentinel task marked completed → wait 15s for spokes to wrap up → return
-        2. All agent PIDs dead → return immediately
-        3. Timeout → return
-        """
-        from clawteam.spawn.registry import get_registry, is_agent_alive
+    ) -> TeamRuntimeWaitResult:
+        """Wait for team runtime convergence using ClawTeam's waiter semantics."""
         from clawteam.store.file import FileTaskStore
+        from clawteam.team.mailbox import MailboxManager
         from clawteam.team.models import TaskStatus
+        from clawteam.team.waiter import TaskWaiter
+
+        task_store = FileTaskStore(team_name)
+        mailbox = MailboxManager(team_name)
+        waiter = TaskWaiter(
+            team_name=team_name,
+            agent_name=hub_role,
+            mailbox=mailbox,
+            task_store=task_store,
+            poll_interval=5.0,
+            timeout=timeout,
+        )
 
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + timeout
-        poll_interval = 5
+        wait_result = await loop.run_in_executor(None, waiter.wait)
 
-        # Initial grace period for agents to register
-        await asyncio.sleep(3)
+        sentinel_completed = False
+        try:
+            task_item = task_store.get(sentinel_task_id)
+            if task_item is not None:
+                sentinel_status = getattr(task_item, "status", None)
+                sentinel_value = _status_value(sentinel_status)
+                completed_value = _status_value(getattr(TaskStatus, "completed", None))
+                sentinel_completed = sentinel_value == completed_value
+        except Exception:
+            log.debug("Failed to inspect sentinel task %s", sentinel_task_id, exc_info=True)
 
-        while loop.time() < deadline:
-            # --- Check 1: sentinel task completed ---
-            try:
-                store = FileTaskStore(team_name)
-                task_item = store.get(sentinel_task_id)
-                if task_item and task_item.status == TaskStatus.completed:
-                    log.info("Sentinel task completed — hub finished, "
-                             "giving spokes 15s to wrap up")
-                    await asyncio.sleep(15)
-                    return
-            except Exception:
-                pass
+        return TeamRuntimeWaitResult(
+            status=wait_result.status,
+            elapsed=wait_result.elapsed,
+            total_tasks=wait_result.total,
+            completed_tasks=wait_result.completed,
+            in_progress_tasks=wait_result.in_progress,
+            pending_tasks=wait_result.pending,
+            blocked_tasks=wait_result.blocked,
+            messages_received=wait_result.messages_received,
+            sentinel_completed=sentinel_completed,
+        )
 
-            # --- Check 2: all PIDs dead ---
-            registry = get_registry(team_name)
-            if len(registry) >= expected_count:
-                all_dead = all(
-                    is_agent_alive(team_name, name) is not True
-                    for name in registry
+    async def _drain_harness_outputs(
+        self,
+        *,
+        wait_result: TeamRuntimeWaitResult,
+        worktrees: dict[str, Path],
+        hub_role: str,
+    ) -> None:
+        """Give raw harness artifacts a short bounded window to settle before collection."""
+        if wait_result.status == "completed":
+            drain_window = COMPLETED_DRAIN_SECONDS
+        elif wait_result.status == "timeout":
+            drain_window = TIMEOUT_DRAIN_SECONDS
+        else:
+            drain_window = INTERRUPTED_DRAIN_SECONDS
+
+        paths = self._runtime.drain_targets(
+            run_id=self._current_run_id,
+            worktrees=worktrees,
+            hub_role=hub_role,
+        )
+        if not paths:
+            return
+
+        deadline = asyncio.get_running_loop().time() + drain_window
+        last_snapshot: dict[str, tuple[int, int] | None] | None = None
+        stable_polls = 0
+
+        while True:
+            snapshot = self._artifact_snapshot(paths)
+            has_observed_artifact = any(value is not None for value in snapshot.values())
+            if last_snapshot is not None and snapshot == last_snapshot:
+                stable_polls += 1
+            else:
+                stable_polls = 0
+
+            if has_observed_artifact and stable_polls >= STABLE_SNAPSHOT_POLLS:
+                return
+            if asyncio.get_running_loop().time() >= deadline:
+                return
+
+            last_snapshot = snapshot
+            await asyncio.sleep(DRAIN_POLL_SECONDS)
+
+    @staticmethod
+    def _settle_window_seconds(wait_status: str) -> float:
+        if wait_status == "completed":
+            return COMPLETED_DRAIN_SECONDS
+        if wait_status == "timeout":
+            return TIMEOUT_DRAIN_SECONDS
+        return INTERRUPTED_DRAIN_SECONDS
+
+    async def _late_read_hub_final_text(
+        self,
+        *,
+        current_text: str,
+        wait_result: TeamRuntimeWaitResult,
+        worktrees: dict[str, Path],
+        hub_role: str,
+        spawn_timestamp: float,
+    ) -> str:
+        """Boundedly re-read the hub's final output when collection saw no text."""
+        if current_text:
+            return current_text
+
+        drain_paths = self._runtime.drain_targets(
+            run_id=self._current_run_id,
+            worktrees=worktrees,
+            hub_role=hub_role,
+        )
+        settle_window = self._settle_window_seconds(wait_result.status)
+        deadline = asyncio.get_running_loop().time() + settle_window
+        read_attempt = 0
+
+        while True:
+            read_attempt += 1
+            final_text = self._runtime.read_final_output(
+                run_id=self._current_run_id,
+                worktrees=worktrees,
+                hub_role=hub_role,
+                spawn_timestamp=spawn_timestamp,
+            )
+            if final_text:
+                log.info(
+                    "Recovered hub final text via bounded late-read after %d attempt(s)",
+                    read_attempt,
                 )
-                if all_dead:
-                    log.info("All %d agents have exited for team %s",
-                             len(registry), team_name)
-                    return
+                return final_text
 
-            await asyncio.sleep(poll_interval)
+            if not drain_paths:
+                return ""
+            if asyncio.get_running_loop().time() >= deadline:
+                log.info(
+                    "Hub final text remained empty after %.1fs settle window (status=%s)",
+                    settle_window,
+                    wait_result.status,
+                )
+                return ""
 
-        log.warning("Timeout (%ds) waiting for agents in team %s", timeout, team_name)
+            await asyncio.sleep(DRAIN_POLL_SECONDS)
+
+    @staticmethod
+    def _artifact_snapshot(paths: list[Path]) -> dict[str, tuple[int, int] | None]:
+        snapshot: dict[str, tuple[int, int] | None] = {}
+        for path in paths:
+            if path.exists():
+                stat = path.stat()
+                snapshot[str(path)] = (stat.st_size, stat.st_mtime_ns)
+            else:
+                snapshot[str(path)] = None
+        return snapshot
 
     # ------------------------------------------------------------------
     # Per-harness MCP registration
@@ -520,7 +669,18 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     def _cleanup_team(self, team_name: str) -> None:
         try:
             from clawteam.team.manager import TeamManager
+
             TeamManager.cleanup(team_name)
         except Exception:
             log.debug("ClawTeam cleanup failed for team %s", team_name, exc_info=True)
+
+        try:
+            from clawteam.team.models import get_data_dir
+
+            wt_root = get_data_dir() / "workspaces" / team_name
+            if wt_root.exists():
+                shutil.rmtree(wt_root, ignore_errors=True)
+        except Exception:
+            log.debug("Workspace cleanup failed for team %s", team_name, exc_info=True)
+
         self._runtime.cleanup()

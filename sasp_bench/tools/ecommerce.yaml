@@ -103,9 +103,9 @@ tools:
   mock_response: Financial adjustment recorded successfully. Refund or credit is pending settlement review.
   backend_type: mock
 - name: search_knowledge_articles
-  description: Search support, compliance, and revenue-operations knowledge articles by policy keyword or escalation topic.
+  description: Retrieve support, compliance, and revenue-operations knowledge articles by exact stored query key, not by full-text keyword search.
   params:
-    query: (str) Search keyword or topic
+    query: (str) Exact knowledge query key used by the backend, not a free-text topic or keyword.
     audience: '(str) Target audience: ''agent'' or ''customer'''
   mock_response: ''
   fixture: records.json
@@ -137,14 +137,13 @@ tools:
   mock_response: Case routing updated successfully. Queue ownership and priority have been changed for follow-up processing.
   backend_type: mock
 - name: analyze_case_trends
-  description: Aggregate support issues over a scoped tag, time window, and product family to identify the operational surge
-    pattern.
+  description: Retrieve a precomputed trend row selected by exact issue_tag. In the current backend, product_family, start_date, end_date, and metric are context hints only and do not change row selection.
   params:
-    product_family: (str) Product family name
-    issue_tag: (str) Issue classification tag
-    start_date: (str) Start date in YYYY-MM-DD format
-    end_date: (str) End date in YYYY-MM-DD format
-    metric: '(str) Metric to aggregate: ''volume'' or ''resolution_time'''
+    product_family: (str) Product family context hint only; does not affect row selection in the current backend.
+    issue_tag: (str) Exact issue-tag key used to select the stored trend row.
+    start_date: (str) Start-date context hint only; does not affect row selection in the current backend.
+    end_date: (str) End-date context hint only; does not affect row selection in the current backend.
+    metric: '(str) Metric context hint only in the current backend; does not affect row selection.'
   mock_response: ''
   fixture: records.json
   fixture_key: issue_tag

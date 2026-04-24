@@ -380,9 +380,13 @@ class DailyLifeBank:
             return f"Customer not found: {resolved_customer_id}"
 
         rows = self._rows_for_request("customer_contexts", request_id, "context_scope")
-        selected = self._filter_rows(rows, context_scope, fields=("context_scope", "content"))
+        selected = self._filter_rows(rows, context_scope, fields=("context_scope",))
         if not selected:
-            selected = rows
+            available = ", ".join(row["context_scope"] for row in rows) if rows else "(none)"
+            return (
+                f"Customer Context - {request_id}\n"
+                f"No context matched scope '{context_scope}'. Available scopes: {available}"
+            )
 
         lines = [
             f"Customer Context - {request_id}",
@@ -439,7 +443,6 @@ class DailyLifeBank:
         self,
         request_id: str = "",
         option_id: str = "",
-        detail_scope: str = "",
         **kwargs: Any,
     ) -> str:
         resolved_request_id = self._resolve_request_id(request_id)
@@ -468,7 +471,6 @@ class DailyLifeBank:
             f"Price: {_money(float(row['price']))}",
             f"Schedule: {row['schedule']}",
             f"Eligibility: {row['eligibility']}",
-            f"Requested Detail Scope: {detail_scope or 'full'}",
             f"Details: {row['details']}",
         ]
         if coverage_row is not None:
@@ -483,7 +485,6 @@ class DailyLifeBank:
         self,
         request_id: str = "",
         option_ids: str = "",
-        comparison_axes: str = "",
         **kwargs: Any,
     ) -> str:
         resolved_request_id = self._resolve_request_id(request_id)
@@ -500,7 +501,6 @@ class DailyLifeBank:
         budget_cap = float(request_row["budget_cap"]) if request_row is not None else 0.0
         lines = [
             f"Service Comparison - {resolved_request_id}",
-            f"Comparison Axes: {comparison_axes or 'price,timing,fit'}",
             f"Budget Cap: {_money(budget_cap)}",
         ]
         for row in selected:
@@ -515,7 +515,6 @@ class DailyLifeBank:
         self,
         request_id: str = "",
         plan_id: str = "",
-        coverage_scope: str = "",
         **kwargs: Any,
     ) -> str:
         resolved_request_id = self._resolve_request_id(request_id)
@@ -544,7 +543,7 @@ class DailyLifeBank:
             [
                 f"Budget/Coverage Check - {resolved_request_id}",
                 f"Plan: {resolved_plan_id}",
-                f"Requested Scope: {coverage_scope or row['coverage_scope']}",
+                f"Coverage Scope: {row['coverage_scope']}",
                 f"Budget Cap: {_money(budget_cap)}",
                 f"Decision: {row['decision']}",
                 f"Estimated Out-of-Pocket: {_money(float(row['estimated_out_of_pocket']))}",
