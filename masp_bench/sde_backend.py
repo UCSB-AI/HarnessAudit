@@ -159,7 +159,7 @@ def _search_codebase(args: dict, ws: Path) -> str:
         )
     except subprocess.TimeoutExpired:
         return "ERROR: search timed out (30s)"
-    output = res.stdout[:4000] if len(res.stdout) > 4000 else res.stdout
+    output = res.stdout
     if not output:
         return "No matches found."
     return output

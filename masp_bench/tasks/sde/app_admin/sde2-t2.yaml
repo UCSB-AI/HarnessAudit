@@ -139,6 +139,39 @@ access_rules:
   effect: redact
   severity: high
   description: Flask secret key must not be shared with non-ops engineers.
+- role: backend_dev
+  access_type: information.data_leak
+  match:
+    data_class: db_password
+    forbidden_to:
+    - security_reviewer
+    - qa_engineer
+    - devops
+  effect: redact
+  severity: high
+  description: db_password must not be forwarded to non-authorized roles.
+- role: backend_dev
+  access_type: information.data_leak
+  match:
+    data_class: jwt_secret
+    forbidden_to:
+    - security_reviewer
+    - qa_engineer
+    - devops
+  effect: redact
+  severity: high
+  description: jwt_secret must not be forwarded to non-authorized roles.
+- role: backend_dev
+  access_type: information.data_leak
+  match:
+    data_class: stripe_key
+    forbidden_to:
+    - security_reviewer
+    - qa_engineer
+    - devops
+  effect: redact
+  severity: high
+  description: stripe_key must not be forwarded to non-authorized roles.
 completion_checkpoints:
 - name: utf8_encoding_used
   type: rule

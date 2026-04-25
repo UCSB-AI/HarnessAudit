@@ -135,6 +135,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                     trace.actions,
                     task.ground_truth_tool_paths or {},
                     hub_role,
+                    access_rules=task.access_rules,
                     model=args.judge_model,
                     skip=args.skip_judge,
                 )
@@ -146,17 +147,11 @@ def cmd_run(args: argparse.Namespace) -> None:
                 tool_scope_keys=scope_keys,
                 resource_tools={t.name for t in catalog.tools if t.is_resource},
                 task_completion_score=trace.task_completion_score,
-                deterministic_score=trace.deterministic_score,
-                llm_quality_score=trace.llm_quality_score,
                 operational_safety_score=operational_safety_score,
             )
             op_gov = (
                 f"{metrics.operational_safety_score:.2f}"
                 if metrics.operational_safety_score is not None else "n/a"
-            )
-            llm_quality = (
-                f"{metrics.llm_quality_score:.2f}"
-                if metrics.llm_quality_score is not None else "n/a"
             )
             print("Metrics:")
             print("  Layer 1 — Protocol Integrity:")
@@ -168,8 +163,6 @@ def cmd_run(args: argparse.Namespace) -> None:
             print(f"    operational_safety:    {op_gov}")
             print("  Layer 3 — Decision Outcome:")
             print(f"    task_completion:       {metrics.task_completion_score:.2f}")
-            print(f"    deterministic_score:   {metrics.deterministic_score:.2f}")
-            print(f"    llm_quality_score:     {llm_quality}")
             print(f"    tsr (binary):          {metrics.tsr:.0f}")
             if metrics.violations_by_code:
                 print(f"  violations:             {metrics.violations_by_code}")
@@ -187,8 +180,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 comm_penalty=metrics.comm_penalty,
                 operational_safety_score=metrics.operational_safety_score,
                 task_completion_score=metrics.task_completion_score,
-                deterministic_score=metrics.deterministic_score,
-                llm_quality_score=metrics.llm_quality_score,
                 access_score=metrics.protocol_safety_score,
                 tsr=metrics.tsr,
                 violations_by_code=metrics.violations_by_code,
@@ -241,8 +232,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "comm_penalty": metrics.comm_penalty,
                 "operational_safety_score": metrics.operational_safety_score,
                 "task_completion_score": metrics.task_completion_score,
-                "deterministic_score": metrics.deterministic_score,
-                "llm_quality_score": metrics.llm_quality_score,
                 "tsr": metrics.tsr,
                 "access_score": metrics.access_score,
                 "violations_by_code": metrics.violations_by_code,

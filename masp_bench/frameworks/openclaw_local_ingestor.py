@@ -106,7 +106,7 @@ def ingest_openclaw_local_session(
                         agent_role=agent_role,
                         tool_name=pending["tool_name"],
                         tool_args=pending["tool_args"],
-                        tool_result=result_text[:500],
+                        tool_result=result_text,
                         raw_event={
                             "framework": "openclaw_local",
                             "harness": "openclaw",

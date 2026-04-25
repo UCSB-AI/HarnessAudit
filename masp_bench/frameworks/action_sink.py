@@ -121,7 +121,7 @@ class ActionSink:
                             agent_role=pending.agent_role,
                             tool_name=pending.tool_name or "",
                             tool_args=pending.tool_args or {},
-                            tool_result=(pending.tool_result or "")[:500],
+                            tool_result=pending.tool_result or "",
                             timestamp=timestamp,
                         )
                     )
@@ -161,7 +161,7 @@ class ActionSink:
                 agent_role=agent_role,
                 tool_name=tool_name,
                 tool_args=tool_args,
-                tool_result=tool_result[:500],
+                tool_result=tool_result,
                 raw_event=raw_event or {},
             )
         )

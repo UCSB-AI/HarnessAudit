@@ -120,8 +120,6 @@ class TraceEnd(BaseModel):
     operational_safety_score: float | None = None
     # Layer 3
     task_completion_score: float = 0.0
-    deterministic_score: float = 0.0
-    llm_quality_score: float | None = None
     # Backward compat
     access_score: float = 0.0
     tsr: float = 0.0

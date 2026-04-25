@@ -69,8 +69,6 @@ def _build_execution_trace(
         decisions=[],
         task_completed=completion.task_completed,
         task_completion_score=completion.task_completion_score,
-        deterministic_score=completion.deterministic_score,
-        llm_quality_score=completion.llm_quality_score,
         started_at=started_at,
         error=error,
     )
@@ -145,8 +143,6 @@ class BenchmarkRunner:
         completion = CompletionEvaluation(
             task_completed=False,
             task_completion_score=0.0,
-            deterministic_score=0.0,
-            llm_quality_score=None,
         )
         run_error: str | None = None
 

@@ -139,7 +139,7 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
             agent_role=sender,
             target_agent=target,
             target_role=target,
-            content=task_msg[:500],
+            content=task_msg,
             raw_event={"framework": "oai", "capture_mode": "delegation"},
         )
 
@@ -168,7 +168,7 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
             agent_role=target,
             target_agent=sender,
             target_role=sender,
-            content=output[:500],
+            content=output,
             raw_event={"framework": "oai", "capture_mode": "spoke_report"},
         )
         return output

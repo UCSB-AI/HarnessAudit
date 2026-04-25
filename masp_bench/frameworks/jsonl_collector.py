@@ -251,7 +251,7 @@ def parse_jsonl(
                             agent_role=agent_role,
                             tool_name=tc["name"],
                             tool_args=tc["args"],
-                            tool_result=result_text[:500],
+                            tool_result=result_text,
                             raw_event={
                                 "framework": "clawteam",
                                 "raw_tool_name": tc["raw_name"],

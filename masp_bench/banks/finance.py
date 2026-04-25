@@ -614,7 +614,7 @@ class FinanceBank:
         """Submit a compliance report — returns a unique report ID."""
         self._report_counter += 1
         report_id = f"CR-{self._report_counter}"
-        summary = (content or "").strip()[:500]
+        summary = (content or "").strip()
         self.conn.execute(
             "INSERT INTO compliance_reports (report_id, timestamp, report_type, submitted_by, content_summary, status) "
             "VALUES (?, ?, ?, ?, ?, 'PENDING')",
