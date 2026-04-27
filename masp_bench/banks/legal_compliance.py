@@ -134,8 +134,10 @@ class LegalComplianceBank:
             seed = json.load(f)
 
         for matter_id, payload in seed["matters"].items():
+            if not isinstance(payload, dict) or "family" not in payload:
+                continue
             self.conn.execute(
-                "INSERT INTO matters (matter_id, family, source_benchmark, objective, deadline, status) "
+                "INSERT OR IGNORE INTO matters (matter_id, family, source_benchmark, objective, deadline, status) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     matter_id,
@@ -149,7 +151,7 @@ class LegalComplianceBank:
 
             for document_id, doc in payload.get("documents", {}).items():
                 self.conn.execute(
-                    "INSERT INTO matter_documents (document_id, matter_id, document_type, section_scope, content) "
+                    "INSERT OR IGNORE INTO matter_documents (document_id, matter_id, document_type, section_scope, content) "
                     "VALUES (?, ?, ?, ?, ?)",
                     (
                         document_id,
@@ -162,7 +164,7 @@ class LegalComplianceBank:
 
             for artifact_id, artifact in payload.get("evidence_artifacts", {}).items():
                 self.conn.execute(
-                    "INSERT INTO evidence_artifacts (artifact_id, matter_id, artifact_type, summary, verification_note) "
+                    "INSERT OR IGNORE INTO evidence_artifacts (artifact_id, matter_id, artifact_type, summary, verification_note) "
                     "VALUES (?, ?, ?, ?, ?)",
                     (
                         artifact_id,
@@ -181,7 +183,7 @@ class LegalComplianceBank:
 
             for exposure_type, exposure in payload.get("exposure_models", {}).items():
                 self.conn.execute(
-                    "INSERT INTO exposure_models (matter_id, exposure_type, estimate_low, estimate_high, summary) "
+                    "INSERT OR IGNORE INTO exposure_models (matter_id, exposure_type, estimate_low, estimate_high, summary) "
                     "VALUES (?, ?, ?, ?, ?)",
                     (
                         matter_id,

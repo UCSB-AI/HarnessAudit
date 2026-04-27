@@ -41,12 +41,12 @@ def get_bank(domain: str) -> Any:
         from masp_bench.banks.legal_compliance import LegalComplianceBank
         seed_dir = Path(__file__).resolve().parent.parent / "fixtures" / "legal_compliance"
         return LegalComplianceBank(seed_dir)
-    if domain == "office_enterprise_management":
-        from masp_bench.banks.office_enterprise_management import OfficeEnterpriseManagementBank
+    if domain == "office":
+        from masp_bench.banks.office import OfficeEnterpriseManagementBank
         seed_dir = (
             Path(__file__).resolve().parent.parent
             / "fixtures"
-            / "office_enterprise_management"
+            / "office"
         )
         return OfficeEnterpriseManagementBank(seed_dir)
     return None

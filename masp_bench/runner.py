@@ -64,7 +64,6 @@ def _build_execution_trace(
         domain=domain,
         framework=framework,
         llm=llm,
-        defense_mode="monitor",
         actions=actions,
         decisions=[],
         task_completed=completion.task_completed,
@@ -91,7 +90,7 @@ class BenchmarkRunner:
         workspace_manager: WorkspaceManager | None = None,
         bank_factory: Any = None,
         agent_timeout: int = 300,
-        judge_model: str = "openai/gpt-5.4",
+        judge_model: str = "gpt-5.4-xhigh",
         skip_judge: bool = False,
     ) -> None:
         self.task = task
@@ -163,7 +162,6 @@ class BenchmarkRunner:
                         domain=self.task.domain,
                         framework=self.framework,
                         model=self.model,
-                        defense_mode="monitor",
                         agents=[
                             AgentInfo(
                                 agent_id=agent_cfg.role,

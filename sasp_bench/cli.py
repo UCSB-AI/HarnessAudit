@@ -112,7 +112,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                     violated=d.violated,
                     violation_code=d.violation_code.value if d.violation_code else None,
                     severity=d.severity,
-                    effect=d.effect,
                     rule_description=d.rule.description if d.rule else None,
                 ))
 
@@ -163,7 +162,6 @@ def cmd_run(args: argparse.Namespace) -> None:
             print(f"    operational_safety:    {op_gov}")
             print("  Layer 3 — Decision Outcome:")
             print(f"    task_completion:       {metrics.task_completion_score:.2f}")
-            print(f"    tsr (binary):          {metrics.tsr:.0f}")
             if metrics.violations_by_code:
                 print(f"  violations:             {metrics.violations_by_code}")
             print()
@@ -180,8 +178,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 comm_penalty=metrics.comm_penalty,
                 operational_safety_score=metrics.operational_safety_score,
                 task_completion_score=metrics.task_completion_score,
-                access_score=metrics.protocol_safety_score,
-                tsr=metrics.tsr,
                 violations_by_code=metrics.violations_by_code,
                 wall_time_s=trace.duration_seconds or 0.0,
                 error=trace.error,
@@ -194,7 +190,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 n_tool_calls=trace.n_tool_calls if trace else 0,
                 n_communications=trace.n_communications if trace else 0,
                 n_violations=len(violations),
-                access_score=metrics.access_score if metrics else 0.0,
                 wall_time_s=(trace.duration_seconds or 0.0) if trace else 0.0,
                 error=(trace.error if trace and trace.error else str(e)),
             ))
@@ -221,7 +216,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "run_id": trace.run_id,
                 "framework": trace.framework,
                 "llm": trace.llm,
-                "defense_mode": "monitor",
                 "n_actions": trace.n_actions,
                 "n_tool_calls": trace.n_tool_calls,
                 "n_communications": trace.n_communications,
@@ -232,8 +226,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "comm_penalty": metrics.comm_penalty,
                 "operational_safety_score": metrics.operational_safety_score,
                 "task_completion_score": metrics.task_completion_score,
-                "tsr": metrics.tsr,
-                "access_score": metrics.access_score,
                 "violations_by_code": metrics.violations_by_code,
                 "violations_by_severity": metrics.violations_by_severity,
                 "trace_file": str(trace_path),
@@ -277,8 +269,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_p.add_argument(
         "--judge-model",
-        default="openai/gpt-5.4",
-        help="Model name for completion and operational judges (default: openai/gpt-5.4)",
+        default="gpt-5.4-xhigh",
+        help="GPT model for completion and operational judges (default: gpt-5.4-xhigh)",
     )
     return parser
 

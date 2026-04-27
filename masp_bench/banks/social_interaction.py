@@ -272,8 +272,10 @@ class SocialInteractionBank:
             seed = json.load(f)
 
         for case_id, payload in seed["cases"].items():
+            if not isinstance(payload, dict) or "family" not in payload:
+                continue
             self.conn.execute(
-                "INSERT INTO cases (case_id, family, source_benchmark, objective, publication_threshold, anonymity_preference, budget_ceiling, status) "
+                "INSERT OR IGNORE INTO cases (case_id, family, source_benchmark, objective, publication_threshold, anonymity_preference, budget_ceiling, status) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     case_id,
@@ -289,13 +291,13 @@ class SocialInteractionBank:
 
             for profile_scope, content in payload.get("profiles", {}).items():
                 self.conn.execute(
-                    "INSERT INTO engagement_profiles (case_id, profile_scope, content) VALUES (?, ?, ?)",
+                    "INSERT OR IGNORE INTO engagement_profiles (case_id, profile_scope, content) VALUES (?, ?, ?)",
                     (case_id, profile_scope, content),
                 )
 
             for target_id, target in payload.get("targets", {}).items():
                 self.conn.execute(
-                    "INSERT INTO targets (target_id, case_id, target_type, title, platform, summary, status) "
+                    "INSERT OR IGNORE INTO targets (target_id, case_id, target_type, title, platform, summary, status) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         target_id,
@@ -310,7 +312,7 @@ class SocialInteractionBank:
 
             for bundle_id, bundle in payload.get("evidence_bundles", {}).items():
                 self.conn.execute(
-                    "INSERT INTO evidence_bundles (bundle_id, case_id, evidence_scope, summary, notes) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO evidence_bundles (bundle_id, case_id, evidence_scope, summary, notes) VALUES (?, ?, ?, ?, ?)",
                     (
                         bundle_id,
                         case_id,
@@ -333,8 +335,10 @@ class SocialInteractionBank:
             seed = json.load(f)
 
         for story_id, payload in seed.get("stories", {}).items():
+            if not isinstance(payload, dict) or "family" not in payload:
+                continue
             self.conn.execute(
-                "INSERT INTO stories (story_id, family, source_benchmark, objective, deadline, publication_standard, status) "
+                "INSERT OR IGNORE INTO stories (story_id, family, source_benchmark, objective, deadline, publication_standard, status) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     story_id,
@@ -349,20 +353,20 @@ class SocialInteractionBank:
 
             for source_id, source in payload.get("sources", {}).items():
                 self.conn.execute(
-                    "INSERT INTO sources (source_id, story_id, source_scope, title, content) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO sources (source_id, story_id, source_scope, title, content) VALUES (?, ?, ?, ?, ?)",
                     (source_id, story_id, source["source_scope"], source["title"], source["content"]),
                 )
 
             for asset_id, asset in payload.get("media_assets", {}).items():
                 self.conn.execute(
-                    "INSERT INTO media_assets (asset_id, story_id, asset_type, inspection_scope, summary, notes) "
+                    "INSERT OR IGNORE INTO media_assets (asset_id, story_id, asset_type, inspection_scope, summary, notes) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
                     (asset_id, story_id, asset["asset_type"], asset["inspection_scope"], asset["summary"], asset["notes"]),
                 )
 
             for record_ref, record in payload.get("public_records", {}).items():
                 self.conn.execute(
-                    "INSERT INTO jm_public_records (record_ref, story_id, query_scope, summary, content) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO jm_public_records (record_ref, story_id, query_scope, summary, content) VALUES (?, ?, ?, ?, ?)",
                     (record_ref, story_id, record["query_scope"], record["summary"], record["content"]),
                 )
 

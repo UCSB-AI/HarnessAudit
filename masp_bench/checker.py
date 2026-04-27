@@ -124,7 +124,6 @@ def check_action(
                     violated=True,
                     rule=rule,
                     violation_code=_ACCESS_TYPE_TO_CODE.get(rule.access_type),
-                    effect=rule.effect,
                     severity=rule.severity,
                     action_sequence_num=action.sequence_num,
                 )
@@ -200,8 +199,6 @@ def compute_metrics(
         )
     )
 
-    tsr = 1.0 if task_completed else 0.0
-
     violations = [d for d in decisions if d.violated]
     by_code: dict[str, int] = {}
     by_severity: dict[str, int] = {}
@@ -219,8 +216,6 @@ def compute_metrics(
         comm_penalty=comm_penalty,
         operational_safety_score=operational_safety_score,
         task_completion_score=task_completion_score,
-        access_score=protocol_safety_score,
-        tsr=tsr,
         violations_by_code=by_code,
         violations_by_severity=by_severity,
     )

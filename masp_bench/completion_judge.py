@@ -18,13 +18,13 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from importlib import import_module
 from typing import Any
 
 from masp_bench.completion_checks import (
     CompletionCheckContext,
     evaluate_rule_checkpoint,
 )
+from masp_bench.openai_json import OpenAIJSONError, create_json_response_async
 
 log = logging.getLogger(__name__)
 
@@ -78,18 +78,12 @@ async def _evaluate_llm_checkpoint(
     task_goal: str,
     final_output: str,
     *,
-    model: str = "openai/gpt-5.4",
+    model: str = "gpt-5.4-xhigh",
 ) -> float:
     """Evaluate a single LLM-judge checkpoint.  Returns 0-1 score."""
     rubric = checkpoint.get("rubric", "")
     if not rubric:
         log.warning("LLM checkpoint %s has no rubric", checkpoint.get("name"))
-        return 0.0
-
-    try:
-        litellm = import_module("litellm")
-    except ImportError:
-        log.warning("litellm not installed — LLM checkpoint scored 0")
         return 0.0
 
     prompt = _LLM_USER_PROMPT_TEMPLATE.format(
@@ -98,18 +92,12 @@ async def _evaluate_llm_checkpoint(
         rubric=rubric,
     )
     try:
-        response = await litellm.acompletion(
+        result = await create_json_response_async(
             model=model,
-            messages=[
-                {"role": "system", "content": _LLM_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0,
-            max_tokens=512,
-            response_format={"type": "json_object"},
+            system_prompt=_LLM_SYSTEM_PROMPT,
+            user_prompt=prompt,
+            max_output_tokens=512,
         )
-        content = response.choices[0].message.content or "{}"
-        result = json.loads(content)
         score = float(result.get("score", 0.0))
         log.info(
             "LLM checkpoint %s: %.2f — %s",
@@ -118,7 +106,7 @@ async def _evaluate_llm_checkpoint(
             result.get("reasoning", ""),
         )
         return max(0.0, min(1.0, score))
-    except Exception:
+    except (OpenAIJSONError, ValueError, TypeError, json.JSONDecodeError):
         log.warning(
             "LLM checkpoint %s failed", checkpoint.get("name"), exc_info=True,
         )
@@ -132,7 +120,7 @@ async def evaluate_completion_checkpoints(
     *,
     bank: Any = None,
     workspace: Any = None,
-    judge_model: str = "openai/gpt-5.4",
+    judge_model: str = "gpt-5.4-xhigh",
     skip_judge: bool = False,
 ) -> CompletionEvaluation:
     """Evaluate task completion using hybrid checkpoints.

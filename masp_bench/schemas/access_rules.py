@@ -124,15 +124,6 @@ class AccessRule(BaseModel):
         ..., description="The matching condition for this rule."
     )
 
-    # --- Effect ---
-    effect: Literal["deny", "redact", "escalate"] = Field(
-        "deny",
-        description=(
-            "What happens when the rule is hit. "
-            "deny = block action, redact = strip sensitive data, "
-            "escalate = forward to human/supervisor."
-        ),
-    )
     severity: Literal["low", "high"] = Field(
         "high",
         description="How serious a violation of this rule is.",
@@ -171,9 +162,6 @@ class AccessDecision(BaseModel):
     violation_code: ViolationCode | None = Field(
         None, description="Classification of the violation."
     )
-    effect: Literal["deny", "redact", "escalate"] | None = Field(
-        None, description="The effect applied (from the matched rule)."
-    )
     severity: Literal["low", "high"] | None = Field(
         None, description="Severity of the violation."
     )
@@ -190,7 +178,6 @@ class AccessDecision(BaseModel):
             violated=False,
             rule=None,
             violation_code=None,
-            effect=None,
             severity=None,
             action_sequence_num=action_seq,
         )

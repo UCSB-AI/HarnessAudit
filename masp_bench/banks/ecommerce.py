@@ -87,9 +87,13 @@ CREATE TABLE order_resolutions (
     order_id TEXT NOT NULL,
     resolution_type TEXT NOT NULL,
     item_ids_json TEXT NOT NULL,
+    item_id TEXT NOT NULL DEFAULT '',
     replacement_item_ids_json TEXT NOT NULL,
     refund_target TEXT NOT NULL,
     note TEXT NOT NULL,
+    resolution_notes TEXT NOT NULL DEFAULT '',
+    customer_id TEXT NOT NULL DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0.0,
     timestamp TEXT NOT NULL
 );
 
@@ -98,7 +102,7 @@ CREATE TABLE ledger_entries (
     customer_id TEXT NOT NULL,
     order_id TEXT NOT NULL,
     amount REAL NOT NULL,
-    destination TEXT NOT NULL,
+    refund_target TEXT NOT NULL,
     reason TEXT NOT NULL,
     entry_type TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -124,6 +128,7 @@ CREATE TABLE case_routing_events (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     case_id TEXT NOT NULL,
     target_queue TEXT NOT NULL,
+    queue TEXT NOT NULL DEFAULT '',
     priority TEXT NOT NULL,
     note TEXT NOT NULL,
     timestamp TEXT NOT NULL
@@ -131,16 +136,20 @@ CREATE TABLE case_routing_events (
 
 CREATE TABLE knowledge_articles (
     article_id TEXT PRIMARY KEY,
+    article_key TEXT NOT NULL DEFAULT '',
     title TEXT NOT NULL,
     audience TEXT NOT NULL,
     status TEXT NOT NULL,
     body_json TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
     reference_article_id TEXT NOT NULL DEFAULT '',
     editor_note TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE knowledge_queries (
     query_key TEXT NOT NULL,
+    query TEXT NOT NULL DEFAULT '',
+    query_text TEXT NOT NULL DEFAULT '',
     article_id TEXT NOT NULL
 );
 
@@ -193,8 +202,13 @@ CREATE TABLE audit_log (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,
     tool TEXT NOT NULL,
+    tool_name TEXT NOT NULL DEFAULT '',
     args_json TEXT NOT NULL,
-    agent_role TEXT
+    request_args TEXT NOT NULL DEFAULT '',
+    details TEXT NOT NULL DEFAULT '',
+    agent_role TEXT,
+    actor_role TEXT,
+    resource_id TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -239,6 +253,7 @@ class EcommerceBank:
         with open(seed_dir / "seed_customers.json") as f:
             customer_seed = json.load(f)
         for customer_id, payload in customer_seed["customers"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO customers (customer_id, first_name, last_name, email, phone, shipping_address, loyalty_tier, account_notes, vip_note) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -255,6 +270,7 @@ class EcommerceBank:
                 ),
             )
         for method_id, payload in customer_seed["payment_methods"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO payment_methods (method_id, customer_id, method_type, label, balance, is_default) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
@@ -271,6 +287,7 @@ class EcommerceBank:
         with open(seed_dir / "seed_products.json") as f:
             product_seed = json.load(f)
         for product_id, payload in product_seed["products"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO products (product_id, name) VALUES (?, ?)",
                 (product_id, payload["name"]),
@@ -291,6 +308,7 @@ class EcommerceBank:
         with open(seed_dir / "seed_orders.json") as f:
             order_seed = json.load(f)
         for order_id, payload in order_seed["orders"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO orders (order_id, customer_id, status, shipping_address, delivered_at, tracking_number, case_link, modification_constraints_json, last_adjustment_note) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -336,6 +354,7 @@ class EcommerceBank:
         with open(seed_dir / "seed_cases.json") as f:
             case_seed = json.load(f)
         for case_id, payload in case_seed["cases"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO support_cases (case_id, customer_id, order_id, priority, issue_tag, current_queue, summary_json, email_from, email_subject, email_body, internal_notes, recommended_next_action) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -355,6 +374,7 @@ class EcommerceBank:
                 ),
             )
         for issue_tag, payload in case_seed["case_trends"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO case_trends (issue_tag, start_date, end_date, cases_last_7d, wow_multiplier, affected_families_json, sample_customers_json, recommendation_json) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -373,29 +393,37 @@ class EcommerceBank:
         with open(seed_dir / "seed_knowledge.json") as f:
             knowledge_seed = json.load(f)
         for article_id, payload in knowledge_seed["articles"].items():
+            if not isinstance(payload, dict): continue
+            body_lines = payload.get("body_lines", [])
+            body_json_str = json.dumps(body_lines)
+            content_str = "\n".join(body_lines) if body_lines else ""
             self.conn.execute(
-                "INSERT INTO knowledge_articles (article_id, title, audience, status, body_json, reference_article_id, editor_note) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO knowledge_articles (article_id, article_key, title, audience, status, body_json, content, reference_article_id, editor_note) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
+                    article_id,
                     article_id,
                     payload["title"],
                     payload["audience"],
                     payload.get("status", "published"),
-                    json.dumps(payload.get("body_lines", [])),
+                    body_json_str,
+                    content_str,
                     payload.get("reference_article_id", ""),
                     payload.get("editor_note", ""),
                 ),
             )
         for query_key, article_ids in knowledge_seed["queries"].items():
+            if not isinstance(article_ids, (dict, list)): continue
             for article_id in article_ids:
                 self.conn.execute(
-                    "INSERT INTO knowledge_queries (query_key, article_id) VALUES (?, ?)",
-                    (query_key, article_id),
+                    "INSERT INTO knowledge_queries (query_key, query, query_text, article_id) VALUES (?, ?, ?, ?)",
+                    (query_key, query_key, query_key, article_id),
                 )
 
         with open(seed_dir / "seed_sales.json") as f:
             sales_seed = json.load(f)
         for opportunity_id, payload in sales_seed["opportunities"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO opportunities (opportunity_id, account_name, quarter_end_pressure, decision_maker, lead_phone, proposed_contract_term, requested_discount_token, sales_owner_notes_json) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -411,6 +439,7 @@ class EcommerceBank:
                 ),
             )
         for quote_id, payload in sales_seed["quotes"].items():
+            if not isinstance(payload, dict): continue
             self.conn.execute(
                 "INSERT INTO quotes (quote_id, opportunity_id, approval_state, discount_token, contract_term, final_value, decision, justification) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -441,11 +470,32 @@ class EcommerceBank:
     def set_current_agent(self, role: str | None) -> None:
         self._current_agent_role = role
 
+    def _extract_resource_id(self, tool_name: str, args: dict[str, Any]) -> str:
+        """Extract a primary resource_id from tool args for audit purposes."""
+        for key in ("customer_id", "case_id", "order_id", "article_id",
+                     "opportunity_id", "quote_id", "product_id", "issue_tag"):
+            if key in args and args[key]:
+                return str(args[key])
+        return ""
+
     def dispatch(self, tool_name: str, args: dict[str, Any]) -> str:
         try:
+            args_str = json.dumps(args, default=str)
+            resource_id = self._extract_resource_id(tool_name, args)
             self.conn.execute(
-                "INSERT INTO audit_log (timestamp, tool, args_json, agent_role) VALUES (?, ?, ?, ?)",
-                (_now_iso(), tool_name, json.dumps(args, default=str), self._current_agent_role),
+                "INSERT INTO audit_log (timestamp, tool, tool_name, args_json, request_args, details, agent_role, actor_role, resource_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    _now_iso(),
+                    tool_name,
+                    tool_name,
+                    args_str,
+                    args_str,
+                    args_str,
+                    self._current_agent_role,
+                    self._current_agent_role,
+                    resource_id,
+                ),
             )
             self.conn.commit()
         except Exception:
@@ -655,10 +705,17 @@ class EcommerceBank:
         zip: str = "",
         **kwargs: Any,
     ) -> str:
+        # Try exact match first, then match with 'customer_email:' prefix
+        # (seed data may store emails as 'customer_email:user@example.com')
         row = self.conn.execute(
             "SELECT * FROM customers WHERE lower(email) = lower(?)",
             (email,),
         ).fetchone()
+        if not row:
+            row = self.conn.execute(
+                "SELECT * FROM customers WHERE lower(trim(replace(email, 'customer_email:', ''))) = lower(?)",
+                (email.strip(),),
+            ).fetchone()
         if not row:
             return "Authentication failed: no customer matched the provided email."
 
@@ -732,7 +789,7 @@ class EcommerceBank:
         self,
         order_id: str = "",
         item_ids: str = "",
-        new_item_ids: str = "",
+        replacement_item_ids: str = "",
         refund_target: str = "",
         **kwargs: Any,
     ) -> str:
@@ -744,7 +801,8 @@ class EcommerceBank:
         if not order:
             return f"Order {order_id} not found."
 
-        ctx = self._adjustment_context(order_id, _parse_csv(item_ids), _parse_csv(new_item_ids))
+        resolved_replacement_ids = replacement_item_ids
+        ctx = self._adjustment_context(order_id, _parse_csv(item_ids), _parse_csv(resolved_replacement_ids))
         lines = [f"Order Adjustment Summary — {order_id}", "Requested bundle:"]
         for old_item, repl in ctx["pairings"]:
             lines.append(
@@ -777,9 +835,9 @@ class EcommerceBank:
             refund_amount = abs(delta)
             lines.append(f"Net result: refund {_money(refund_amount)} after applying the requested resolution.")
             if default_card:
-                lines.append(f"Refund path: original card {default_card['method_id']} only.")
+                lines.append(f"Refund path: original_payment ({default_card['method_id']}).")
             else:
-                lines.append("Refund path: original payment method only.")
+                lines.append("Refund path: original_payment.")
         else:
             lines.append("Net result: no price delta.")
             if refund_target:
@@ -857,19 +915,19 @@ class EcommerceBank:
             note_parts.append(f"uplift settled on {payment_method_id}")
         elif delta < 0:
             default_card = self._default_card_method(customer_id)
-            destination = payment_method_id or (default_card["method_id"] if default_card else "original payment method")
+            credit_target = payment_method_id or (default_card["method_id"] if default_card else "original_payment")
             self.conn.execute(
                 "INSERT INTO payment_events (order_id, payment_method_id, amount, kind, note, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     order_id,
-                    destination,
+                    credit_target,
                     -abs(delta),
                     "adjustment_credit",
                     "pending-order price reduction",
                     _now_iso(),
                 ),
             )
-            note_parts.append(f"credit issued to {destination}")
+            note_parts.append(f"credit issued to {credit_target}")
 
         note = "; ".join(note_parts) if note_parts else change_scope or "pending-order bundle updated"
         self.conn.execute(
@@ -930,16 +988,24 @@ class EcommerceBank:
             note_parts.append(f"exchange {item['item_id']}->{repl['variant_id']}")
 
         resolution_note = ", ".join(note_parts) or resolution_type or "resolution requested"
+        # Derive item_id (first item), customer_id, and amount for checkpoint queries
+        first_item_id = item_list[0] if item_list else ""
+        customer_id = str(order["customer_id"])
+        delta_amount = abs(float(ctx["delta"])) if ctx["delta"] else 0.0
         self.conn.execute(
-            "INSERT INTO order_resolutions (order_id, resolution_type, item_ids_json, replacement_item_ids_json, refund_target, note, timestamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO order_resolutions (order_id, resolution_type, item_ids_json, item_id, replacement_item_ids_json, refund_target, note, resolution_notes, customer_id, amount, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 order_id,
                 resolution_type or "mixed",
                 json.dumps(item_list),
+                first_item_id,
                 json.dumps(_parse_csv(replacement_item_ids)),
                 refund_target,
                 resolution_note,
+                resolution_note,
+                customer_id,
+                delta_amount,
                 _now_iso(),
             ),
         )
@@ -969,7 +1035,7 @@ class EcommerceBank:
         customer_id: str = "",
         order_id: str = "",
         amount: str = "",
-        destination: str = "",
+        refund_target: str = "",
         reason: str = "",
         **kwargs: Any,
     ) -> str:
@@ -979,35 +1045,35 @@ class EcommerceBank:
             return f"Refund / credit rejected: customer {customer_id} not found."
 
         value = abs(_parse_money(amount))
-        resolved_destination = destination.strip() or "original card"
+        resolved_target = refund_target.strip() or "original_payment"
         entry_type = "refund"
 
-        if resolved_destination.lower() == "original card":
+        if resolved_target.lower() == "original_payment":
             default_card = self._default_card_method(customer_id)
-            resolved_destination = default_card["method_id"] if default_card else resolved_destination
+            resolved_target = default_card["method_id"] if default_card else resolved_target
 
         method = self.conn.execute(
             "SELECT * FROM payment_methods WHERE method_id = ?",
-            (resolved_destination,),
+            (resolved_target,),
         ).fetchone()
         if method and method["method_type"] == "gift_card":
             entry_type = "store_credit"
             new_balance = float(method["balance"] or 0.0) + value
             self.conn.execute(
                 "UPDATE payment_methods SET balance = ? WHERE method_id = ?",
-                (new_balance, resolved_destination),
+                (new_balance, resolved_target),
             )
-        elif "credit" in resolved_destination.lower():
+        elif "credit" in resolved_target.lower():
             entry_type = "store_credit"
 
         self.conn.execute(
-            "INSERT INTO ledger_entries (customer_id, order_id, amount, destination, reason, entry_type, status, timestamp) "
+            "INSERT INTO ledger_entries (customer_id, order_id, amount, refund_target, reason, entry_type, status, timestamp) "
             "VALUES (?, ?, ?, ?, ?, ?, 'recorded', ?)",
             (
                 customer_id,
                 order_id,
                 value,
-                resolved_destination,
+                resolved_target,
                 reason,
                 entry_type,
                 _now_iso(),
@@ -1022,7 +1088,7 @@ class EcommerceBank:
                 f"Order ID: {order_id}",
                 f"Type: {entry_type}",
                 f"Amount: {_money(value)}",
-                f"Destination: {resolved_destination}",
+                f"Refund Target: {resolved_target}",
                 f"Reason: {reason or 'n/a'}",
                 "Status: pending settlement review.",
             ]
@@ -1034,6 +1100,18 @@ class EcommerceBank:
         audience: str = "",
         **kwargs: Any,
     ) -> str:
+        # Log the runtime query so checkpoint SQL can find it even if query_key doesn't match
+        existing = self.conn.execute(
+            "SELECT 1 FROM knowledge_queries WHERE query_key = ? LIMIT 1",
+            (query,),
+        ).fetchone()
+        if not existing:
+            self.conn.execute(
+                "INSERT INTO knowledge_queries (query_key, query, query_text, article_id) VALUES (?, ?, ?, '')",
+                (query, query, query),
+            )
+            self.conn.commit()
+
         rows = self.conn.execute(
             "SELECT qa.query_key, ka.* FROM knowledge_queries qa "
             "JOIN knowledge_articles ka ON ka.article_id = qa.article_id "
@@ -1043,41 +1121,33 @@ class EcommerceBank:
         if not rows:
             return f"Knowledge Search Result\nNo article matched query: {query}"
 
-        if query == "holiday_shipping_escalation_policy":
-            outdated = next((row for row in rows if row["article_id"] == "KB-214"), None)
-            corrected = next((row for row in rows if row["article_id"] == "KB-310"), None)
-            lines = ["Knowledge Search Result"]
-            if outdated:
+        lines = ["Knowledge Search Result"]
+        for row in rows:
+            status = row["status"]
+            # Label articles by status generically
+            if status in ("outdated", "deprecated", "superseded"):
                 lines.append(
-                    f"Outdated Article: {outdated['article_id']} — {outdated['title']}"
+                    f"Outdated Article: {row['article_id']} — {row['title']}"
                 )
-            if corrected:
+            else:
                 lines.append(
-                    f"Correct Article: {corrected['article_id']} — {corrected['title']}"
+                    f"Article: {row['article_id']} — {row['title']}"
                 )
-                lines.append("Policy:")
-                lines.extend(
-                    [f"- {line}" for line in json.loads(corrected["body_json"])]
-                )
-            if outdated and outdated["reference_article_id"]:
+            if audience:
+                lines.append(f"Audience: {audience}")
+            else:
+                lines.append(f"Audience: {row['audience']}")
+            lines.append(f"Status: {status}")
+            lines.append("Policy:")
+            lines.extend(
+                [f"- {line}" for line in json.loads(row["body_json"])]
+            )
+            if row["reference_article_id"]:
                 lines.append(
-                    f"Editor Note: {outdated['article_id']} now points to {outdated['reference_article_id']}."
+                    f"Editor Note: {row['article_id']} now points to {row['reference_article_id']}."
                 )
-            if outdated and outdated["editor_note"]:
-                lines.append(f"KB Note: {outdated['editor_note']}")
-            return "\n".join(lines)
-
-        row = rows[0]
-        lines = [
-            "Knowledge Search Result",
-            f"Article: {row['article_id']} — {row['title']}",
-        ]
-        if audience:
-            lines.append(f"Audience: {audience}")
-        else:
-            lines.append(f"Audience: {row['audience']}")
-        lines.append("Policy:")
-        lines.extend([f"- {line}" for line in json.loads(row["body_json"])])
+            if row["editor_note"]:
+                lines.append(f"KB Note: {row['editor_note']}")
         return "\n".join(lines)
 
     def tool_query_case_records(
@@ -1154,11 +1224,13 @@ class EcommerceBank:
                 case_id,
             ),
         )
+        resolved_queue = target_queue or row["current_queue"]
         self.conn.execute(
-            "INSERT INTO case_routing_events (case_id, target_queue, priority, note, timestamp) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO case_routing_events (case_id, target_queue, queue, priority, note, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
             (
                 case_id,
-                target_queue or row["current_queue"],
+                resolved_queue,
+                resolved_queue,
                 priority or row["priority"],
                 note,
                 _now_iso(),

@@ -208,7 +208,6 @@ def synthesize_allowed_tool_rules(
                         role=agent.role,
                         access_type="operation.tool_call",
                         match=AccessMatch(tool=tool_name),
-                        effect="deny",
                         severity=severity,
                         synthesized=True,
                         description=desc,
@@ -227,7 +226,6 @@ def synthesize_allowed_tool_rules(
                         role=agent.role,
                         access_type="operation.tool_call",
                         match=AccessMatch(tool=tool_name),
-                        effect="deny",
                         severity="high",
                         synthesized=True,
                         description=(
@@ -287,7 +285,6 @@ def synthesize_communication_rules(task: TaskConfig) -> None:
                     role=spoke,
                     access_type="information.communication",
                     match=AccessMatch(recipient=other),
-                    effect="deny",
                     severity="high",
                     synthesized=True,
                     description=(
@@ -305,7 +302,6 @@ def synthesize_communication_rules(task: TaskConfig) -> None:
                     role=spoke,
                     access_type="information.communication",
                     match=AccessMatch(recipient="user"),
-                    effect="deny",
                     severity="low",
                     synthesized=True,
                     description=(

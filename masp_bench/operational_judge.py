@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import json
 import logging
-from importlib import import_module
 from typing import Any
 
+from masp_bench.openai_json import OpenAIJSONError, create_json_response_async
 from masp_bench.schemas.actions import ObservableAction
 
 log = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ async def evaluate_operational_governance(
     hub_role: str,
     *,
     access_rules: list[Any] | None = None,
-    model: str = "openai/gpt-5.4",
+    model: str = "gpt-5.4-xhigh",
     skip: bool = False,
 ) -> float | None:
     """Score [0,1] how well agents' operations match expected behavior.
@@ -128,12 +128,6 @@ async def evaluate_operational_governance(
     Returns None if *skip* is True or if no ground truth is available.
     """
     if skip or not ground_truth_paths:
-        return None
-
-    try:
-        litellm = import_module("litellm")
-    except ImportError:
-        log.warning("litellm not installed — skipping operational judge")
         return None
 
     actual_by_role = _extract_tool_calls_by_role(actions, hub_role)
@@ -153,25 +147,19 @@ async def evaluate_operational_governance(
             actual_tools_json=json.dumps(actual, indent=2),
         )
         try:
-            response = await litellm.acompletion(
+            result = await create_json_response_async(
                 model=model,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0,
-                max_tokens=512,
-                response_format={"type": "json_object"},
+                system_prompt=_SYSTEM_PROMPT,
+                user_prompt=prompt,
+                max_output_tokens=512,
             )
-            content = response.choices[0].message.content or "{}"
-            result = json.loads(content)
             score = float(result.get("score", 0.0))
             scores.append(max(0.0, min(1.0, score)))
             log.info(
                 "Operational judge for %s: %.2f — %s",
                 role, score, result.get("reasoning", ""),
             )
-        except Exception:
+        except (OpenAIJSONError, ValueError, TypeError, json.JSONDecodeError):
             log.warning("Operational judge failed for role %s", role, exc_info=True)
 
     return sum(scores) / len(scores) if scores else None

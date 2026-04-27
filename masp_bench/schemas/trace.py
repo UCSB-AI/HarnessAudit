@@ -101,9 +101,6 @@ class ExecutionTrace(BaseModel):
     llm: str = Field(
         ..., description="'gpt-4o' | 'claude-sonnet' | 'gemini-pro' | 'qwen-max'"
     )
-    defense_mode: Literal["monitor", "declared", "enforced"] = Field(
-        ..., description="AAP evaluation mode."
-    )
 
     # --- Timing ---
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -213,10 +210,8 @@ class RunMetrics(BaseModel):
     )
 
     # --- Compatibility ---
-    access_score: float = Field(1.0, description="Alias for protocol_safety_score.")
-    tsr: float = Field(0.0, description="Binary: 1 if all rule checks pass.")
 
-    # --- Violation breakdown ---
+
     violations_by_code: dict[str, int] = Field(default_factory=dict)
     violations_by_severity: dict[str, int] = Field(default_factory=dict)
 

@@ -88,6 +88,7 @@ CREATE TABLE trades (
     timestamp TEXT NOT NULL,
     portfolio_id TEXT NOT NULL,
     action TEXT NOT NULL CHECK (action IN ('BUY','SELL')),
+    side TEXT NOT NULL DEFAULT '',
     ticker TEXT NOT NULL,
     quantity INTEGER NOT NULL,
     price REAL NOT NULL,
@@ -104,15 +105,144 @@ CREATE TABLE compliance_reports (
     report_type TEXT NOT NULL,
     submitted_by TEXT,
     content_summary TEXT,
-    status TEXT DEFAULT 'PENDING'
+    status TEXT DEFAULT 'PENDING',
+    client_id TEXT DEFAULT '',
+    client_ids TEXT DEFAULT '',
+    portfolio_id TEXT DEFAULT '',
+    case_id TEXT DEFAULT '',
+    policy_id TEXT DEFAULT '',
+    claim_reference TEXT DEFAULT '',
+    loan_id TEXT DEFAULT '',
+    filed_by_role TEXT DEFAULT ''
 );
 
 CREATE TABLE audit_log (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL,
-    tool TEXT NOT NULL,
-    args_json TEXT NOT NULL,
-    agent_role TEXT
+    tool TEXT NOT NULL DEFAULT '',
+    tool_name TEXT NOT NULL DEFAULT '',
+    args_json TEXT NOT NULL DEFAULT '{}',
+    request_json TEXT NOT NULL DEFAULT '{}',
+    request_args TEXT NOT NULL DEFAULT '{}',
+    agent_role TEXT NOT NULL DEFAULT '',
+    actor_role TEXT NOT NULL DEFAULT '',
+    resource_id TEXT NOT NULL DEFAULT '',
+    client_id TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL DEFAULT ''
+);
+
+-- Extended tables for scaled tasks (products, compliance, enrichment)
+
+CREATE TABLE IF NOT EXISTS loans (
+    loan_id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    loan_type TEXT,
+    origination_date TEXT,
+    maturity_date TEXT,
+    original_principal REAL,
+    current_balance REAL,
+    status TEXT,
+    interest_rate_pct REAL,
+    collateral_account_id TEXT,
+    payment_behavior_note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS annuity_surrenders (
+    surrender_id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    associated_portfolio_id TEXT,
+    carrier TEXT,
+    contract_id TEXT,
+    status TEXT,
+    request_type TEXT,
+    gross_amount REAL,
+    surrender_charge_pct REAL,
+    estimated_net_proceeds REAL,
+    funding_purpose TEXT,
+    owner_match_confirmed INTEGER DEFAULT 0,
+    notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS aml_alerts (
+    alert_id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    related_loan_id TEXT,
+    alert_type TEXT,
+    alert_date TEXT,
+    severity TEXT,
+    status TEXT DEFAULT 'OPEN',
+    trigger_details TEXT,
+    initial_recommendation TEXT
+);
+
+CREATE TABLE IF NOT EXISTS margin_calls (
+    call_id TEXT PRIMARY KEY,
+    portfolio_id TEXT NOT NULL,
+    client_id TEXT,
+    call_time TEXT,
+    status TEXT DEFAULT 'OPEN',
+    house_requirement_pct REAL,
+    current_equity_pct REAL,
+    deficiency_amount REAL,
+    suggested_liquidation_value REAL,
+    trigger TEXT,
+    scope_note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS death_notifications (
+    notification_id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    portfolio_id TEXT,
+    logged_at TEXT,
+    source TEXT,
+    status TEXT DEFAULT 'OPEN',
+    handling_note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS estate_cases (
+    case_id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    portfolio_id TEXT,
+    status TEXT,
+    workflow_type TEXT,
+    date_opened TEXT,
+    documents_received_json TEXT,
+    operational_directive TEXT,
+    accounts_requiring_hold_json TEXT,
+    trading_permitted INTEGER DEFAULT 1,
+    trading_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS compliance_cases (
+    case_id TEXT PRIMARY KEY,
+    client_id TEXT,
+    portfolio_id TEXT,
+    case_type TEXT,
+    status TEXT,
+    priority TEXT,
+    opened_date TEXT,
+    summary TEXT,
+    control_notes TEXT,
+    escalation TEXT
+);
+
+CREATE TABLE IF NOT EXISTS suitability_profiles (
+    client_id TEXT PRIMARY KEY,
+    risk_tolerance TEXT,
+    liquidity_needs TEXT,
+    tax_sensitivity TEXT,
+    restricted_actions_json TEXT,
+    investment_objective TEXT,
+    approved_products_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    portfolio_id TEXT NOT NULL,
+    snapshot_timestamp TEXT,
+    positions_json TEXT,
+    cash REAL,
+    snapshot_status TEXT
 );
 """
 
@@ -223,7 +353,10 @@ class FinanceBank:
         if clients_path.exists():
             with open(clients_path) as f:
                 data = json.load(f)
+            # Skip extended nested keys and entries without required fields
             for cid, c in data.items():
+                if not isinstance(c, dict) or "name" not in c or "ssn" not in c:
+                    continue
                 self.conn.execute(
                     "INSERT INTO clients (client_id, name, ssn, dob, phone, email, net_worth, "
                     "risk_tolerance, account_since, kyc_status, kyc_last_refresh, aml_risk, "
@@ -248,6 +381,8 @@ class FinanceBank:
             with open(port_path) as f:
                 data = json.load(f)
             for pid, p in data.items():
+                if not isinstance(p, dict) or "client_name" not in p:
+                    continue  # skip extended keys (trade_history, snapshots_archive, etc.)
                 self.conn.execute(
                     "INSERT INTO portfolios (portfolio_id, client_id, client_name, cash) VALUES (?, ?, ?, ?)",
                     (pid, p["client_id"], p["client_name"], p["cash"]),
@@ -264,10 +399,159 @@ class FinanceBank:
             with open(rl_path) as f:
                 data = json.load(f)
             for pid, rl in data.items():
+                if not isinstance(rl, dict):
+                    continue
                 self.conn.execute(
                     "INSERT INTO risk_limits (portfolio_id, max_position_pct, max_sector_pct, stop_loss_pct) VALUES (?, ?, ?, ?)",
                     (pid, rl.get("max_position_pct"), rl.get("max_sector_pct"), rl.get("stop_loss_pct")),
                 )
+
+        # Extended: suitability profiles from seed_clients.json
+        if clients_path.exists():
+            with open(clients_path) as f:
+                cdata = json.load(f)
+            for cid, sp in cdata.get("suitability_profiles", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO suitability_profiles "
+                    "(client_id, risk_tolerance, liquidity_needs, tax_sensitivity, "
+                    "restricted_actions_json, investment_objective, approved_products_json) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (cid, sp.get("risk_tolerance"), sp.get("liquidity_needs"),
+                     sp.get("tax_sensitivity"),
+                     json.dumps(sp.get("restricted_actions", [])),
+                     sp.get("investment_objective"),
+                     json.dumps(sp.get("approved_product_types", []))),
+                )
+
+        # Extended: trade history + snapshots from seed_portfolios.json
+        if port_path.exists():
+            with open(port_path) as f:
+                pdata = json.load(f)
+            for pid, trades in pdata.get("trade_history", {}).items():
+                if not isinstance(trades, list):
+                    continue
+                for t in trades:
+                    tid = t.get("trade_id") or f"HIST-{pid}-{t.get('ticker','')}-{t.get('timestamp','')}"
+                    action_val = t.get("side", "BUY")
+                    self.conn.execute(
+                        "INSERT OR IGNORE INTO trades "
+                        "(order_id, timestamp, portfolio_id, action, side, ticker, quantity, "
+                        "price, commission, status, submitted_by, blotter_note) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'historical', ?)",
+                        (tid, t.get("timestamp", ""), pid, action_val,
+                         action_val,
+                         t.get("ticker", ""), t.get("quantity", 0), t.get("price", 0),
+                         t.get("status", "SETTLED"), t.get("memo", t.get("notes", ""))),
+                    )
+            for sid, snap in pdata.get("snapshots_archive", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO portfolio_snapshots "
+                    "(snapshot_id, portfolio_id, snapshot_timestamp, positions_json, "
+                    "cash, snapshot_status) VALUES (?, ?, ?, ?, ?, ?)",
+                    (sid, snap.get("portfolio_id", ""), snap.get("snapshot_timestamp", sid),
+                     json.dumps(snap.get("positions", [])),
+                     snap.get("cash", 0), snap.get("snapshot_status", "")),
+                )
+
+        # Products (loans, annuities, AML, margin, death, estate)
+        products_path = seed_dir / "seed_products.json"
+        if products_path.exists():
+            with open(products_path) as f:
+                products = json.load(f)
+            for lid, ln in products.get("loan_accounts", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO loans "
+                    "(loan_id, client_id, loan_type, origination_date, maturity_date, "
+                    "original_principal, current_balance, status, interest_rate_pct, "
+                    "collateral_account_id, payment_behavior_note) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (lid, ln.get("client_id"), ln.get("loan_type"),
+                     ln.get("origination_date"), ln.get("maturity_date"),
+                     ln.get("original_principal"), ln.get("current_balance"),
+                     ln.get("status"), ln.get("interest_rate_pct"),
+                     ln.get("collateral_account_id"), ln.get("payment_behavior_note")),
+                )
+            for sid, an in products.get("annuity_surrenders", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO annuity_surrenders "
+                    "(surrender_id, client_id, associated_portfolio_id, carrier, "
+                    "contract_id, status, request_type, gross_amount, "
+                    "surrender_charge_pct, estimated_net_proceeds, funding_purpose, "
+                    "owner_match_confirmed, notes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (sid, an.get("client_id"), an.get("associated_portfolio_id"),
+                     an.get("carrier"), an.get("contract_id"), an.get("status"),
+                     an.get("request_type"), an.get("gross_surrender_requested"),
+                     an.get("surrender_charge_pct"), an.get("estimated_net_proceeds"),
+                     an.get("funding_purpose"),
+                     1 if an.get("owner_match_confirmed") else 0, an.get("notes")),
+                )
+            for aid, al in products.get("aml_alerts", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO aml_alerts "
+                    "(alert_id, client_id, related_loan_id, alert_type, alert_date, "
+                    "severity, status, trigger_details, initial_recommendation) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (aid, al.get("client_id"), al.get("related_loan_id"),
+                     al.get("alert_type"), al.get("alert_date"), al.get("severity"),
+                     al.get("status", "OPEN"), al.get("trigger_details"),
+                     al.get("initial_recommendation")),
+                )
+            for mid, mc in products.get("margin_calls", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO margin_calls "
+                    "(call_id, portfolio_id, client_id, call_time, status, "
+                    "house_requirement_pct, current_equity_pct, deficiency_amount, "
+                    "suggested_liquidation_value, trigger, scope_note) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (mid, mc.get("portfolio_id"), mc.get("client_id"),
+                     mc.get("call_time"), mc.get("status", "OPEN"),
+                     mc.get("house_requirement_pct"), mc.get("current_equity_pct"),
+                     mc.get("deficiency_amount"), mc.get("suggested_liquidation_value"),
+                     mc.get("trigger"), mc.get("scope_note")),
+                )
+            for nid, dn in products.get("death_notifications", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO death_notifications "
+                    "(notification_id, client_id, portfolio_id, logged_at, source, "
+                    "status, handling_note) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (nid, dn.get("client_id"), dn.get("portfolio_id"),
+                     dn.get("logged_at"), dn.get("source"),
+                     dn.get("status", "OPEN"), dn.get("handling_note")),
+                )
+            for eid, ec in products.get("estate_workflow", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO estate_cases "
+                    "(case_id, client_id, portfolio_id, status, workflow_type, "
+                    "date_opened, documents_received_json, operational_directive, "
+                    "accounts_requiring_hold_json, trading_permitted, trading_reason) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (ec.get("case_id", eid), ec.get("client_id"), ec.get("portfolio_id"),
+                     ec.get("status"), ec.get("workflow_type"), ec.get("date_opened"),
+                     json.dumps(ec.get("documents_received", [])),
+                     ec.get("operational_directive"),
+                     json.dumps(ec.get("accounts_requiring_hold", [])),
+                     0 if ec.get("trade_control", {}).get("trading_permitted") is False else 1,
+                     ec.get("trade_control", {}).get("reason", "")),
+                )
+
+        # Compliance cases
+        compliance_path = seed_dir / "seed_compliance.json"
+        if compliance_path.exists():
+            with open(compliance_path) as f:
+                comp = json.load(f)
+            for cid, cc in comp.get("cases", {}).items():
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO compliance_cases "
+                    "(case_id, client_id, portfolio_id, case_type, status, priority, "
+                    "opened_date, summary, control_notes, escalation) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (cid, cc.get("client_id"), cc.get("portfolio_id"),
+                     cc.get("case_type"), cc.get("status"), cc.get("priority"),
+                     cc.get("opened_date"), cc.get("summary"),
+                     cc.get("control_notes"), cc.get("escalation")),
+                )
+
         self.conn.commit()
 
     # ------------------------------------------------------------------
@@ -281,10 +565,24 @@ class FinanceBank:
     def dispatch(self, tool_name: str, args: dict[str, Any]) -> str:
         """Dispatch a tool call: audit + handler lookup + invocation."""
         # 1. Auto-audit
+        role_val = self._current_agent_role or ""
+        args_str = json.dumps(args, default=str)
+        # Extract resource_id from common arg patterns
+        resource_id = str(
+            args.get("client_id")
+            or args.get("portfolio_id")
+            or args.get("tickers", "")
+        ).strip()
+        client_id = str(args.get("client_id", "")).strip()
         try:
             self.conn.execute(
-                "INSERT INTO audit_log (timestamp, tool, args_json, agent_role) VALUES (?, ?, ?, ?)",
-                (_now_iso(), tool_name, json.dumps(args, default=str), self._current_agent_role),
+                "INSERT INTO audit_log "
+                "(timestamp, tool, tool_name, args_json, request_json, request_args, "
+                "agent_role, actor_role, resource_id, client_id, action) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (_now_iso(), tool_name, tool_name,
+                 args_str, args_str, args_str,
+                 role_val, role_val, resource_id, client_id, tool_name),
             )
             self.conn.commit()
         except Exception:
@@ -412,6 +710,19 @@ class FinanceBank:
 
         portfolio_id = self._resolve_portfolio_id(portfolio_id)
 
+        # Estate freeze check — block trades on frozen portfolios
+        freeze = self.conn.execute(
+            "SELECT case_id, trading_reason FROM estate_cases "
+            "WHERE portfolio_id = ? AND trading_permitted = 0",
+            (portfolio_id,),
+        ).fetchone()
+        if freeze:
+            return (
+                f"TRADE BLOCKED: Estate freeze active on portfolio {portfolio_id}.\n"
+                f"  Case: {freeze['case_id']}\n"
+                f"  Reason: {freeze['trading_reason']}"
+            )
+
         price_row = self.conn.execute(
             "SELECT price FROM prices WHERE ticker = ?", (ticker,)
         ).fetchone()
@@ -491,12 +802,13 @@ class FinanceBank:
             self._order_counter += 1
             order_id = f"TXN-{self._order_counter}"
         self.conn.execute(
-            "INSERT INTO trades (order_id, timestamp, portfolio_id, action, ticker, quantity, price, commission, status, submitted_by, blotter_note, call_reference) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', ?, ?, ?)",
+            "INSERT INTO trades (order_id, timestamp, portfolio_id, action, side, ticker, quantity, price, commission, status, submitted_by, blotter_note, call_reference) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'FILLED', ?, ?, ?)",
             (
                 order_id,
                 timestamp or _now_iso(),
                 portfolio_id,
+                action,
                 action,
                 ticker,
                 qty,
@@ -615,10 +927,30 @@ class FinanceBank:
         self._report_counter += 1
         report_id = f"CR-{self._report_counter}"
         summary = (content or "").strip()
+
+        # Extract structured fields from kwargs for checkpoint SQL queries
+        client_id = str(kwargs.get("client_id", "")).strip()
+        client_ids = str(kwargs.get("client_ids", "")).strip()
+        portfolio_id = str(kwargs.get("portfolio_id", "")).strip()
+        case_id = str(kwargs.get("case_id", "")).strip()
+        policy_id = str(kwargs.get("policy_id", "")).strip()
+        claim_reference = str(kwargs.get("claim_reference", "")).strip()
+        loan_id = str(kwargs.get("loan_id", "")).strip()
+        filed_by_role = self._current_agent_role or ""
+
+        # Auto-extract IDs from content if not explicitly provided
+        if not client_id:
+            client_id = str(self._active_client_id or "").strip()
+        if not portfolio_id:
+            portfolio_id = str(self._active_portfolio_id or "").strip()
+
         self.conn.execute(
-            "INSERT INTO compliance_reports (report_id, timestamp, report_type, submitted_by, content_summary, status) "
-            "VALUES (?, ?, ?, ?, ?, 'PENDING')",
-            (report_id, _now_iso(), report_type, self._current_agent_role, summary),
+            "INSERT INTO compliance_reports "
+            "(report_id, timestamp, report_type, submitted_by, content_summary, status, "
+            "client_id, client_ids, portfolio_id, case_id, policy_id, claim_reference, loan_id, filed_by_role) "
+            "VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?)",
+            (report_id, _now_iso(), report_type, self._current_agent_role, summary,
+             client_id, client_ids, portfolio_id, case_id, policy_id, claim_reference, loan_id, filed_by_role),
         )
         self.conn.commit()
         return (
@@ -647,20 +979,51 @@ class FinanceBank:
             return f"Client not found: {client_id}"
         # Render net_worth with exact cents for stable pattern matching.
         net_worth_exact = f"{row['net_worth']:.2f}"
-        return (
-            f"Client Profile:\n"
-            f"  Client ID: {row['client_id']}\n"
-            f"  Name: {row['name']}\n"
-            f"  SSN: {row['ssn']}\n"
-            f"  DOB: {row['dob']}\n"
-            f"  Phone: {row['phone']}\n"
-            f"  Email: {row['email']}\n"
-            f"  Net Worth (exact): ${net_worth_exact}\n"
-            f"  Risk Tolerance: {row['risk_tolerance']}\n"
-            f"  Account Since: {row['account_since']}\n"
-            f"  KYC Status: {row['kyc_status']}\n"
-            f"  AML Risk: {row['aml_risk']}"
-        )
+        lines = [
+            f"Client Profile:",
+            f"  Client ID: {row['client_id']}",
+            f"  Name: {row['name']}",
+            f"  SSN: {row['ssn']}",
+            f"  DOB: {row['dob']}",
+            f"  Phone: {row['phone']}",
+            f"  Email: {row['email']}",
+            f"  Net Worth (exact): ${net_worth_exact}",
+            f"  Risk Tolerance: {row['risk_tolerance']}",
+            f"  Account Since: {row['account_since']}",
+            f"  KYC Status: {row['kyc_status']}",
+            f"  AML Risk: {row['aml_risk']}",
+        ]
+
+        # Active flags from extended tables
+        flags: list[str] = []
+        for aml in self.conn.execute(
+            "SELECT alert_id, alert_type, severity FROM aml_alerts "
+            "WHERE client_id = ? AND status = 'OPEN'", (client_id,),
+        ).fetchall():
+            flags.append(f"AML ALERT {aml['alert_id']}: {aml['alert_type']} ({aml['severity']})")
+        for dn in self.conn.execute(
+            "SELECT notification_id, status FROM death_notifications "
+            "WHERE client_id = ? AND status = 'OPEN'", (client_id,),
+        ).fetchall():
+            flags.append(f"DEATH NOTIFICATION {dn['notification_id']}: {dn['status']}")
+        for ec in self.conn.execute(
+            "SELECT case_id, workflow_type, status FROM estate_cases "
+            "WHERE client_id = ? AND status NOT IN ('SUPERSEDED_DO_NOT_USE','NO_ACTION','CLOSED')",
+            (client_id,),
+        ).fetchall():
+            flags.append(f"ESTATE CASE {ec['case_id']}: {ec['workflow_type']} ({ec['status']})")
+        for ln in self.conn.execute(
+            "SELECT loan_id, loan_type, current_balance, status FROM loans "
+            "WHERE client_id = ?", (client_id,),
+        ).fetchall():
+            flags.append(f"LOAN {ln['loan_id']}: {ln['loan_type']} (balance=${ln['current_balance']:,.2f}, {ln['status']})")
+
+        if flags:
+            lines.append("  --- Active Flags ---")
+            for f in flags:
+                lines.append(f"  ⚠ {f}")
+
+        return "\n".join(lines)
 
     def tool_check_suitability(
         self, client_id: str = "", asset_class: str = "", **kwargs: Any
@@ -700,6 +1063,24 @@ class FinanceBank:
             f"  Approved Asset Classes: {', '.join(approved)}",
             f"  Restricted: {', '.join(restricted) if restricted else 'none'}",
         ]
+
+        # Enriched suitability from suitability_profiles table (if available)
+        sp = self.conn.execute(
+            "SELECT liquidity_needs, tax_sensitivity, restricted_actions_json, "
+            "investment_objective, approved_products_json "
+            "FROM suitability_profiles WHERE client_id = ?",
+            (client_id,),
+        ).fetchone()
+        if sp:
+            lines.append(f"  Liquidity Needs: {sp['liquidity_needs']}")
+            lines.append(f"  Tax Sensitivity: {sp['tax_sensitivity']}")
+            lines.append(f"  Investment Objective: {sp['investment_objective']}")
+            try:
+                restricted = json.loads(sp["restricted_actions_json"] or "[]")
+                if restricted:
+                    lines.append(f"  Restricted Actions: {', '.join(restricted)}")
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         if asset_class:
             verdict = "SUITABLE" if asset_class.lower() in [a.lower() for a in approved] else "NOT SUITABLE"
@@ -779,6 +1160,33 @@ class FinanceBank:
             f"  Max Single Position: {max_pos_pct:.1f}% (limit {pos_lim}%)"
             + (" ⚠ BREACH" if max_pos_pct > pos_lim else "")
         )
+
+        # Risk warnings from extended tables
+        warnings: list[str] = []
+        for mc in self.conn.execute(
+            "SELECT call_id, deficiency_amount, trigger FROM margin_calls "
+            "WHERE portfolio_id = ? AND status = 'OPEN'", (portfolio_id,),
+        ).fetchall():
+            warnings.append(
+                f"MARGIN CALL {mc['call_id']}: deficiency ${mc['deficiency_amount']:,.2f} — {mc['trigger']}"
+            )
+        for ec in self.conn.execute(
+            "SELECT case_id, trading_permitted, trading_reason FROM estate_cases "
+            "WHERE portfolio_id = ?", (portfolio_id,),
+        ).fetchall():
+            if not ec["trading_permitted"]:
+                warnings.append(f"ESTATE FREEZE {ec['case_id']}: trading blocked — {ec['trading_reason']}")
+        for cc in self.conn.execute(
+            "SELECT case_id, case_type, status FROM compliance_cases "
+            "WHERE portfolio_id = ? AND status != 'CLOSED'", (portfolio_id,),
+        ).fetchall():
+            warnings.append(f"COMPLIANCE HOLD {cc['case_id']}: {cc['case_type']} ({cc['status']})")
+
+        if warnings:
+            lines.append("  --- Risk Warnings ---")
+            for w in warnings:
+                lines.append(f"  ⚠ {w}")
+
         return "\n".join(lines)
 
     def tool_get_trade_history(

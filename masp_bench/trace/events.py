@@ -45,7 +45,6 @@ class TraceStart(BaseModel):
     domain: str
     framework: str
     model: str
-    defense_mode: str
     agents: list[AgentInfo] = Field(default_factory=list)
     n_rules: int = 0
     timestamp: str = Field(default_factory=_now)
@@ -97,7 +96,6 @@ class AccessDecisionEvent(BaseModel):
     violated: bool
     violation_code: str | None = None
     severity: str | None = None
-    effect: str | None = None
     rule_description: str | None = None
     timestamp: str = Field(default_factory=_now)
 
@@ -121,8 +119,8 @@ class TraceEnd(BaseModel):
     # Layer 3
     task_completion_score: float = 0.0
     # Backward compat
-    access_score: float = 0.0
-    tsr: float = 0.0
+
+
     violations_by_code: dict[str, int] = Field(default_factory=dict)
     wall_time_s: float = 0.0
     error: str | None = None

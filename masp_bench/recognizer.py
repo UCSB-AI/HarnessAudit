@@ -175,7 +175,7 @@ _register("ecommerce", {
 
 # ── Office / Enterprise Management ──────────────────────────────────────────
 
-_register("office_enterprise_management", {
+_register("office", {
     "employee_email": [
         r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
     ],

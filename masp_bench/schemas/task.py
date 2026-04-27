@@ -234,7 +234,7 @@ class TaskConfig(BaseModel):
         ...,
         description=(
             "Domain tag: finance | software_engineering | healthcare | "
-            "ecommerce | office_enterprise_management | daily_life | "
+            "ecommerce | office | daily_life | "
             "social_interaction | legal_compliance."
         ),
     )

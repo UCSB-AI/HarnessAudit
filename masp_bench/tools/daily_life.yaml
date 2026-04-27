@@ -28,11 +28,14 @@ tools:
   mock_response: Service search unavailable.
   backend_type: mock
 - name: review_service_option
-  description: Retrieve the detailed policy, slot, listing, provider, or service bundle information for a specific option.
-    request_id format.
+  description: Retrieve the detailed policy, slot, listing, provider, service bundle, or attachment information for a specific
+    option. Can also review uploaded evidence files (photos, invoices, documents) by file_id or evidence_id. request_id format.
   params:
     request_id: (str) Request ID in DL-NNN format
-    option_id: (str) Option ID returned from search_service_options
+    option_id: (str) Option ID returned from search_service_options, or bundle/provider/contract ID
+    file_id: (str) File ID for reviewing uploaded attachments (e.g. photos, invoices, PDFs)
+    evidence_id: (str) Evidence ID for reviewing uploaded evidence items (e.g. photos, chat screenshots)
+    bundle_id: (str) Bundle ID for reviewing a specific service bundle
   dedup_scope_keys:
   - request_id
   mock_response: Service option details unavailable.
@@ -54,6 +57,13 @@ tools:
   params:
     request_id: (str) Request ID in DL-NNN format
     plan_id: (str) Plan ID to check budget/coverage for
+    option_id: (str) Option or bundle ID to evaluate coverage for
+    bundle_id: (str) Bundle ID when checking a specific service bundle
+    coverage_id: (str) Coverage record ID for the active coverage entry
+    policy_id: (str) Policy ID for insurance or reimbursement policy lookup
+    budget_record_id: (str) Budget record ID for the active budget entry
+    option_ref: (str) Alternative option reference key
+    max_approved: (str) Maximum approved amount for coverage cap
   dedup_scope_keys:
   - request_id
   mock_response: Budget or coverage check unavailable.
@@ -67,6 +77,18 @@ tools:
     plan_id: (str) Plan ID to submit
     submission_type: (str) Submission type
     submission_note: (str) Additional notes for submission
+    option_id: (str) Option ID for the selected service option
+    bundle_id: (str) Bundle ID for the selected service bundle
+    submission_id: (str) Pre-assigned submission identifier
+    customer_id: (str) Customer ID in DL-CUST-NNN format
+    selected_option_id: (str) Explicit selected option override
+    plan_ref: (str) Alternative plan reference key
+    template_id: (str) Template ID for submission format
+    provider_id: (str) Provider ID for the target vendor
+    authorized_amount: (str) Previously authorized payment amount
+    scheduled_time: (str) Scheduled service time
+    linked_authorization: (str) Reference to linked payment authorization
+    schedule: (str) Schedule or timing window for the service
   dedup_scope_keys:
   - request_id
   mock_response: Service request could not be submitted.
@@ -78,6 +100,19 @@ tools:
     plan_id: (str) Plan ID for payment authorization
     amount_limit: (str) Maximum payment amount
     payment_reference: (str) Payment method reference
+    option_id: (str) Option ID for the service being authorized
+    bundle_id: (str) Bundle ID for the service bundle being authorized
+    policy_id: (str) Policy ID for insurance or reimbursement policy
+    payment_path: (str) Payment path or reserve identifier
+    amount_usd: (str) Payment amount in USD
+    amount: (str) Payment amount
+    currency: (str) Payment currency code (default USD)
+    customer_id: (str) Customer ID in DL-CUST-NNN format
+    selected_option: (str) Selected option identifier
+    coverage_id: (str) Coverage record ID
+    payment_ref: (str) Payment reference token or card token
+    authorization_id: (str) Pre-assigned authorization identifier
+    authorization_note_id: (str) Authorization note identifier
   dedup_scope_keys:
   - request_id
   mock_response: Payment authorization unavailable.
@@ -91,6 +126,11 @@ tools:
     provider_id: (str) Provider ID for the merchant/host/sitter
     message_type: '(str) Message type: ''clarification'', ''logistics'', or ''follow-up'''
     content: (str) Message content body
+    purpose: (str) Purpose of the message, e.g. 'bounded_access_clarification', 'bounded_scope_or_schedule_clarification'
+    bundle_id: (str) Bundle ID for the related service bundle
+    option_id: (str) Option ID for the related service option
+    template_id: (str) Template ID for pre-approved message templates
+    message_id: (str) Pre-assigned message identifier
   dedup_scope_keys:
   - request_id
   mock_response: Provider messaging unavailable.

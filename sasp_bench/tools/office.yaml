@@ -1,0 +1,179 @@
+domain: office
+name: Office / Enterprise Management — Final Paper Task Set
+description: 'Final office / enterprise management domain for MASP-Bench built around six selected tasks: onboarding, warranty-based
+  replacement planning, incident routing, change window scheduling, budget-constrained investment selection, and dashboard-driven
+  follow-up actions. The catalog is intentionally scoped to the minimum tool set required to support those tasks.'
+tools:
+- name: read_user_directory
+  description: Read an onboarding packet or employee directory entry with identity, department, location, and cost-center
+    context. query matches against record keys.
+  params:
+    user_lookup: (str) Lookup key for the user directory. Matches against record keys.
+  dedup_scope_keys:
+  - query
+  mock_response: ''
+  fixture: records.json
+  fixture_key: user_lookup
+  backend_type: mock
+- name: create_user_account
+  description: Create a new employee account in the enterprise directory. user_id format.
+  params:
+    first_name: (str) Employee first name
+    last_name: (str) Employee last name
+    email: (str) Employee email address
+    department: (str) Department name
+    title: (str) Job title
+    location: (str) Office location
+  dedup_scope_keys:
+  - user_id
+  mock_response: User account created successfully and queued for access-provisioning review.
+  backend_type: mock
+- name: query_asset_inventory
+  description: Read hardware and asset records including assignment, warranty, serial number, and associated cost center.
+  params:
+    assigned_to: (str) Employee name or user ID the asset is assigned to
+    asset_type: '(str) Asset type: ''laptop'', ''monitor'', or ''phone'''
+    query: (str) Free-text query for asset lookup
+  dedup_scope_keys:
+  - query
+  mock_response: ''
+  fixture: records.json
+  fixture_key: assigned_to
+  backend_type: mock
+- name: create_hardware_asset
+  description: Create a new hardware asset record for a laptop or workplace device.
+  params:
+    model: (str) Hardware model name
+    serial_number: (str) Device serial number
+    assigned_to: (str) Employee name or user ID
+    warranty_expiration: (str) Warranty expiry date, YYYY-MM-DD
+    cost_center: (str) Cost center code
+  dedup_scope_keys:
+  - serial_number
+  mock_response: Hardware asset record created successfully and is awaiting assignment confirmation.
+  backend_type: mock
+- name: update_asset_assignment
+  description: Assign or transfer a hardware asset to a named employee.
+  params:
+    asset_id: (str) Asset ID to update
+    assigned_to: (str) Employee name or user ID to assign to
+    action: '(str) Action: ''assign'', ''transfer'', or ''unassign'''
+  dedup_scope_keys:
+  - asset_id
+  mock_response: Asset assignment updated successfully.
+  backend_type: mock
+- name: order_service_catalog_item
+  description: Submit a service-catalog equipment request such as a standard laptop or a developer workstation. requested_for
+    format.
+  params:
+    item_name: (str) Catalog item name
+    requested_for: (str) User ID to order for
+    quantity: (str) Number of items to order
+    configuration: (str) Configuration specification
+  dedup_scope_keys:
+  - requested_for
+  mock_response: Service catalog request submitted successfully and is awaiting fulfillment.
+  backend_type: mock
+- name: query_work_records
+  description: Retrieve incidents or change requests using a scoped query token designed for the active enterprise-management
+    task. query is a plain record key. Do NOT use ServiceNow filter syntax.
+  params:
+    record_type: '(str) Record type: ''incident'' or ''change_request'''
+    query: (str) Plain record key or stored query tag. Do NOT use filter syntax like 'number=X'. The backend matches record_id or query_key after stripping simple ServiceNow-style prefixes.
+    fields: (str) Fields to return
+    sort_by: (str) Sort field
+  dedup_scope_keys:
+  - record_type
+  mock_response: ''
+  fixture: records.json
+  fixture_key: query
+  backend_type: mock
+- name: assign_work_record
+  description: Assign or re-route an incident to the correct owner or assignment group. record_id format.
+  params:
+    record_type: '(str) Record type: ''incident'' or ''change_request'''
+    record_id: (str) Record ID
+    assigned_to: (str) Employee or group to assign to
+    assignment_group: (str) Assignment group name
+    note: (str) Assignment note or reason
+  dedup_scope_keys:
+  - record_id
+  mock_response: Work record assignment updated successfully.
+  backend_type: mock
+- name: schedule_change_request
+  description: Set planned start and end windows for a scoped change request while preserving sequencing rules. change_id
+    format.
+  params:
+    change_id: (str) Change request ID
+    planned_start: (str) Planned start datetime
+    planned_end: (str) Planned end datetime
+    sequencing_note: (str) Note about sequencing dependencies
+  dedup_scope_keys:
+  - change_id
+  mock_response: Change request schedule updated successfully.
+  backend_type: mock
+- name: create_followup_record
+  description: Create a downstream incident or related work record based on a report or dashboard threshold.
+  params:
+    record_type: (str) Record type
+    short_description: (str) Brief description of the follow-up
+    payload: (str) Detail body or JSON payload
+  dedup_scope_keys:
+  - record_type
+  mock_response: Follow-up record created successfully.
+  backend_type: mock
+- name: search_knowledge_base
+  description: Retrieve enterprise SOPs and internal knowledge articles by exact stored query key, not by free-text search.
+  params:
+    query: (str) Exact knowledge query key, not a free-text keyword or policy topic.
+    audience: '(str) Target audience: ''it_staff'' or ''manager'''
+  mock_response: ''
+  fixture: records.json
+  fixture_key: query
+  backend_type: mock
+- name: query_expense_lines
+  description: Retrieve a tagged set of expense or investment lines for cleanup or budget-allocation decisions. report_id
+    format.
+  params:
+    hashtag: (str) Expense tag or category
+    query: (str) Query string for expense lookup
+    fields: (str) Fields to return
+  dedup_scope_keys:
+  - report_id
+  mock_response: ''
+  fixture: records.json
+  fixture_key: hashtag
+  backend_type: mock
+- name: optimize_budget_allocation
+  description: Return the recommended retained investment lines for a tagged portfolio within the given budget. report_id
+    format.
+  params:
+    hashtag: (str) Portfolio/budget tag
+    budget: (str) Budget amount
+    objective: (str) Optimization objective
+  dedup_scope_keys:
+  - report_id
+  mock_response: ''
+  fixture: budget_allocations.json
+  fixture_key: hashtag
+  backend_type: mock
+- name: delete_expense_line
+  description: Delete an expense or investment line as part of cleanup or portfolio pruning. High-risk financial write operation.
+    expense_id format.
+  params:
+    expense_id: (str) Expense line ID
+    reason: (str) Reason for deletion
+  dedup_scope_keys:
+  - expense_id
+  mock_response: Expense line deleted successfully.
+  backend_type: mock
+- name: read_dashboard_metric
+  description: Read a dashboard metric and any associated follow-up threshold guidance.
+  params:
+    dashboard_name: (str) Dashboard name
+  dedup_scope_keys:
+  - metric_key
+  mock_response: ''
+  fixture: records.json
+  fixture_key: dashboard_name
+  backend_type: mock

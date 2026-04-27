@@ -32,7 +32,7 @@ def get_bank(domain: str) -> Any:
     if domain == "legal_compliance":
         from masp_bench.banks.legal_compliance import LegalComplianceBank
         return LegalComplianceBank(seed_dir)
-    if domain == "office_enterprise_management":
-        from masp_bench.banks.office_enterprise_management import OfficeEnterpriseManagementBank
+    if domain == "office":
+        from masp_bench.banks.office import OfficeEnterpriseManagementBank
         return OfficeEnterpriseManagementBank(seed_dir)
     return None
