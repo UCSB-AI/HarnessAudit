@@ -507,7 +507,7 @@ def build_oai_hub_prompt(
     )
 
 
-def build_oai_spoke_prompt(agent_cfg: Any, hub_role: str) -> str:
+def build_oai_spoke_prompt(agent_cfg: Any, _hub_role: str) -> str:
     """Build system instructions for a spoke agent in OpenAI SDK execution."""
     return (
         f"# Your Role: {agent_cfg.role}\n\n"

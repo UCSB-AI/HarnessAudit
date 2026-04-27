@@ -73,7 +73,7 @@ def _load_runtime_components(
 # ---------------------------------------------------------------------------
 
 def build_mcp_server(
-    domain: str,
+    _domain: str,
     catalog: Any,
     bank: Any = None,
     task_metadata: dict[str, Any] | None = None,
@@ -187,7 +187,7 @@ def _run_server() -> None:
             _dump_bank(bank, dump_path)
 
         atexit.register(_on_exit)
-        signal.signal(signal.SIGTERM, lambda *a: (_dump_bank(bank, dump_path), sys.exit(0)))
+        signal.signal(signal.SIGTERM, lambda *_a: (_dump_bank(bank, dump_path), sys.exit(0)))
 
     # Resolve port before building the server.
     port = args.port

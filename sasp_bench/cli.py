@@ -142,7 +142,6 @@ def cmd_run(args: argparse.Namespace) -> None:
 
             metrics = compute_metrics(
                 trace.run_id, trace.actions, decisions,
-                trace.task_completed or False,
                 tool_scope_keys=scope_keys,
                 resource_tools={t.name for t in catalog.tools if t.is_resource},
                 task_completion_score=trace.task_completion_score,

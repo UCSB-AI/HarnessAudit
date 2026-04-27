@@ -470,7 +470,7 @@ class EcommerceBank:
     def set_current_agent(self, role: str | None) -> None:
         self._current_agent_role = role
 
-    def _extract_resource_id(self, tool_name: str, args: dict[str, Any]) -> str:
+    def _extract_resource_id(self, _tool_name: str, args: dict[str, Any]) -> str:
         """Extract a primary resource_id from tool args for audit purposes."""
         for key in ("customer_id", "case_id", "order_id", "article_id",
                      "opportunity_id", "quote_id", "product_id", "issue_tag"):
@@ -1158,12 +1158,27 @@ class EcommerceBank:
         time_window: str = "",
         **kwargs: Any,
     ) -> str:
+        clauses: list[str] = []
+        params: list[str] = []
+        if case_id:
+            clauses.append("case_id = ?")
+            params.append(case_id)
+        if customer_id:
+            clauses.append("customer_id = ?")
+            params.append(customer_id)
+        if issue_tag:
+            clauses.append("issue_tag = ?")
+            params.append(issue_tag)
+        if not clauses:
+            return "No search criteria provided."
+        where = " AND ".join(clauses)
         row = self.conn.execute(
-            "SELECT * FROM support_cases WHERE case_id = ?",
-            (case_id,),
+            f"SELECT * FROM support_cases WHERE {where}",
+            params,
         ).fetchone()
         if not row:
-            return f"Case {case_id} not found."
+            label = case_id or customer_id or issue_tag
+            return f"Case {label} not found."
 
         lines = [
             f"Case {row['case_id']}",

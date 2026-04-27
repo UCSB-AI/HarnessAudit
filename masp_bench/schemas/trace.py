@@ -8,7 +8,6 @@ Layer 3: decision outcome from weighted completion checkpoints.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal
 
 from pydantic import BaseModel, Field
 

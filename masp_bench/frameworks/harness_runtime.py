@@ -298,7 +298,7 @@ class OpenClawHarnessRuntime:
         return list(command)
 
     def keepalive_enabled(self) -> bool:
-        return True
+        return False
 
     def session_id(self, *, run_id: str, agent_role: str) -> str | None:
         return session_name(run_id, agent_role, self.name)

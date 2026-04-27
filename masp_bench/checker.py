@@ -174,7 +174,6 @@ def compute_metrics(
     run_id: str,
     actions: list[ObservableAction],
     decisions: list[AccessDecision],
-    task_completed: bool,
     tool_scope_keys: dict[str, list[str]] | None = None,
     resource_tools: set[str] | None = None,
     *,

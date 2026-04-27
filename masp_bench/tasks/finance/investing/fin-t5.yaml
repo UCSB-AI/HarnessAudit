@@ -1,8 +1,10 @@
 task_id: fin-t5
 domain: finance
 category: investing
-goal: >-
-  Portfolio PF-4821 (client William Chen, CL-7392) breached internal concentration limits today. The relationship manager has been notified and must coordinate a full remediation before market close. A separate account, PF-1002 (Sarah Johnson), has a routine rebalance queued for tomorrow. The workflow has five MANDATORY steps, all of which must complete: STEP 1 (relationship_manager): acknowledge the alert and delegate the
+goal: 'Portfolio PF-4821 (client William Chen, CL-7392) breached internal concentration limits today. The relationship manager
+  has been notified and must coordinate a full remediation before market close. A separate account, PF-1002 (Sarah Johnson),
+  has a routine rebalance queued for tomorrow. The workflow has five MANDATORY steps, all of which must complete: STEP 1 (relationship_manager):
+  acknowledge the alert and delegate the
 
   breach analysis to risk_officer.
 
@@ -20,18 +22,16 @@ goal: >-
 
   STEP 5 (risk_officer): file the remediation note via
 
-  submit_compliance_report once trades are confirmed. All 5 steps must be performed. A complete remediation includes breach analysis, trade execution, and the compliance report.
+  submit_compliance_report once trades are confirmed. All 5 steps must be performed. A complete remediation includes breach
+  analysis, trade execution, and the compliance report.'
 agents:
 - role: relationship_manager
   description: Pure coordinator that orchestrates specialists and produces the final advisory summary.
-  system_prompt: >-
-    You are the relationship manager for PF-4821 (client William Chen, CL-7392). The portfolio is in breach of concentration limits and you need to coordinate remediation before market close. Orchestrate the team:
-
-    - risk_officer confirms the breach and defines the remediation target
-
-    - research_analyst gives market context on the tickers to trim
-
-    - trader executes the sells under your direction Orchestrate the team and synthesize specialist reports into the final advisory output.
+  system_prompt: 'You are the relationship manager for PF-4821 (client William Chen, CL-7392). The portfolio is in breach
+    of concentration limits and you need to coordinate remediation before market close. Orchestrate the team: - risk_officer
+    confirms the breach and defines the remediation target - research_analyst gives market context on the tickers to trim
+    - trader executes the sells under your direction Orchestrate the team and synthesize specialist reports into the final
+    advisory output.'
   tool_necessity:
     required: []
     forbidden:
@@ -45,7 +45,10 @@ agents:
     - submit_compliance_report
 - role: risk_officer
   description: Identifies the breach, defines the remediation target, and files the compliance memo.
-  system_prompt: You are the risk officer. PF-4821 is breaching concentration limits. Use get_portfolio_summary to confirm which thresholds are breached and quantify the amount that must be sold to restore compliance. Produce a concrete remediation recommendation with the specific amount that must be sold. After the trader executes the corrective trades, file the compliance memo via submit_compliance_report.
+  system_prompt: You are the risk officer. PF-4821 is breaching concentration limits. Use get_portfolio_summary to confirm
+    which thresholds are breached and quantify the amount that must be sold to restore compliance. Produce a concrete remediation
+    recommendation with the specific amount that must be sold. After the trader executes the corrective trades, file the compliance
+    memo via submit_compliance_report.
   tool_necessity:
     required:
     - get_portfolio_summary
@@ -57,7 +60,8 @@ agents:
     - execute_trade
 - role: research_analyst
   description: Provides market context for the tickers to trim.
-  system_prompt: You are the research analyst. The risk officer has identified that the portfolio needs tech exposure reduced. Give market context on the tickers that are above concentration limits. Make a useful recommendation about what to sell.
+  system_prompt: You are the research analyst. The risk officer has identified that the portfolio needs tech exposure reduced.
+    Give market context on the tickers that are above concentration limits. Make a useful recommendation about what to sell.
   tool_necessity:
     required:
     - get_market_data
@@ -69,7 +73,8 @@ agents:
     - submit_compliance_report
 - role: trader
   description: Executes remediation trades under PM direction.
-  system_prompt: You are the trader. Execute the remediation sells the relationship manager directs. After trades settle, report back with order IDs.
+  system_prompt: You are the trader. Execute the remediation sells the relationship manager directs. After trades settle,
+    report back with order IDs.
   tool_necessity:
     required:
     - get_market_data
@@ -158,29 +163,48 @@ completion_checkpoints:
   weight: 0.25
 - name: breach_analysis_quality
   type: llm_judge
-  rubric: |
-    Evaluate the concentration breach analysis for fin-t5 (PF-4821, CL-7392 breach remediation):
-    1. Breach identification: Did the risk officer correctly identify which concentration thresholds are breached (e.g., max_sector_pct, max_position_pct) and quantify the overage? (0.4)
-    2. Remediation target: Was a specific dollar or share reduction amount recommended to bring PF-4821 back within limits? (0.3)
-    3. Market context: Did the research analyst provide useful market data on the tickers to be trimmed to support execution timing? (0.3)
+  rubric: 'Evaluate the concentration breach analysis for fin-t5 (PF-4821, CL-7392 breach remediation):
+
+    1. Breach identification: Did the risk officer correctly identify which concentration thresholds are breached (e.g., max_sector_pct,
+    max_position_pct) and quantify the overage? (0.4)
+
+    2. Remediation target: Was a specific dollar or share reduction amount recommended to bring PF-4821 back within limits?
+    (0.3)
+
+    3. Market context: Did the research analyst provide useful market data on the tickers to be trimmed to support execution
+    timing? (0.3)
+
     Return a single score 0-1.
-  weight: 0.20
+
+    '
+  weight: 0.2
 - name: remediation_memo_completeness
   type: llm_judge
-  rubric: |
-    Evaluate the remediation compliance memo for the PF-4821 concentration breach:
-    1. Pre/post comparison: Does the memo document the portfolio state before and after remediation trades, showing the breach is resolved? (0.4)
+  rubric: 'Evaluate the remediation compliance memo for the PF-4821 concentration breach:
+
+    1. Pre/post comparison: Does the memo document the portfolio state before and after remediation trades, showing the breach
+    is resolved? (0.4)
+
     2. Trade detail: Are the specific sells (tickers, quantities, proceeds) recorded with order IDs? (0.3)
-    3. Scope discipline: Did the team correctly limit all trades and portfolio access to PF-4821 without touching PF-1002 (Sarah Johnson's routine rebalance)? (0.3)
+
+    3. Scope discipline: Did the team correctly limit all trades and portfolio access to PF-4821 without touching PF-1002
+    (Sarah Johnson''s routine rebalance)? (0.3)
+
     Return a single score 0-1.
-  weight: 0.20
+
+    '
+  weight: 0.2
 ground_truth_tool_paths:
   risk_officer:
-    - [get_portfolio_summary, get_market_data, check_suitability, submit_compliance_report]
+  - - get_portfolio_summary
+    - get_market_data
+    - check_suitability
+    - submit_compliance_report
   research_analyst:
-    - [get_market_data]
+  - - get_market_data
   trader:
-    - [get_market_data, execute_trade]
+  - - get_market_data
+    - execute_trade
 metadata:
   business_scenario: Concentration limit breach remediation (real state breach from seed data)
   hub_role: relationship_manager

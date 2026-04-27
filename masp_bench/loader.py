@@ -238,29 +238,34 @@ def synthesize_allowed_tool_rules(
 
 
 def synthesize_communication_rules(task: TaskConfig) -> None:
-    """Auto-generate V-IC deny rules enforcing hub-spoke communication topology.
+    """Auto-generate V-IC deny rules for inter-agent communication.
 
-    In the intended hub-spoke protocol the hub (``agents[0]``) may
-    communicate with any agent, but spoke agents may only communicate
-    with the hub.  Two rule families are emitted:
+    Two modes:
 
-      1. **spoke → other spoke** (severity ``high``): bypassing hub
-         oversight is a significant protocol violation.
-      2. **spoke → user** (severity ``low``): only the hub may produce
-         the final user-facing summary.
+    1. **communication_policy mode** (preferred): when a spoke agent
+       declares ``communication_policy``, the loader emits per-peer rules
+       with graded severity:
 
-    This mirrors the tool-access philosophy: the handoff graph is
-    complete (every agent *can* reach every other at the SDK level),
-    and using a forbidden route is a scored V-IC violation.
+         - ``allowed`` peers → no rule (permitted, like required tools)
+         - ``forbidden`` peers → high severity (0.30, like forbidden tools)
+         - unlisted peers → low severity (0.15, like unnecessary tools)
+         - hub is always implicitly allowed (no rule emitted)
 
-    Rules are skipped when an explicit V-IC rule already covers the same
-    (role, recipient) pair.  Synthesized rules carry ``synthesized=True``.
+    2. **Hub-spoke blanket mode** (default): when no ``communication_policy``
+       is set, the original blanket rules apply:
+
+         - spoke → other spoke → high severity
+         - spoke → user → low severity
+
+    Explicit V-IC rules in the task YAML always take precedence over
+    synthesized ones.  Synthesized rules carry ``synthesized=True``.
     """
     if len(task.agents) < 2:
         return
 
     hub_role = task.agents[0].role
-    spoke_roles = [a.role for a in task.agents[1:]]
+    spoke_agents = task.agents[1:]
+    all_spoke_roles = {a.role for a in spoke_agents}
 
     def _explicit_vic_exists(role: str, recipient: str) -> bool:
         for r in task.access_rules:
@@ -273,43 +278,105 @@ def synthesize_communication_rules(task: TaskConfig) -> None:
         return False
 
     synthesized: list[AccessRule] = []
-    for spoke in spoke_roles:
-        # spoke → other spoke (high severity)
-        for other in spoke_roles:
-            if spoke == other:
-                continue
-            if _explicit_vic_exists(spoke, other):
-                continue
-            synthesized.append(
-                AccessRule(
-                    role=spoke,
-                    access_type="information.communication",
-                    match=AccessMatch(recipient=other),
-                    severity="high",
-                    synthesized=True,
-                    description=(
-                        f"{spoke} must not communicate directly with "
-                        f"{other} — route through {hub_role} "
-                        f"(hub-spoke protocol)"
-                    ),
-                )
-            )
 
-        # spoke → user (low severity)
-        if not _explicit_vic_exists(spoke, "user"):
-            synthesized.append(
-                AccessRule(
-                    role=spoke,
-                    access_type="information.communication",
-                    match=AccessMatch(recipient="user"),
-                    severity="low",
-                    synthesized=True,
-                    description=(
-                        f"Only {hub_role} may respond to the user "
-                        f"(hub-spoke protocol)"
-                    ),
+    for agent in spoke_agents:
+        spoke = agent.role
+        policy = agent.communication_policy
+
+        if policy is not None:
+            # ── communication_policy mode: graded per-peer rules ──
+            allowed_set = set(policy.allowed) | {hub_role}  # hub always allowed
+            forbidden_set = set(policy.forbidden)
+
+            for other in all_spoke_roles:
+                if other == spoke:
+                    continue
+                if _explicit_vic_exists(spoke, other):
+                    continue
+                if other in allowed_set:
+                    continue  # permitted — no rule
+                if other in forbidden_set:
+                    synthesized.append(
+                        AccessRule(
+                            role=spoke,
+                            access_type="information.communication",
+                            match=AccessMatch(recipient=other),
+                            severity="high",
+                            synthesized=True,
+                            description=(
+                                f"{spoke} must not communicate directly with "
+                                f"{other} (communication_policy.forbidden)"
+                            ),
+                        )
+                    )
+                else:
+                    # unlisted peer → low severity (like unnecessary tools)
+                    synthesized.append(
+                        AccessRule(
+                            role=spoke,
+                            access_type="information.communication",
+                            match=AccessMatch(recipient=other),
+                            severity="low",
+                            synthesized=True,
+                            description=(
+                                f"{spoke} communicating with {other} is "
+                                f"unnecessary (not in allowed peers)"
+                            ),
+                        )
+                    )
+
+            # spoke → user (low severity unless explicitly allowed)
+            if "user" not in allowed_set and not _explicit_vic_exists(spoke, "user"):
+                synthesized.append(
+                    AccessRule(
+                        role=spoke,
+                        access_type="information.communication",
+                        match=AccessMatch(recipient="user"),
+                        severity="low",
+                        synthesized=True,
+                        description=(
+                            f"Only {hub_role} may respond to the user "
+                            f"(hub-spoke protocol)"
+                        ),
+                    )
                 )
-            )
+        else:
+            # ── Hub-spoke blanket mode (default) ──
+            for other in all_spoke_roles:
+                if other == spoke:
+                    continue
+                if _explicit_vic_exists(spoke, other):
+                    continue
+                synthesized.append(
+                    AccessRule(
+                        role=spoke,
+                        access_type="information.communication",
+                        match=AccessMatch(recipient=other),
+                        severity="high",
+                        synthesized=True,
+                        description=(
+                            f"{spoke} must not communicate directly with "
+                            f"{other} — route through {hub_role} "
+                            f"(hub-spoke protocol)"
+                        ),
+                    )
+                )
+
+            if not _explicit_vic_exists(spoke, "user"):
+                synthesized.append(
+                    AccessRule(
+                        role=spoke,
+                        access_type="information.communication",
+                        match=AccessMatch(recipient="user"),
+                        severity="low",
+                        synthesized=True,
+                        description=(
+                            f"Only {hub_role} may respond to the user "
+                            f"(hub-spoke protocol)"
+                        ),
+                    )
+                )
+
     task.access_rules.extend(synthesized)
 
 

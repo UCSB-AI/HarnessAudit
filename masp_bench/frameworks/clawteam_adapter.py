@@ -14,9 +14,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import shutil
+import signal
 import subprocess
 import sys
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,6 +60,12 @@ class TeamRuntimeWaitResult:
     blocked_tasks: int
     messages_received: int
     sentinel_completed: bool
+
+
+@dataclass(slots=True)
+class SpawnedAgentProcess:
+    role: str
+    pid: int | None = None
 
 
 def _status_value(status: Any) -> Any:
@@ -118,6 +127,132 @@ def seed_spoke_tasks(
     return task_ids
 
 
+def _pid_exists(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _proc_stat_ppid(pid: int) -> int | None:
+    try:
+        stat = Path("/proc") / str(pid) / "stat"
+        text = stat.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+    close = text.rfind(")")
+    if close < 0:
+        return None
+    fields = text[close + 2:].split()
+    if len(fields) < 2:
+        return None
+    try:
+        return int(fields[1])
+    except ValueError:
+        return None
+
+
+def _descendant_pids(root_pid: int) -> set[int]:
+    children: dict[int, list[int]] = {}
+    try:
+        proc_entries = list(Path("/proc").iterdir())
+    except OSError:
+        return set()
+
+    for entry in proc_entries:
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        ppid = _proc_stat_ppid(pid)
+        if ppid is None:
+            continue
+        children.setdefault(ppid, []).append(pid)
+
+    descendants: set[int] = set()
+    stack = list(children.get(root_pid, []))
+    while stack:
+        pid = stack.pop()
+        if pid in descendants:
+            continue
+        descendants.add(pid)
+        stack.extend(children.get(pid, []))
+    return descendants
+
+
+def _team_process_pids(team_name: str) -> set[int]:
+    needle = f"CLAWTEAM_TEAM_NAME={team_name}".encode()
+    pids: set[int] = set()
+    try:
+        proc_entries = list(Path("/proc").iterdir())
+    except OSError:
+        return pids
+
+    for entry in proc_entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            environ = (entry / "environ").read_bytes()
+        except OSError:
+            continue
+        if needle in environ.split(b"\0"):
+            pids.add(int(entry.name))
+    return pids
+
+
+def _signal_pids(pids: set[int], sig: signal.Signals) -> None:
+    current_pid = os.getpid()
+    for pid in sorted(pids, reverse=True):
+        if pid == current_pid or pid <= 0:
+            continue
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            log.warning("Permission denied sending %s to pid %s", sig.name, pid)
+
+
+def _kill_pid_family(pid: int, *, grace_seconds: float = 1.0) -> None:
+    if not _pid_exists(pid):
+        return
+
+    current_pgid = os.getpgrp()
+    try:
+        pgid = os.getpgid(pid)
+    except ProcessLookupError:
+        pgid = None
+    except PermissionError:
+        pgid = None
+
+    if pgid and pgid > 0 and pgid != current_pgid:
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            log.warning("Permission denied terminating process group %s", pgid)
+
+    pids = _descendant_pids(pid)
+    pids.add(pid)
+    _signal_pids(pids, signal.SIGTERM)
+
+    deadline = time.monotonic() + grace_seconds
+    while time.monotonic() < deadline:
+        if not any(_pid_exists(p) for p in pids):
+            return
+        time.sleep(0.05)
+
+    remaining = {p for p in pids if _pid_exists(p)}
+    if remaining:
+        _signal_pids(remaining, signal.SIGKILL)
+
+
 class ClawTeamAdapter(MASFrameworkAdapter):
     """Run tasks by spawning ClawTeam-managed agent processes."""
 
@@ -157,6 +292,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         bank_dump_path = Path(f"/tmp/masp_bank_{ctx.run_id}.db")
         final_text = ""
         worktrees: dict[str, Path] = {}
+        spawned_agents: list[SpawnedAgentProcess] = []
         try:
             # 0. Clean up stale team from previous failed run
             if TeamManager.team_exists(team_name):
@@ -278,6 +414,16 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     is_leader=is_leader,
                     keepalive=self._runtime.keepalive_enabled(),
                 )
+                spawned_agents.append(
+                    SpawnedAgentProcess(
+                        role=agent_cfg.role,
+                        pid=self._lookup_spawn_pid(
+                            team_name,
+                            agent_cfg.role,
+                            backend=backend,
+                        ),
+                    )
+                )
                 log.info("Spawned %s (%s): %s",
                          agent_cfg.role, self._profile.name, result_msg)
 
@@ -288,6 +434,13 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 sentinel_task_id=sentinel_id,
                 timeout=self._agent_timeout,
             )
+            if wait_result.status in {"timeout", "interrupted"}:
+                self._stop_spawned_agents(
+                    team_name,
+                    spawned_agents,
+                    reason=wait_result.status,
+                )
+
             await self._drain_harness_outputs(
                 wait_result=wait_result,
                 worktrees=worktrees,
@@ -345,6 +498,11 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 error=str(exc),
             )
         finally:
+            self._stop_spawned_agents(
+                team_name,
+                spawned_agents,
+                reason="cleanup",
+            )
             stop_mcp_server(mcp_proc)
             self._unregister_mcp_for_harness(worktrees)
             self._cleanup_team(team_name)
@@ -689,6 +847,89 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             hub_role=hub_role,
             spawn_timestamp=spawn_timestamp,
         )
+
+    def _lookup_spawn_pid(
+        self,
+        team_name: str,
+        agent_role: str,
+        *,
+        backend: Any,
+    ) -> int | None:
+        try:
+            from clawteam.spawn.registry import get_registry
+
+            pid = int(get_registry(team_name).get(agent_role, {}).get("pid") or 0)
+            if pid > 0:
+                return pid
+        except Exception:
+            log.debug(
+                "Failed to read ClawTeam spawn registry for %s/%s",
+                team_name,
+                agent_role,
+                exc_info=True,
+            )
+
+        process = getattr(backend, "_processes", {}).get(agent_role)
+        pid = getattr(process, "pid", None)
+        return int(pid) if pid else None
+
+    def _stop_spawned_agents(
+        self,
+        team_name: str,
+        spawned_agents: list[SpawnedAgentProcess],
+        *,
+        reason: str,
+    ) -> None:
+        if not spawned_agents:
+            return
+
+        registry: dict[str, dict[str, Any]] = {}
+        stop_agent = None
+        try:
+            from clawteam.spawn.registry import get_registry, stop_agent as _stop_agent
+
+            registry = get_registry(team_name)
+            stop_agent = _stop_agent
+        except Exception:
+            log.debug("Failed to load ClawTeam spawn registry for %s", team_name, exc_info=True)
+
+        roles = [agent.role for agent in spawned_agents]
+        log.info(
+            "Stopping %d ClawTeam agent process(es) for %s after %s",
+            len(roles),
+            team_name,
+            reason,
+        )
+
+        if stop_agent is not None:
+            for role in roles:
+                try:
+                    stop_agent(team_name, role, timeout_seconds=0.5)
+                except Exception:
+                    log.debug("ClawTeam stop_agent failed for %s/%s", team_name, role, exc_info=True)
+
+        candidate_pids: set[int] = set()
+        for agent in spawned_agents:
+            if agent.pid:
+                candidate_pids.add(agent.pid)
+            try:
+                pid = int(registry.get(agent.role, {}).get("pid") or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            if pid > 0:
+                candidate_pids.add(pid)
+
+        # The subprocess backend injects CLAWTEAM_TEAM_NAME into the shell
+        # environment. CLI children inherit it, so this catches reparented
+        # descendants that are no longer visible under the shell PID.
+        candidate_pids.update(_team_process_pids(team_name))
+
+        for pid in sorted(candidate_pids, reverse=True):
+            _kill_pid_family(pid)
+
+        remaining = _team_process_pids(team_name)
+        if remaining:
+            _signal_pids(remaining, signal.SIGKILL)
 
     # ------------------------------------------------------------------
     # Cleanup
