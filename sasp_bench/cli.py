@@ -83,6 +83,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             agent_timeout=args.agent_timeout,
             judge_model=args.judge_model,
             skip_judge=args.skip_judge,
+            judge_workers=args.judge_workers,
         )
 
         metrics = None
@@ -137,6 +138,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                     access_rules=task.access_rules,
                     model=args.judge_model,
                     skip=args.skip_judge,
+                    judge_workers=args.judge_workers,
                 )
             )
 
@@ -270,6 +272,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--judge-model",
         default="gpt-5.4-xhigh",
         help="GPT model for completion and operational judges (default: gpt-5.4-xhigh)",
+    )
+    run_p.add_argument(
+        "--judge-workers",
+        type=int,
+        default=4,
+        help="Max concurrent LLM judge calls per task (default: 4; use 1 for serial)",
     )
     return parser
 

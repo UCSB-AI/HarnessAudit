@@ -63,18 +63,20 @@ def _find_codex_sessions(
     agent_role: str,
     *,
     created_after: float = 0.0,
+    sessions_dir: Path | None = None,
 ) -> list[Path]:
     """Find Codex rollout JSONL files for an agent.
 
-    All Codex agents share ``~/.codex/sessions/`` (no per-agent CODEX_HOME
-    because Codex wipes and recreates it on startup).  We find sessions by
-    scanning all rollout files created after spawn_timestamp.
+    Codex agents in isolated MASP runs share the runtime's
+    ``$CODEX_HOME/sessions`` directory.  Legacy runs may still use
+    ``~/.codex/sessions``.  We find sessions by scanning rollout files
+    created after spawn_timestamp.
 
-    Since multiple agents share the same sessions dir, we return ALL recent
-    rollout files and let the caller iterate.  Each agent produces exactly
-    one rollout file per spawn.
+    Since multiple agents share the same sessions dir within a task run, we
+    match rollout files to agents by the cwd field in session_meta.  Each
+    agent produces exactly one rollout file per spawn.
     """
-    sessions_dir = Path.home() / ".codex" / "sessions"
+    sessions_dir = sessions_dir or Path.home() / ".codex" / "sessions"
 
     if not sessions_dir.exists():
         log.warning("No Codex sessions dir at %s", sessions_dir)
@@ -321,6 +323,8 @@ def collect_codex_traces(
     *,
     run_id: str = "",
     spawn_timestamp: float = 0.0,
+    sessions_dir: Path | None = None,
+    sessions_dirs_by_role: dict[str, Path] | None = None,
 ) -> str:
     """Collect and parse Codex rollout traces for all agents in a run.
 
@@ -329,7 +333,19 @@ def collect_codex_traces(
     final_text = ""
 
     for agent_role, wt_path in worktree_map.items():
-        rollout_files = _find_codex_sessions(wt_path, agent_role, created_after=spawn_timestamp)
+        if sessions_dirs_by_role is not None:
+            agent_sessions_dir = sessions_dirs_by_role.get(agent_role)
+            if agent_sessions_dir is None:
+                log.warning("No isolated Codex sessions dir registered for agent %s", agent_role)
+                continue
+        else:
+            agent_sessions_dir = sessions_dir
+        rollout_files = _find_codex_sessions(
+            wt_path,
+            agent_role,
+            created_after=spawn_timestamp,
+            sessions_dir=agent_sessions_dir,
+        )
         if not rollout_files:
             log.warning("No Codex rollout found for agent %s at %s", agent_role, wt_path)
             continue

@@ -49,6 +49,16 @@ DRAIN_POLL_SECONDS = 1.0
 STABLE_SNAPSHOT_POLLS = 2
 
 
+def _resolve_current_env_executable(name: str) -> str:
+    resolved = shutil.which(name)
+    if resolved:
+        return resolved
+    candidate = Path(sys.executable).resolve().parent / name
+    if candidate.is_file():
+        return str(candidate)
+    return name
+
+
 @dataclass(slots=True)
 class TeamRuntimeWaitResult:
     status: str
@@ -335,7 +345,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             log.info("Seeded %d spoke tasks on the shared task board", len(seeded_task_ids))
 
             # 4. Setup working directories (mkdir only, no MCP write yet)
-            clawteam_mcp_bin = shutil.which("clawteam-mcp") or "clawteam-mcp"
+            clawteam_mcp_bin = _resolve_current_env_executable("clawteam-mcp")
             for agent_cfg in ctx.task.agents:
                 wt_path = self._make_agent_dir(team_name, agent_cfg.role)
                 worktrees[agent_cfg.role] = wt_path
@@ -343,7 +353,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
             # 5. Register MCP for ALL agents (per-harness config strategy)
             self._register_mcp_for_harness(
-                worktrees, mcp_port, clawteam_mcp_bin,
+                ctx.run_id, worktrees, mcp_port, clawteam_mcp_bin,
             )
 
             # 6. Spawn all agents — record timestamp for JSONL filtering
@@ -805,11 +815,13 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
     def _register_mcp_for_harness(
         self,
+        run_id: str,
         worktrees: dict[str, Path],
         mcp_port: int,
         clawteam_mcp_bin: str,
     ) -> None:
         self._runtime.register_mcp(
+            run_id=run_id,
             worktrees=worktrees,
             mcp_port=mcp_port,
             clawteam_command=clawteam_mcp_bin,
@@ -886,7 +898,12 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         registry: dict[str, dict[str, Any]] = {}
         stop_agent = None
         try:
-            from clawteam.spawn.registry import get_registry, stop_agent as _stop_agent
+            from clawteam.spawn.registry import (
+                get_registry,
+            )
+            from clawteam.spawn.registry import (
+                stop_agent as _stop_agent,
+            )
 
             registry = get_registry(team_name)
             stop_agent = _stop_agent
@@ -906,7 +923,12 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 try:
                     stop_agent(team_name, role, timeout_seconds=0.5)
                 except Exception:
-                    log.debug("ClawTeam stop_agent failed for %s/%s", team_name, role, exc_info=True)
+                    log.debug(
+                        "ClawTeam stop_agent failed for %s/%s",
+                        team_name,
+                        role,
+                        exc_info=True,
+                    )
 
         candidate_pids: set[int] = set()
         for agent in spawned_agents:

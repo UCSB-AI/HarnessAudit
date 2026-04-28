@@ -106,6 +106,30 @@ class _TomlDocument:
         if section.parsed_values().get(MASP_OWNED_KEY) is True:
             section.lines = rendered
 
+    def replace_section(self, header: str, values: dict[str, Any]) -> None:
+        section = self.section(header)
+        rendered = _render_managed_section_lines(values)
+        if section is None:
+            self.sections.append(_TomlSection(header=header, lines=rendered))
+            return
+        section.lines = rendered
+
+    def upsert_preamble_value(self, key: str, value: Any) -> None:
+        rendered = f"{key} = {_render_toml_value(value)}"
+        for idx, line in enumerate(self.preamble_lines):
+            body = line.split("#", 1)[0].strip()
+            if not body or "=" not in body:
+                continue
+            existing_key, _ = body.split("=", 1)
+            if existing_key.strip() == key:
+                self.preamble_lines[idx] = rendered
+                return
+
+        insert_at = len(self.preamble_lines)
+        while insert_at > 0 and not self.preamble_lines[insert_at - 1].strip():
+            insert_at -= 1
+        self.preamble_lines.insert(insert_at, rendered)
+
     def remove_managed_sections(self, headers: set[str]) -> None:
         self.sections = [
             section
@@ -155,16 +179,29 @@ def _parse_toml_document(text: str) -> _TomlDocument:
     return _TomlDocument(preamble_lines=preamble_lines, sections=sections)
 
 
+def _render_toml_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return str(value)
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def _render_managed_section_lines(values: dict[str, Any]) -> list[str]:
     lines: list[str] = []
-    for key in ("url", "transport", "command", "default_tools_approval_mode", MASP_OWNED_KEY):
+    for key in ("url", "transport", "command", "env", "default_tools_approval_mode", MASP_OWNED_KEY):
         if key not in values:
             continue
         value = values[key]
-        if isinstance(value, bool):
-            lines.append(f"{key} = {'true' if value else 'false'}")
-        else:
-            lines.append(f'{key} = "{value}"')
+        if key == "env" and isinstance(value, dict):
+            items = ", ".join(
+                f"{_render_toml_value(str(k))} = {_render_toml_value(v)}"
+                for k, v in sorted(value.items())
+            )
+            lines.append(f"{key} = {{ {items} }}")
+            continue
+        lines.append(f"{key} = {_render_toml_value(value)}")
     return lines
 
 

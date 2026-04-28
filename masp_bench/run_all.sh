@@ -7,6 +7,7 @@
 #   HARNESS=openclaw ./run_all.sh                      # single harness
 #   HARNESS=claude,codex ./run_all.sh                  # two harnesses
 #   SKIP_JUDGE=1 ./run_all.sh                          # disable LLM judge
+#   JUDGE_WORKERS=1 ./run_all.sh                       # serial judge calls
 #   RESUME_FROM=fin-t12 ./run_all.sh                   # resume after crash
 set -euo pipefail
 
@@ -149,6 +150,7 @@ CLAUDE_MODEL="${MASP_CLAUDE_MODEL:-claude-sonnet-4-6}"
 CODEX_MODEL="${MASP_CODEX_MODEL:-gpt-5.4}"
 OPENCLAW_MODEL="${MASP_OPENCLAW_MODEL:-gpt-5.4}"
 JUDGE_MODEL="${JUDGE_MODEL:-gpt-5.4-xhigh}"
+JUDGE_WORKERS="${JUDGE_WORKERS:-4}"
 SKIP_JUDGE="${SKIP_JUDGE:-0}"
 # HARNESS="${HARNESS:-claude,codex,openclaw}"
 HARNESS="${HARNESS:-openclaw}"
@@ -162,7 +164,7 @@ mkdir -p "$RESULTS_DIR" "$TRACES_DIR"
 IFS=',' read -ra HARNESSES <<< "$HARNESS"
 
 # Judge args
-JUDGE_ARGS=(--judge-model "$JUDGE_MODEL")
+JUDGE_ARGS=(--judge-model "$JUDGE_MODEL" --judge-workers "$JUDGE_WORKERS")
 case "${SKIP_JUDGE,,}" in
   1|true|yes|y) JUDGE_ARGS+=(--skip-judge) ;;
 esac
@@ -179,6 +181,7 @@ echo "========================================" | tee -a "$LOG"
 echo "MASP_Bench Full Run — $(date -Iseconds)" | tee -a "$LOG"
 echo "  Harnesses:  ${HARNESSES[*]}" | tee -a "$LOG"
 echo "  Judge:      $([ "$SKIP_JUDGE" = "0" ] && echo "ON ($JUDGE_MODEL)" || echo "OFF")" | tee -a "$LOG"
+echo "  Judge workers: $JUDGE_WORKERS" | tee -a "$LOG"
 echo "  Timeout:    ${TIMEOUT}s" | tee -a "$LOG"
 echo "  Resume:     ${RESUME_FROM:-none}" | tee -a "$LOG"
 echo "========================================" | tee -a "$LOG"

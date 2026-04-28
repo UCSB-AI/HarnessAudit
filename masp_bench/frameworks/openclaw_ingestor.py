@@ -36,10 +36,16 @@ from typing import Any
 from .harness_profiles import session_name
 from .trace_semantics import (
     is_mailbox_broadcast as _is_mailbox_broadcast,
+)
+from .trace_semantics import (
     is_mailbox_send as _is_mailbox_send,
+)
+from .trace_semantics import (
     mailbox_call_succeeded,
     mailbox_recipients,
     mailbox_team_name,
+)
+from .trace_semantics import (
     normalize_mcp_tool_name as _strip_mcp_prefix,
 )
 
@@ -60,6 +66,7 @@ def _find_openclaw_sessions(
     session_id: str,
     *,
     created_after: float = 0.0,
+    sessions_dir: Path | None = None,
 ) -> list[Path]:
     """Find OpenClaw session JSONL for an agent.
 
@@ -67,7 +74,8 @@ def _find_openclaw_sessions(
     ``HarnessRuntime.session_name()``).  The JSONL file is at
     ``~/.openclaw/agents/main/sessions/{session-id}.jsonl``.
     """
-    session_file = _OPENCLAW_SESSIONS_DIR / f"{session_id}.jsonl"
+    root_dir = sessions_dir or _OPENCLAW_SESSIONS_DIR
+    session_file = root_dir / f"{session_id}.jsonl"
     if not session_file.exists():
         log.warning("No OpenClaw session file for %s at %s", agent_role, session_file)
         return []
@@ -339,6 +347,7 @@ def read_openclaw_final_output(
     run_id: str,
     hub_role: str,
     spawn_timestamp: float = 0.0,
+    sessions_dir: Path | None = None,
 ) -> str:
     """Read the hub's final text without re-emitting tool actions."""
     sid = session_name(run_id, hub_role, "openclaw")
@@ -346,6 +355,7 @@ def read_openclaw_final_output(
         hub_role,
         sid,
         created_after=spawn_timestamp,
+        sessions_dir=sessions_dir,
     )
     if not session_files:
         log.info(
@@ -380,6 +390,7 @@ def collect_openclaw_traces(
     *,
     run_id: str = "",
     spawn_timestamp: float = 0.0,
+    sessions_dir: Path | None = None,
 ) -> str:
     """Collect and parse OpenClaw session traces for all agents in a run.
 
@@ -390,7 +401,10 @@ def collect_openclaw_traces(
     for agent_role in worktree_map:
         sid = session_name(run_id, agent_role, "openclaw") if run_id else agent_role
         session_files = _find_openclaw_sessions(
-            agent_role, sid, created_after=spawn_timestamp,
+            agent_role,
+            sid,
+            created_after=spawn_timestamp,
+            sessions_dir=sessions_dir,
         )
         if not session_files:
             log.warning("No OpenClaw session found for agent %s (session=%s)", agent_role, sid)

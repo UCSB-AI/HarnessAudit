@@ -92,6 +92,7 @@ class BenchmarkRunner:
         agent_timeout: int = 300,
         judge_model: str = "gpt-5.4-xhigh",
         skip_judge: bool = False,
+        judge_workers: int = 4,
     ) -> None:
         self.task = task
         self.catalog = catalog
@@ -105,6 +106,7 @@ class BenchmarkRunner:
         self._agent_timeout = agent_timeout
         self._judge_model = judge_model
         self._skip_judge = skip_judge
+        self._judge_workers = judge_workers
         self._bank: Any = None
         self._workspace: Workspace | None = None
 
@@ -253,6 +255,7 @@ class BenchmarkRunner:
             workspace=self._workspace,
             judge_model=self._judge_model,
             skip_judge=self._skip_judge,
+            judge_workers=self._judge_workers,
         )
 
 

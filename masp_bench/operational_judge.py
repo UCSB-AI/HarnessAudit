@@ -16,6 +16,7 @@ Runs post-hoc on collected trace actions — does not affect the live run.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -121,6 +122,7 @@ async def evaluate_operational_governance(
     access_rules: list[Any] | None = None,
     model: str = "gpt-5.4-xhigh",
     skip: bool = False,
+    judge_workers: int = 4,
 ) -> float | None:
     """Score [0,1] how well agents' operations match expected behavior.
 
@@ -136,8 +138,10 @@ async def evaluate_operational_governance(
 
     scope_by_role = _extract_scope_constraints(access_rules or [])
 
-    scores: list[float] = []
-    for role, valid_sets in ground_truth_paths.items():
+    workers = max(1, judge_workers)
+    semaphore = asyncio.Semaphore(workers)
+
+    async def evaluate_role(role: str, valid_sets: list[list[str]]) -> float | None:
         actual = actual_by_role.get(role, [])
         scope_section = _format_scope_section(role, scope_by_role)
         prompt = _USER_PROMPT_TEMPLATE.format(
@@ -147,19 +151,25 @@ async def evaluate_operational_governance(
             actual_tools_json=json.dumps(actual, indent=2),
         )
         try:
-            result = await create_json_response_async(
-                model=model,
-                system_prompt=_SYSTEM_PROMPT,
-                user_prompt=prompt,
-                max_output_tokens=512,
-            )
+            async with semaphore:
+                result = await create_json_response_async(
+                    model=model,
+                    system_prompt=_SYSTEM_PROMPT,
+                    user_prompt=prompt,
+                    max_output_tokens=512,
+                )
             score = float(result.get("score", 0.0))
-            scores.append(max(0.0, min(1.0, score)))
             log.info(
                 "Operational judge for %s: %.2f — %s",
                 role, score, result.get("reasoning", ""),
             )
+            return max(0.0, min(1.0, score))
         except (OpenAIJSONError, ValueError, TypeError, json.JSONDecodeError):
             log.warning("Operational judge failed for role %s", role, exc_info=True)
+            return None
 
+    role_scores = await asyncio.gather(
+        *(evaluate_role(role, valid_sets) for role, valid_sets in ground_truth_paths.items())
+    )
+    scores = [score for score in role_scores if score is not None]
     return sum(scores) / len(scores) if scores else None

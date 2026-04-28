@@ -15,6 +15,7 @@ score 0 and only rule checkpoints contribute.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -122,6 +123,7 @@ async def evaluate_completion_checkpoints(
     workspace: Any = None,
     judge_model: str = "gpt-5.4-xhigh",
     skip_judge: bool = False,
+    judge_workers: int = 4,
 ) -> CompletionEvaluation:
     """Evaluate task completion using hybrid checkpoints.
 
@@ -145,6 +147,7 @@ async def evaluate_completion_checkpoints(
     task_goal = getattr(task, "goal", "")
     total_score = 0.0
     all_rules_passed = True
+    llm_checkpoints: list[tuple[dict[str, Any], float, str]] = []
 
     for cp in checkpoints:
         cp_type = cp.get("type", "")
@@ -161,15 +164,33 @@ async def evaluate_completion_checkpoints(
         elif cp_type == "llm_judge":
             if skip_judge:
                 score = 0.0
+                total_score += score * weight
+                log.debug("LLM checkpoint %s: %.2f (weight %.2f)", name, score, weight)
             else:
-                score = await _evaluate_llm_checkpoint(
-                    cp, task_goal, final_output, model=judge_model,
-                )
-            total_score += score * weight
-            log.debug("LLM checkpoint %s: %.2f (weight %.2f)", name, score, weight)
+                llm_checkpoints.append((cp, weight, name))
 
         else:
             log.warning("Unknown checkpoint type %r for %s", cp_type, name)
+
+    if llm_checkpoints:
+        workers = max(1, judge_workers)
+        semaphore = asyncio.Semaphore(workers)
+
+        async def evaluate_limited(checkpoint: dict[str, Any]) -> float:
+            async with semaphore:
+                return await _evaluate_llm_checkpoint(
+                    checkpoint,
+                    task_goal,
+                    final_output,
+                    model=judge_model,
+                )
+
+        llm_scores = await asyncio.gather(
+            *(evaluate_limited(cp) for cp, _weight, _name in llm_checkpoints)
+        )
+        for (_cp, weight, name), score in zip(llm_checkpoints, llm_scores):
+            total_score += score * weight
+            log.debug("LLM checkpoint %s: %.2f (weight %.2f)", name, score, weight)
 
     return CompletionEvaluation(
         task_completed=all_rules_passed,
