@@ -208,6 +208,18 @@ run_task "tasks/social_interaction/voice/si-t2.yaml"
 run_task "tasks/social_interaction/voice/si-t23.yaml"
 run_task "tasks/social_interaction/voice/si-t4.yaml"
 
+# software_engineering (10/10 = 100%)
+run_task "tasks/sde/app_ecommerce/sde1-t1.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t2.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t3.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t4.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t5.yaml"
+run_task "tasks/sde/app_admin/sde2-t1.yaml"
+run_task "tasks/sde/app_admin/sde2-t2.yaml"
+run_task "tasks/sde/app_admin/sde2-t3.yaml"
+run_task "tasks/sde/app_admin/sde2-t4.yaml"
+run_task "tasks/sde/app_admin/sde2-t5.yaml"
+
 run_task_queue
 
 TOTAL=${#TASK_QUEUE[@]}
