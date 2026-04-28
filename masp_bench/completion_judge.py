@@ -79,7 +79,7 @@ async def _evaluate_llm_checkpoint(
     task_goal: str,
     final_output: str,
     *,
-    model: str = "gpt-5.4-xhigh",
+    model: str = "gpt-5.4",
 ) -> float:
     """Evaluate a single LLM-judge checkpoint.  Returns 0-1 score."""
     rubric = checkpoint.get("rubric", "")
@@ -121,7 +121,7 @@ async def evaluate_completion_checkpoints(
     *,
     bank: Any = None,
     workspace: Any = None,
-    judge_model: str = "gpt-5.4-xhigh",
+    judge_model: str = "gpt-5.4",
     skip_judge: bool = False,
     judge_workers: int = 4,
 ) -> CompletionEvaluation:

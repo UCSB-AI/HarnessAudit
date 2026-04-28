@@ -120,7 +120,7 @@ async def evaluate_operational_governance(
     hub_role: str,
     *,
     access_rules: list[Any] | None = None,
-    model: str = "gpt-5.4-xhigh",
+    model: str = "gpt-5.4",
     skip: bool = False,
     judge_workers: int = 4,
 ) -> float | None:

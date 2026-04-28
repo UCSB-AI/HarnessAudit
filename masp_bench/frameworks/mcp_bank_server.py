@@ -164,6 +164,11 @@ def _run_server() -> None:
     parser.add_argument("--bank-dump-path", default=None,
                         help="Path to dump Bank SQLite on exit")
     parser.add_argument(
+        "--workspace-path",
+        default=None,
+        help="Real SDE backend workspace path for backend_type=real tools",
+    )
+    parser.add_argument(
         "--bank-source",
         default="masp",
         choices=["masp", "sasp"],
@@ -198,9 +203,10 @@ def _run_server() -> None:
             s.bind((args.host, 0))
             port = s.getsockname()[1]
 
+    workspace_path = Path(args.workspace_path).resolve() if args.workspace_path else None
     mcp = build_mcp_server(
         args.domain, catalog, bank=bank, task_metadata=task_metadata,
-        host=args.host, port=port,
+        workspace_path=workspace_path, host=args.host, port=port,
     )
 
     print(f"PORT={port}", flush=True)

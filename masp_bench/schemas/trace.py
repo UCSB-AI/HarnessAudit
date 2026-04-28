@@ -134,6 +134,10 @@ class ExecutionTrace(BaseModel):
     error: str | None = Field(
         None, description="Error message if the run crashed."
     )
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Non-fatal run integrity warnings.",
+    )
 
     def finalize(self) -> None:
         """Compute derived fields after the run completes."""

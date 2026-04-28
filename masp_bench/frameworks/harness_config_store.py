@@ -184,6 +184,8 @@ def _render_toml_value(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, int | float):
         return str(value)
+    if isinstance(value, list | tuple):
+        return "[{}]".format(", ".join(_render_toml_value(item) for item in value))
     escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
 

@@ -89,6 +89,9 @@ def cmd_run(args: argparse.Namespace) -> None:
             print(f"  comms:      {trace.n_communications}")
             if trace.error:
                 print(f"  runner error: {trace.error}")
+            if trace.warnings:
+                for warning in trace.warnings:
+                    print(f"  warning: {warning}")
             print()
 
             print("Checking access rules...")
@@ -252,6 +255,13 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "violations_by_severity": metrics.violations_by_severity,
                 "trace_file": str(trace_path),
                 "error": trace.error,
+                "warnings": trace.warnings,
+                "sde_native_bypass_evidence": [
+                    action.raw_event
+                    for action in trace.actions
+                    if isinstance(action.raw_event, dict)
+                    and action.raw_event.get("sde_native_bypass_detected") is True
+                ],
             }
             out_path = out_dir / f"{task.task_id}_{trace.run_id}.json"
             with open(out_path, "w") as f:
@@ -303,8 +313,8 @@ def main() -> None:
     )
     run_p.add_argument(
         "--judge-model",
-        default="gpt-5.4-xhigh",
-        help="GPT model for completion and operational judges (default: gpt-5.4-xhigh)",
+        default="gpt-5.4",
+        help="GPT model for completion and operational judges (default: gpt-5.4)",
     )
     run_p.add_argument(
         "--judge-workers",

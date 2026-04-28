@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,17 +13,31 @@ from typing import Any, Protocol
 
 from .harness_config_store import MASP_OWNED_KEY, HarnessConfigStore, _parse_toml_document
 from .harness_profiles import session_name
+from .sde_policy import (
+    SDE_CLAUDE_NATIVE_TOOLS,
+    SDE_MCP_ALLOWED_TOOLS,
+    SDE_OPENCLAW_NATIVE_TOOLS,
+)
 
 CLAUDE_CODE_AGENT_TOOL = "Agent"
+CLAUDE_CODE_ALLOWED_TOOLS_FLAG = "--allowedTools"
 CLAUDE_CODE_DISALLOWED_TOOLS_FLAG = "--disallowedTools"
+CLAUDE_CODE_TOOLS_FLAG = "--tools"
 KEEP_CODEX_ISOLATION_ENV = "MASP_KEEP_CODEX_ISOLATION"
 KEEP_OPENCLAW_ISOLATION_ENV = "MASP_KEEP_OPENCLAW_ISOLATION"
+CODEX_ISOLATION_ROOT_ENV = "MASP_CODEX_ISOLATION_ROOT"
+OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
+OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
-def _append_disallowed_tool(command: list[str], tool_name: str) -> list[str]:
+def _append_comma_flag_values(
+    command: list[str],
+    flag: str,
+    values: list[str] | tuple[str, ...],
+) -> list[str]:
     adjusted = list(command)
     for idx, value in enumerate(adjusted[:-1]):
-        if value != CLAUDE_CODE_DISALLOWED_TOOLS_FLAG:
+        if value != flag:
             continue
 
         existing = [
@@ -30,18 +45,37 @@ def _append_disallowed_tool(command: list[str], tool_name: str) -> list[str]:
             for item in adjusted[idx + 1].split(",")
             if item.strip()
         ]
-        if tool_name not in existing:
-            existing.append(tool_name)
-            adjusted[idx + 1] = ",".join(existing)
+        for item in values:
+            if item not in existing:
+                existing.append(item)
+        adjusted[idx + 1] = ",".join(existing)
         return adjusted
 
-    adjusted.extend([CLAUDE_CODE_DISALLOWED_TOOLS_FLAG, tool_name])
+    adjusted.extend([flag, ",".join(values)])
     return adjusted
+
+
+def _append_disallowed_tool(command: list[str], tool_name: str) -> list[str]:
+    return _append_comma_flag_values(
+        command,
+        CLAUDE_CODE_DISALLOWED_TOOLS_FLAG,
+        [tool_name],
+    )
 
 
 def _safe_temp_fragment(value: str) -> str:
     safe = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in value)
     return safe[:80] or "run"
+
+
+def _mk_isolation_root(*, prefix: str, root_env: str | None = None) -> Path:
+    parent: Path | None = None
+    if root_env:
+        raw_parent = os.environ.get(root_env, "").strip()
+        if raw_parent:
+            parent = Path(raw_parent)
+            parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=str(parent) if parent else None))
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:
@@ -69,16 +103,31 @@ class HarnessRuntime(Protocol):
         worktrees: dict[str, Path],
         mcp_port: int,
         clawteam_command: str,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+        model: str = "",
     ) -> None:
         ...
 
     def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
         ...
 
-    def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
+    def build_spawn_env(
+        self,
+        *,
+        agent_role: str,
+        cwd: str,
+        sde_mcp_only: bool = False,
+    ) -> dict[str, str]:
         ...
 
-    def adjust_spawn_command(self, command: list[str]) -> list[str]:
+    def adjust_spawn_command(
+        self,
+        command: list[str],
+        *,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+    ) -> list[str]:
         ...
 
     def keepalive_enabled(self) -> bool:
@@ -106,6 +155,7 @@ class HarnessRuntime(Protocol):
         action_sink: Any,
         hub_role: str,
         spawn_timestamp: float,
+        sde_mcp_only: bool = False,
     ) -> str:
         ...
 
@@ -127,6 +177,7 @@ class HarnessRuntime(Protocol):
 @dataclass
 class ClaudeHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
+    _supports_tools_flag: bool | None = field(default=None, init=False)
     name: str = "claude"
 
     def register_mcp(
@@ -136,8 +187,11 @@ class ClaudeHarnessRuntime:
         worktrees: dict[str, Path],
         mcp_port: int,
         clawteam_command: str,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+        model: str = "",
     ) -> None:
-        del run_id
+        del run_id, sde_mcp_only, catalog_names, model
         self.config_store.register_claude(
             project_paths=list(worktrees.values()),
             mcp_url=f"http://127.0.0.1:{mcp_port}/sse",
@@ -147,12 +201,61 @@ class ClaudeHarnessRuntime:
     def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
         self.config_store.unregister_claude(project_paths=list(worktrees.values()))
 
-    def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
-        del cwd
+    def build_spawn_env(
+        self,
+        *,
+        agent_role: str,
+        cwd: str,
+        sde_mcp_only: bool = False,
+    ) -> dict[str, str]:
+        del cwd, sde_mcp_only
         return {}
 
-    def adjust_spawn_command(self, command: list[str]) -> list[str]:
-        return _append_disallowed_tool(command, CLAUDE_CODE_AGENT_TOOL)
+    def adjust_spawn_command(
+        self,
+        command: list[str],
+        *,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+    ) -> list[str]:
+        del catalog_names
+        adjusted = _append_disallowed_tool(command, CLAUDE_CODE_AGENT_TOOL)
+        if not sde_mcp_only:
+            return adjusted
+        adjusted = _append_comma_flag_values(
+            adjusted,
+            CLAUDE_CODE_ALLOWED_TOOLS_FLAG,
+            SDE_MCP_ALLOWED_TOOLS,
+        )
+        if self._command_supports_tools_flag(command):
+            adjusted = _append_comma_flag_values(
+                adjusted,
+                CLAUDE_CODE_TOOLS_FLAG,
+                SDE_MCP_ALLOWED_TOOLS,
+            )
+        return _append_comma_flag_values(
+            adjusted,
+            CLAUDE_CODE_DISALLOWED_TOOLS_FLAG,
+            SDE_CLAUDE_NATIVE_TOOLS,
+        )
+
+    def _command_supports_tools_flag(self, command: list[str]) -> bool:
+        if self._supports_tools_flag is not None:
+            return self._supports_tools_flag
+        exe = command[0] if command else "claude"
+        try:
+            result = subprocess.run(
+                [exe, "--help"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            help_text = f"{result.stdout}\n{result.stderr}"
+            self._supports_tools_flag = CLAUDE_CODE_TOOLS_FLAG in help_text
+        except Exception:
+            self._supports_tools_flag = False
+        return self._supports_tools_flag
 
     def keepalive_enabled(self) -> bool:
         return False
@@ -181,6 +284,7 @@ class ClaudeHarnessRuntime:
         action_sink: Any,
         hub_role: str,
         spawn_timestamp: float,
+        sde_mcp_only: bool = False,
     ) -> str:
         from .jsonl_collector import collect_all_agent_traces
 
@@ -192,6 +296,7 @@ class ClaudeHarnessRuntime:
             hub_role=hub_role,
             run_id=run_id,
             spawn_timestamp=spawn_timestamp,
+            sde_mcp_only=sde_mcp_only,
         )
 
     def read_final_output(
@@ -251,14 +356,16 @@ class CodexHarnessRuntime:
         worktrees: dict[str, Path],
         mcp_port: int,
         clawteam_command: str,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+        model: str = "",
     ) -> None:
-        del worktrees
+        del worktrees, catalog_names, model
         self.cleanup()
 
-        root_dir = Path(
-            tempfile.mkdtemp(
-                prefix=f"masp-codex-harness-{_safe_temp_fragment(run_id)}-",
-            )
+        root_dir = _mk_isolation_root(
+            prefix=f"masp-codex-harness-{_safe_temp_fragment(run_id)}-",
+            root_env=CODEX_ISOLATION_ROOT_ENV,
         )
         codex_home = root_dir / "codex_homes"
         sessions_dir = root_dir / "sessions"
@@ -270,20 +377,25 @@ class CodexHarnessRuntime:
 
         raw_config = _load_text_or_empty(self.config_store.codex_config_path)
         doc = _parse_toml_document(raw_config)
-        openai_base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("SUXI_BASE_URL")
+        openai_base_url = os.environ.get("OPENAI_BASE_URL")
         if openai_base_url:
             doc.upsert_preamble_value("openai_base_url", openai_base_url)
+        if sde_mcp_only:
+            doc.upsert_preamble_value("include_apply_patch_tool", False)
+            doc.upsert_preamble_value("approval_policy", "never")
+            doc.upsert_preamble_value("sandbox_mode", "read-only")
+        mcp_approval_mode = "approve" if sde_mcp_only else "auto"
         doc.replace_section(
             "mcp_servers.masp_tools",
             {
                 "url": f"http://127.0.0.1:{mcp_port}/mcp",
-                "default_tools_approval_mode": "auto",
+                "default_tools_approval_mode": mcp_approval_mode,
                 MASP_OWNED_KEY: True,
             },
         )
         clawteam_server: dict[str, Any] = {
             "command": clawteam_command,
-            "default_tools_approval_mode": "auto",
+            "default_tools_approval_mode": mcp_approval_mode,
             MASP_OWNED_KEY: True,
         }
         clawteam_env = {
@@ -325,13 +437,19 @@ class CodexHarnessRuntime:
         self._agent_sessions_dirs[agent_role] = agent_sessions_dir
         return agent_home
 
-    def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
-        del cwd
+    def build_spawn_env(
+        self,
+        *,
+        agent_role: str,
+        cwd: str,
+        sde_mcp_only: bool = False,
+    ) -> dict[str, str]:
+        del cwd, sde_mcp_only
         agent_home = self._ensure_agent_codex_home(agent_role)
         env = dict(os.environ)
         env["CODEX_HOME"] = str(agent_home)
         if not env.get("CODEX_API_KEY"):
-            for source_key in ("OPENAI_API_KEY", "SUXI_API_KEY"):
+            for source_key in ("OPENAI_API_KEY",):
                 source_value = env.get(source_key, "").strip()
                 if source_value:
                     env["CODEX_API_KEY"] = source_value
@@ -344,7 +462,14 @@ class CodexHarnessRuntime:
             env["CLAWTEAM_SPAWN_LOG_FILE"] = str(self._agent_log_dir / log_name)
         return env
 
-    def adjust_spawn_command(self, command: list[str]) -> list[str]:
+    def adjust_spawn_command(
+        self,
+        command: list[str],
+        *,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+    ) -> list[str]:
+        del sde_mcp_only, catalog_names
         return list(command)
 
     def keepalive_enabled(self) -> bool:
@@ -374,6 +499,7 @@ class CodexHarnessRuntime:
         action_sink: Any,
         hub_role: str,
         spawn_timestamp: float,
+        sde_mcp_only: bool = False,
     ) -> str:
         from .codex_ingestor import collect_codex_traces
 
@@ -389,6 +515,7 @@ class CodexHarnessRuntime:
             run_id=run_id,
             spawn_timestamp=spawn_timestamp,
             sessions_dirs_by_role=self._agent_sessions_dirs,
+            sde_mcp_only=sde_mcp_only,
         )
 
     def read_final_output(
@@ -449,14 +576,16 @@ class OpenClawHarnessRuntime:
         worktrees: dict[str, Path],
         mcp_port: int,
         clawteam_command: str,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+        model: str = "",
     ) -> None:
-        del worktrees
+        del worktrees, catalog_names
         self.cleanup()
 
-        root_dir = Path(
-            tempfile.mkdtemp(
-                prefix=f"masp-openclaw-harness-{_safe_temp_fragment(run_id)}-",
-            )
+        root_dir = _mk_isolation_root(
+            prefix=f"masp-openclaw-harness-{_safe_temp_fragment(run_id)}-",
+            root_env=OPENCLAW_ISOLATION_ROOT_ENV,
         )
         state_dir = root_dir / "state"
         sessions_dir = state_dir / "agents" / "main" / "sessions"
@@ -484,7 +613,36 @@ class OpenClawHarnessRuntime:
             mcp_config = dict(mcp_config)
         mcp_config["servers"] = managed_servers
         config["mcp"] = mcp_config
+
+        # Override the OpenClaw model when the benchmark requests a specific one.
+        if model:
+            models_cfg = config.setdefault("models", {})
+            providers = models_cfg.setdefault("providers", {})
+            openai_cfg = providers.setdefault("openai", {})
+            openai_cfg["baseUrl"] = (
+                os.environ.get("OPENCLAW_OPENAI_BASE_URL")
+                or openai_cfg.get("baseUrl")
+                or OPENCLAW_DEFAULT_OPENAI_BASE_URL
+            )
+            openai_cfg["models"] = [{"id": model, "name": model}]
+        if sde_mcp_only:
+            tools_config = config.get("tools")
+            if not isinstance(tools_config, dict):
+                tools_config = {}
+            else:
+                tools_config = dict(tools_config)
+            existing_deny = tools_config.get("deny")
+            if isinstance(existing_deny, list):
+                deny = [str(item) for item in existing_deny]
+            else:
+                deny = []
+            for tool_name in SDE_OPENCLAW_NATIVE_TOOLS:
+                if tool_name not in deny:
+                    deny.append(tool_name)
+            tools_config["deny"] = deny
+            config["tools"] = tools_config
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        self._validate_config(config_path, state_dir)
 
         self._root_dir = root_dir
         self._config_path = config_path
@@ -493,12 +651,42 @@ class OpenClawHarnessRuntime:
         self._agent_log_dir = agent_log_dir
         self._run_id = run_id
 
+    @staticmethod
+    def _validate_config(config_path: Path, state_dir: Path) -> None:
+        openclaw_bin = shutil.which("openclaw")
+        if not openclaw_bin:
+            return
+        env = dict(os.environ)
+        env["OPENCLAW_CONFIG_PATH"] = str(config_path)
+        env["OPENCLAW_STATE_DIR"] = str(state_dir)
+        result = subprocess.run(
+            [openclaw_bin, "config", "validate"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            env=env,
+        )
+        if result.returncode != 0:
+            detail = "\n".join(
+                part.strip()
+                for part in (result.stdout, result.stderr)
+                if part.strip()
+            )
+            raise RuntimeError(f"Generated OpenClaw config is invalid: {detail}")
+
     def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
         del worktrees
         return None
 
-    def build_spawn_env(self, *, agent_role: str, cwd: str) -> dict[str, str]:
-        del cwd
+    def build_spawn_env(
+        self,
+        *,
+        agent_role: str,
+        cwd: str,
+        sde_mcp_only: bool = False,
+    ) -> dict[str, str]:
+        del cwd, sde_mcp_only
         if self._config_path is None or self._state_dir is None:
             raise RuntimeError("OpenClaw runtime must register_mcp before spawning agents")
         env = dict(os.environ)
@@ -512,7 +700,14 @@ class OpenClawHarnessRuntime:
             env["CLAWTEAM_SPAWN_LOG_FILE"] = str(self._agent_log_dir / log_name)
         return env
 
-    def adjust_spawn_command(self, command: list[str]) -> list[str]:
+    def adjust_spawn_command(
+        self,
+        command: list[str],
+        *,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+    ) -> list[str]:
+        del sde_mcp_only, catalog_names
         return list(command)
 
     def keepalive_enabled(self) -> bool:
@@ -545,6 +740,7 @@ class OpenClawHarnessRuntime:
         action_sink: Any,
         hub_role: str,
         spawn_timestamp: float,
+        sde_mcp_only: bool = False,
     ) -> str:
         from .openclaw_ingestor import collect_openclaw_traces
 
@@ -557,6 +753,7 @@ class OpenClawHarnessRuntime:
             run_id=run_id,
             spawn_timestamp=spawn_timestamp,
             sessions_dir=self._sessions_dir,
+            sde_mcp_only=sde_mcp_only,
         )
 
     def read_final_output(

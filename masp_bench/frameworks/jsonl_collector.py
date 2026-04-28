@@ -32,6 +32,7 @@ from .trace_semantics import (
 from .trace_semantics import (
     normalize_mcp_tool_name as _strip_mcp_prefix,
 )
+from .sde_policy import is_sde_native_tool, native_bypass_tool_name
 
 log = logging.getLogger(__name__)
 
@@ -124,6 +125,7 @@ def parse_jsonl(
     mcp_server_name: str = MCP_SERVER_NAME,
     is_subagent: bool = False,
     expected_team_name: str | None = None,
+    sde_mcp_only: bool = False,
 ) -> str:
     """Parse one JSONL file and emit ``ObservableAction`` entries.
 
@@ -216,6 +218,25 @@ def parse_jsonl(
                                 "timestamp": _event_timestamp(event),
                                 "line_no": line_no,
                             }
+                        elif sde_mcp_only and is_sde_native_tool("claude", raw_name):
+                            action_sink.emit_tool_call(
+                                agent_id=agent_role,
+                                agent_role=agent_role,
+                                tool_name=native_bypass_tool_name(raw_name),
+                                tool_args=tool_args if isinstance(tool_args, dict) else {},
+                                tool_result="(SDE native harness tool bypass attempt)",
+                                raw_event={
+                                    "framework": "clawteam",
+                                    "harness": "claude",
+                                    "raw_tool_name": raw_name,
+                                    "capture_mode": "jsonl_sde_native_bypass",
+                                    "sde_native_bypass_detected": True,
+                                    "source_file": str(jsonl_path),
+                                    "source_line": line_no,
+                                    **_sub_flag,
+                                },
+                                timestamp=_event_timestamp(event),
+                            )
 
                     elif item.get("type") == "text":
                         text = item.get("text", "")
@@ -337,6 +358,7 @@ def collect_all_agent_traces(
     *,
     run_id: str = "",
     spawn_timestamp: float = 0.0,
+    sde_mcp_only: bool = False,
 ) -> str:
     """Collect and parse JSONL traces for all agents in a run.
 
@@ -380,6 +402,7 @@ def collect_all_agent_traces(
                 action_sink,
                 is_subagent=(idx > 0),
                 expected_team_name=f"masp-{run_id}" if run_id else None,
+                sde_mcp_only=sde_mcp_only,
             )
             # Final output = last text from hub's main JSONL (first file only)
             if agent_role == hub_role and idx == 0:

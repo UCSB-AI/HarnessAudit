@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,7 @@ from masp_bench.frameworks import (
 )
 from masp_bench.frameworks.action_sink import ActionSink
 from masp_bench.frameworks.common import build_task_input
+from masp_bench.frameworks.sde_policy import SDE_DOMAIN
 from masp_bench.schemas.actions import ObservableAction
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
 from masp_bench.schemas.trace import ExecutionTrace
@@ -57,6 +59,7 @@ def _build_execution_trace(
     started_at: datetime,
     completion: CompletionEvaluation,
     error: str | None = None,
+    warnings: list[str] | None = None,
 ) -> ExecutionTrace:
     trace = ExecutionTrace(
         run_id=run_id,
@@ -70,6 +73,7 @@ def _build_execution_trace(
         task_completion_score=completion.task_completion_score,
         started_at=started_at,
         error=error,
+        warnings=warnings or [],
     )
     trace.finalize()
     return trace
@@ -90,7 +94,7 @@ class BenchmarkRunner:
         workspace_manager: WorkspaceManager | None = None,
         bank_factory: Any = None,
         agent_timeout: int = 300,
-        judge_model: str = "gpt-5.4-xhigh",
+        judge_model: str = "gpt-5.4",
         skip_judge: bool = False,
         judge_workers: int = 4,
     ) -> None:
@@ -146,6 +150,8 @@ class BenchmarkRunner:
             task_completion_score=0.0,
         )
         run_error: str | None = None
+        run_warnings: list[str] = []
+        sde_workspace_checked = False
 
         if self.task.fixture and self._workspace_manager:
             self._workspace = self._workspace_manager.create(self.task.fixture, run_id)
@@ -197,9 +203,18 @@ class BenchmarkRunner:
             )
             final_text = outcome.final_output
             run_error = outcome.error
+            if self._workspace is not None:
+                run_warnings.extend(
+                    self._sde_workspace_warnings(action_sink.actions, self._workspace)
+                )
+                sde_workspace_checked = True
             completion = await self._evaluate_completion(action_sink.actions, final_text)
         finally:
             if self._workspace and self._workspace_manager:
+                if not sde_workspace_checked:
+                    run_warnings.extend(
+                        self._sde_workspace_warnings(action_sink.actions, self._workspace)
+                    )
                 keep = not completion.task_completed or os.getenv("MASP_KEEP_WORKSPACES") == "1"
                 self._workspace_manager.destroy(self._workspace, keep=keep)
                 self._workspace = None
@@ -214,6 +229,7 @@ class BenchmarkRunner:
             started_at=run_started_at,
             completion=completion,
             error=run_error,
+            warnings=run_warnings,
         )
 
     def dump_bank_to_file(self, path: Any) -> bool:
@@ -240,6 +256,45 @@ class BenchmarkRunner:
             close_fn()
         except Exception:
             pass
+
+    def _sde_workspace_warnings(
+        self,
+        actions: list[ObservableAction],
+        workspace: Workspace,
+    ) -> list[str]:
+        if self.task.domain != SDE_DOMAIN:
+            return []
+
+        has_write_source_code = any(
+            action.surface == "tool_call"
+            and action.tool_name == "write_source_code"
+            for action in actions
+        )
+        if has_write_source_code:
+            return []
+
+        try:
+            status = subprocess.run(
+                ["git", "-C", str(workspace.path), "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except Exception as exc:
+            return [f"SDE workspace dirty-check failed: {exc}"]
+
+        if status.returncode != 0:
+            stderr = status.stderr.strip()
+            detail = f": {stderr}" if stderr else ""
+            return [f"SDE workspace dirty-check failed{detail}"]
+
+        if status.stdout.strip():
+            return [
+                "SDE backend workspace changed but trace contains no "
+                "write_source_code tool call."
+            ]
+        return []
 
     async def _evaluate_completion(
         self,

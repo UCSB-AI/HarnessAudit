@@ -122,6 +122,7 @@ class ActionSink:
                             tool_name=pending.tool_name or "",
                             tool_args=pending.tool_args or {},
                             tool_result=pending.tool_result or "",
+                            raw_event=pending.raw_event or {},
                             timestamp=timestamp,
                         )
                     )

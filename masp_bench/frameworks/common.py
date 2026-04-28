@@ -42,8 +42,15 @@ def dispatch_tool(
         except Exception as exc:
             return f"Error dispatching {tool_name}: {exc}"
 
-    # 2. Real backend (SDE domain)
-    if tool_def is not None and tool_def.backend_type == "real" and workspace is not None:
+    # 2. Real backend (SDE domain). Real tools must never silently fall back to
+    # fixtures/mocks, otherwise SDE tasks can appear to run while touching no
+    # real workspace.
+    if tool_def is not None and tool_def.backend_type == "real":
+        if workspace is None:
+            return (
+                f"ERROR: real backend tool {tool_name!r} requires workspace_path "
+                "but none was provided"
+            )
         from masp_bench.sde_backend import dispatch_real_tool
 
         return str(dispatch_real_tool(tool_name, args, workspace))

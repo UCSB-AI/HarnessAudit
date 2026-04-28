@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .openclaw_bootstrap import OpenClawBootstrapManager
 
-OPENAI_HARDCODED_BASE_URL = "https://new.suxi.ai/v1"
+OPENAI_HARDCODED_BASE_URL = "https://api.openai.com/v1"
 
 @dataclass(frozen=True)
 class OpenClawLocalSession:

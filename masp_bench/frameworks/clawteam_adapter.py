@@ -37,6 +37,7 @@ from .common import (
 )
 from .harness_profiles import HarnessProfile, get_harness_profile
 from .harness_runtime import HarnessRuntime, get_harness_runtime
+from .sde_policy import SDE_DOMAIN, sde_mcp_only_enabled
 
 log = logging.getLogger(__name__)
 
@@ -303,6 +304,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         final_text = ""
         worktrees: dict[str, Path] = {}
         spawned_agents: list[SpawnedAgentProcess] = []
+        sde_mcp_only = sde_mcp_only_enabled(ctx.task.domain)
         try:
             # 0. Clean up stale team from previous failed run
             if TeamManager.team_exists(team_name):
@@ -350,10 +352,19 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 wt_path = self._make_agent_dir(team_name, agent_cfg.role)
                 worktrees[agent_cfg.role] = wt_path
                 stage_task_input_assets(ctx.task, wt_path)
+                if sde_mcp_only:
+                    self._write_sde_agent_readme(wt_path)
 
             # 5. Register MCP for ALL agents (per-harness config strategy)
+            catalog_names = {t.name for t in ctx.catalog.tools}
             self._register_mcp_for_harness(
-                ctx.run_id, worktrees, mcp_port, clawteam_mcp_bin,
+                ctx.run_id,
+                worktrees,
+                mcp_port,
+                clawteam_mcp_bin,
+                sde_mcp_only=sde_mcp_only,
+                catalog_names=catalog_names,
+                model=run_model,
             )
 
             # 6. Spawn all agents — record timestamp for JSONL filtering
@@ -392,7 +403,11 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 sys_prompt = agent_cfg.system_prompt or agent_cfg.description or ""
 
                 cwd = str(worktrees[agent_cfg.role])
-                spawn_env = self._build_spawn_env(agent_cfg.role, cwd)
+                spawn_env = self._build_spawn_env(
+                    agent_cfg.role,
+                    cwd,
+                    sde_mcp_only=sde_mcp_only,
+                )
                 spawn_command = list(self._profile.spawn_command)
                 runtime_session_id = self._runtime.session_id(
                     run_id=ctx.run_id,
@@ -409,14 +424,15 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                         command=spawn_command,
                         env=spawn_env,
                     )
-                    # ``apply_profile`` is a no-op for the openclaw profile —
-                    # it only knows how to inject ``--model`` for claude/pi/codex
-                    # CLI shapes. Pass the flag through explicitly so OpenClaw
-                    # actually uses the benchmark-requested model instead of
-                    # silently defaulting to its built-in (``gpt-5.5``).
-                    if self._profile.name == "openclaw":
-                        spawn_command.extend(["--model", run_model])
-                spawn_command = self._runtime.adjust_spawn_command(spawn_command)
+                    # For openclaw, the model is set via the isolated
+                    # openclaw.json config (models.providers.openai.models),
+                    # not via CLI flags — ``openclaw agent`` does not accept
+                    # ``--model``.
+                spawn_command = self._runtime.adjust_spawn_command(
+                    spawn_command,
+                    sde_mcp_only=sde_mcp_only,
+                    catalog_names=catalog_names,
+                )
                 result_msg = backend.spawn(
                     command=spawn_command,
                     agent_name=agent_cfg.role,
@@ -426,7 +442,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     prompt=prompt,
                     env=spawn_env,
                     cwd=cwd,
-                    skip_permissions=True,
+                    skip_permissions=not sde_mcp_only,
                     system_prompt=sys_prompt,
                     is_leader=is_leader,
                     keepalive=self._runtime.keepalive_enabled(),
@@ -476,7 +492,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             )
 
             # 8. Collect traces (per-harness ingestor)
-            catalog_names = {t.name for t in ctx.catalog.tools}
             all_roles = [a.role for a in all_agents]
 
             final_text = self._collect_traces(
@@ -486,6 +501,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 action_sink=ctx.action_sink,
                 hub_role=hub_role,
                 spawn_timestamp=spawn_timestamp,
+                sde_mcp_only=sde_mcp_only,
             )
             final_text = await self._late_read_hub_final_text(
                 current_text=final_text,
@@ -508,11 +524,14 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     "capture_mode": "jsonl_hub_final_text",
                 },
             )
-            await self._stop_and_restore_bank_state(
-                bank=ctx.bank,
-                dump_path=bank_dump_path,
-                proc=mcp_proc,
-            )
+            if ctx.task.domain == SDE_DOMAIN:
+                stop_mcp_server(mcp_proc)
+            else:
+                await self._stop_and_restore_bank_state(
+                    bank=ctx.bank,
+                    dump_path=bank_dump_path,
+                    proc=mcp_proc,
+                )
             mcp_proc = None
 
             return RunOutcome(framework=self.framework_id, final_output=final_text)
@@ -556,6 +575,8 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             "--task-metadata-json", task_metadata_json,
             "--bank-dump-path", str(bank_dump_path),
         ]
+        if ctx.workspace is not None:
+            cmd.extend(["--workspace-path", str(ctx.workspace.path)])
 
         proc = subprocess.Popen(
             cmd,
@@ -644,6 +665,19 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         wt_path = get_data_dir() / "workspaces" / team_name / agent_role
         wt_path.mkdir(parents=True, exist_ok=True)
         return wt_path
+
+    @staticmethod
+    def _write_sde_agent_readme(worktree_path: Path) -> None:
+        readme = worktree_path / "README_MASP_SDE.md"
+        readme.write_text(
+            "# MASP SDE Workspace\n\n"
+            "This is an empty scratch workspace for the native harness only.\n"
+            "Do not use native file, edit, or shell tools for the target codebase.\n"
+            "Use the MASP `masp_tools` MCP software-engineering tools such as "
+            "`read_source_code`, `search_codebase`, `write_source_code`, and "
+            "`run_tests` to access the real backend workspace.\n",
+            encoding="utf-8",
+        )
 
     # ------------------------------------------------------------------
     # Agent completion detection
@@ -839,12 +873,19 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         worktrees: dict[str, Path],
         mcp_port: int,
         clawteam_mcp_bin: str,
+        *,
+        sde_mcp_only: bool = False,
+        catalog_names: set[str] | None = None,
+        model: str = "",
     ) -> None:
         self._runtime.register_mcp(
             run_id=run_id,
             worktrees=worktrees,
             mcp_port=mcp_port,
             clawteam_command=clawteam_mcp_bin,
+            sde_mcp_only=sde_mcp_only,
+            catalog_names=catalog_names,
+            model=model,
         )
 
     def _unregister_mcp_for_harness(self, worktrees: dict[str, Path]) -> None:
@@ -854,8 +895,18 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     # Per-harness spawn environment
     # ------------------------------------------------------------------
 
-    def _build_spawn_env(self, agent_role: str, cwd: str) -> dict[str, str]:
-        return self._runtime.build_spawn_env(agent_role=agent_role, cwd=cwd)
+    def _build_spawn_env(
+        self,
+        agent_role: str,
+        cwd: str,
+        *,
+        sde_mcp_only: bool = False,
+    ) -> dict[str, str]:
+        return self._runtime.build_spawn_env(
+            agent_role=agent_role,
+            cwd=cwd,
+            sde_mcp_only=sde_mcp_only,
+        )
 
     # ------------------------------------------------------------------
     # Per-harness trace collection
@@ -869,6 +920,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         action_sink: Any,
         hub_role: str,
         spawn_timestamp: float,
+        sde_mcp_only: bool = False,
     ) -> str:
         return self._runtime.collect_traces(
             run_id=self._current_run_id,
@@ -878,6 +930,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             action_sink=action_sink,
             hub_role=hub_role,
             spawn_timestamp=spawn_timestamp,
+            sde_mcp_only=sde_mcp_only,
         )
 
     def _lookup_spawn_pid(

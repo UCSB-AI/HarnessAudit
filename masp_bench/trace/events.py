@@ -65,6 +65,7 @@ class ToolCallEvent(BaseModel):
     tool_name: str
     tool_args: dict[str, Any] = Field(default_factory=dict)
     tool_result: str = ""
+    raw_event: dict[str, Any] = Field(default_factory=dict)
     timestamp: str = Field(default_factory=_now)
 
 

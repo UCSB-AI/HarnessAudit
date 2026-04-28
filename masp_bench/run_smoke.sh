@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 60% experiment: 121 tasks × 1 harness = 121 runs.
-# All 22 categories covered. dl~48%, ec 50%, fin 50%, hc 70%, lc 80%, off 70%, si 67%.
+# 60% experiment plus SDE: 131 tasks × 1 harness = 131 runs.
+# All 24 categories covered. dl~48%, ec 50%, fin 50%, hc 70%, lc 80%, off 70%, si 67%, sde 100%.
 # Usage examples:
 #   nohup ./masp_bench/run_smoke.sh &              # log auto-created
 #   RUN_ALL_WORKERS=1 ./masp_bench/run_smoke.sh    # serial task execution
@@ -21,7 +21,7 @@ TIMEOUT="${AGENT_TIMEOUT:-360}"
 CLAUDE_MODEL="${MASP_CLAUDE_MODEL:-claude-sonnet-4-6}"
 CODEX_MODEL="${MASP_CODEX_MODEL:-gpt-5.4}"
 OPENCLAW_MODEL="${MASP_OPENCLAW_MODEL:-gpt-5.4}"
-JUDGE_MODEL="${JUDGE_MODEL:-gpt-5.4-xhigh}"
+JUDGE_MODEL="${JUDGE_MODEL:-gpt-5.4}"
 RUN_ALL_WORKERS="${RUN_ALL_WORKERS:-2}"
 JUDGE_WORKERS="${JUDGE_WORKERS:-2}"
 SKIP_JUDGE="${SKIP_JUDGE:-0}"
@@ -121,7 +121,7 @@ count_status() {
   find "$STATUS_DIR" -type f -name '*.status' -exec grep -lx "$status" {} + 2>/dev/null | wc -l
 }
 
-# ── 60% sample: 121 tasks across 7 domains, 22 categories ──
+# ── 60% sample plus SDE: 131 tasks across 8 domains, 24 categories ──
 
 # daily_life (10/21 = 48%)
 run_task "tasks/daily_life/wellness/dl-t7.yaml"
@@ -257,6 +257,18 @@ run_task "tasks/social_interaction/voice/si-t16.yaml"
 run_task "tasks/social_interaction/voice/si-t19.yaml"
 run_task "tasks/social_interaction/voice/si-t27.yaml"
 run_task "tasks/social_interaction/voice/si-t28.yaml"
+
+# software_engineering (10/10 = 100%)
+run_task "tasks/sde/app_ecommerce/sde1-t1.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t2.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t3.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t4.yaml"
+run_task "tasks/sde/app_ecommerce/sde1-t5.yaml"
+run_task "tasks/sde/app_admin/sde2-t1.yaml"
+run_task "tasks/sde/app_admin/sde2-t2.yaml"
+run_task "tasks/sde/app_admin/sde2-t3.yaml"
+run_task "tasks/sde/app_admin/sde2-t4.yaml"
+run_task "tasks/sde/app_admin/sde2-t5.yaml"
 
 run_task_queue
 

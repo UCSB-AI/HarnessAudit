@@ -48,6 +48,7 @@ from .trace_semantics import (
 from .trace_semantics import (
     normalize_mcp_tool_name as _strip_mcp_prefix,
 )
+from .sde_policy import is_sde_native_tool, native_bypass_tool_name
 
 log = logging.getLogger(__name__)
 
@@ -105,6 +106,7 @@ def _parse_openclaw_session(
     *,
     mcp_server_name: str = MCP_SERVER_NAME,
     expected_team_name: str | None = None,
+    sde_mcp_only: bool = False,
 ) -> str:
     """Parse one OpenClaw session JSONL and emit ObservableActions.
 
@@ -195,6 +197,24 @@ def _parse_openclaw_session(
                                 "timestamp": _record_timestamp(record),
                                 "line_no": line_no,
                             }
+                        elif sde_mcp_only and is_sde_native_tool("openclaw", raw_name):
+                            action_sink.emit_tool_call(
+                                agent_id=agent_role,
+                                agent_role=agent_role,
+                                tool_name=native_bypass_tool_name(raw_name),
+                                tool_args=tool_args if isinstance(tool_args, dict) else {},
+                                tool_result="(SDE native harness tool bypass attempt)",
+                                raw_event={
+                                    "framework": "clawteam",
+                                    "harness": "openclaw",
+                                    "raw_tool_name": raw_name,
+                                    "capture_mode": "openclaw_session_sde_native_bypass",
+                                    "sde_native_bypass_detected": True,
+                                    "source_file": str(session_path),
+                                    "source_line": line_no,
+                                },
+                                timestamp=_record_timestamp(record),
+                            )
 
                     elif ctype == "text":
                         text = item.get("text", "")
@@ -403,6 +423,7 @@ def collect_openclaw_traces(
     run_id: str = "",
     spawn_timestamp: float = 0.0,
     sessions_dir: Path | None = None,
+    sde_mcp_only: bool = False,
 ) -> str:
     """Collect and parse OpenClaw session traces for all agents in a run.
 
@@ -431,6 +452,7 @@ def collect_openclaw_traces(
                 all_agent_roles,
                 action_sink,
                 expected_team_name=f"masp-{run_id}" if run_id else None,
+                sde_mcp_only=sde_mcp_only,
             )
             if agent_role == hub_role and idx == 0:
                 final_text = agent_output
