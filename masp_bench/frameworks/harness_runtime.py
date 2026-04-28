@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -19,15 +20,20 @@ from .sde_policy import (
     SDE_OPENCLAW_NATIVE_TOOLS,
 )
 
+log = logging.getLogger(__name__)
+
 CLAUDE_CODE_AGENT_TOOL = "Agent"
 CLAUDE_CODE_ALLOWED_TOOLS_FLAG = "--allowedTools"
 CLAUDE_CODE_DISALLOWED_TOOLS_FLAG = "--disallowedTools"
 CLAUDE_CODE_TOOLS_FLAG = "--tools"
+KEEP_CLAUDE_ISOLATION_ENV = "MASP_KEEP_CLAUDE_ISOLATION"
 KEEP_CODEX_ISOLATION_ENV = "MASP_KEEP_CODEX_ISOLATION"
 KEEP_OPENCLAW_ISOLATION_ENV = "MASP_KEEP_OPENCLAW_ISOLATION"
+CLAUDE_ISOLATION_ROOT_ENV = "MASP_CLAUDE_ISOLATION_ROOT"
 CODEX_ISOLATION_ROOT_ENV = "MASP_CODEX_ISOLATION_ROOT"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
 OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+CLAUDE_CONFIG_FILE_NAME = ".claude.json"
 
 
 def _append_comma_flag_values(
@@ -181,7 +187,17 @@ class HarnessRuntime(Protocol):
 class ClaudeHarnessRuntime:
     config_store: HarnessConfigStore = field(default_factory=HarnessConfigStore)
     _supports_tools_flag: bool | None = field(default=None, init=False)
+    _root_dir: Path | None = field(default=None, init=False)
+    _config_dir: Path | None = field(default=None, init=False)
+    _config_path: Path | None = field(default=None, init=False)
+    _alternate_config_path: Path | None = field(default=None, init=False)
+    _agent_log_dir: Path | None = field(default=None, init=False)
+    _run_id: str | None = field(default=None, init=False)
     name: str = "claude"
+
+    @property
+    def config_dir(self) -> Path | None:
+        return self._config_dir
 
     def register_mcp(
         self,
@@ -194,15 +210,74 @@ class ClaudeHarnessRuntime:
         catalog_names: set[str] | None = None,
         model: str = "",
     ) -> None:
-        del run_id, sde_mcp_only, catalog_names, model
-        self.config_store.register_claude(
+        del sde_mcp_only, catalog_names, model
+        self.cleanup()
+
+        root_dir = _mk_isolation_root(
+            prefix=f"masp-claude-harness-{_safe_temp_fragment(run_id)}-",
+            root_env=CLAUDE_ISOLATION_ROOT_ENV,
+        )
+        config_dir = root_dir / ".claude"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "projects").mkdir(parents=True, exist_ok=True)
+        agent_log_dir = root_dir / "logs" / "agents"
+        agent_log_dir.mkdir(parents=True, exist_ok=True)
+
+        config_path = root_dir / CLAUDE_CONFIG_FILE_NAME
+        alternate_config_path = config_dir / CLAUDE_CONFIG_FILE_NAME
+        self._inherit_claude_config(config_dir, config_path, alternate_config_path)
+
+        local_store = HarnessConfigStore(
+            claude_config_path=config_path,
+            codex_config_path=self.config_store.codex_config_path,
+            openclaw_config_path=self.config_store.openclaw_config_path,
+        )
+        local_store.register_claude(
             project_paths=list(worktrees.values()),
             mcp_url=f"http://127.0.0.1:{mcp_port}/sse",
             clawteam_command=clawteam_command,
         )
+        self._mirror_claude_config(config_path, alternate_config_path)
+
+        self._root_dir = root_dir
+        self._config_dir = config_dir
+        self._config_path = config_path
+        self._alternate_config_path = alternate_config_path
+        self._agent_log_dir = agent_log_dir
+        self._run_id = run_id
 
     def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
-        self.config_store.unregister_claude(project_paths=list(worktrees.values()))
+        del worktrees
+        return None
+
+    def _inherit_claude_config(
+        self,
+        config_dir: Path,
+        config_path: Path,
+        alternate_config_path: Path,
+    ) -> None:
+        source_dir = Path.home() / ".claude"
+        for name in (
+            ".credentials.json",
+            "settings.json",
+            "settings.local.json",
+            "mcp-needs-auth-cache.json",
+        ):
+            source = source_dir / name
+            if source.is_file():
+                shutil.copy2(source, config_dir / name)
+
+        source_config = self.config_store.claude_config_path
+        if source_config.is_file():
+            shutil.copy2(source_config, config_path)
+        else:
+            config_path.write_text("{}", encoding="utf-8")
+        self._mirror_claude_config(config_path, alternate_config_path)
+
+    @staticmethod
+    def _mirror_claude_config(config_path: Path, alternate_config_path: Path) -> None:
+        alternate_config_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(config_path, alternate_config_path)
 
     def build_spawn_env(
         self,
@@ -212,7 +287,17 @@ class ClaudeHarnessRuntime:
         sde_mcp_only: bool = False,
     ) -> dict[str, str]:
         del cwd, sde_mcp_only
-        return {}
+        if self._config_dir is None:
+            raise RuntimeError("Claude runtime must register_mcp before spawning agents")
+        env = dict(os.environ)
+        env["CLAUDE_CONFIG_DIR"] = str(self._config_dir)
+        if self._agent_log_dir is not None and self._run_id:
+            log_name = (
+                f"{_safe_temp_fragment(self._run_id)}-"
+                f"{_safe_temp_fragment(agent_role)}.log"
+            )
+            env["CLAWTEAM_SPAWN_LOG_FILE"] = str(self._agent_log_dir / log_name)
+        return env
 
     def adjust_spawn_command(
         self,
@@ -294,6 +379,9 @@ class ClaudeHarnessRuntime:
     ) -> str:
         from .jsonl_collector import collect_all_agent_traces
 
+        if self._config_dir is None:
+            raise RuntimeError("Claude runtime must register_mcp before collecting traces")
+
         return collect_all_agent_traces(
             worktree_map=worktrees,
             catalog_tool_names=catalog_names,
@@ -303,6 +391,7 @@ class ClaudeHarnessRuntime:
             run_id=run_id,
             spawn_timestamp=spawn_timestamp,
             sde_mcp_only=sde_mcp_only,
+            claude_config_dir=self._config_dir,
         )
 
     def read_final_output(
@@ -318,7 +407,16 @@ class ClaudeHarnessRuntime:
         return ""
 
     def cleanup(self) -> None:
-        return None
+        if self._root_dir and os.environ.get(KEEP_CLAUDE_ISOLATION_ENV, "").strip():
+            log.warning("Keeping Claude isolation dir: %s", self._root_dir)
+        elif self._root_dir:
+            shutil.rmtree(self._root_dir, ignore_errors=True)
+        self._root_dir = None
+        self._config_dir = None
+        self._config_path = None
+        self._alternate_config_path = None
+        self._agent_log_dir = None
+        self._run_id = None
 
 
 @dataclass

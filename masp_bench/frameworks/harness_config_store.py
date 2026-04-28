@@ -36,29 +36,35 @@ def _atomic_write_text(path: Path, text: str) -> None:
 
 def _locked_json_update(path: Path, mutator: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a+", encoding="utf-8") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+    lock_path = path.with_name(f".{path.name}.lock")
+    with open(lock_path, "a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle, fcntl.LOCK_EX)
         try:
-            handle.seek(0)
-            raw = handle.read()
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except OSError:
+                raw = ""
             payload = json.loads(raw) if raw.strip() else {}
             mutator(payload)
             _atomic_write_text(path, json.dumps(payload, indent=2))
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            fcntl.flock(lock_handle, fcntl.LOCK_UN)
 
 
 def _locked_text_update(path: Path, mutator: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a+", encoding="utf-8") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+    lock_path = path.with_name(f".{path.name}.lock")
+    with open(lock_path, "a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle, fcntl.LOCK_EX)
         try:
-            handle.seek(0)
-            raw = handle.read()
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except OSError:
+                raw = ""
             updated = mutator(raw)
             _atomic_write_text(path, updated)
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            fcntl.flock(lock_handle, fcntl.LOCK_UN)
 
 
 def _parse_toml_value(raw_value: str) -> Any:

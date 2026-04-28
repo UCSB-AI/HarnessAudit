@@ -68,6 +68,7 @@ def find_agent_jsonl(
     worktree_path: Path,
     *,
     created_after: float = 0.0,
+    claude_config_dir: Path | None = None,
 ) -> list[Path]:
     """Find JSONL files for an agent's Claude Code session created after a timestamp.
 
@@ -85,7 +86,8 @@ def find_agent_jsonl(
     is found.
     """
     encoded = _encode_project_path(worktree_path)
-    project_dir = Path.home() / ".claude" / "projects" / encoded
+    config_dir = claude_config_dir or Path.home() / ".claude"
+    project_dir = config_dir / "projects" / encoded
     if not project_dir.exists():
         log.warning("No Claude Code project dir for %s (expected %s)", worktree_path, project_dir)
         return []
@@ -359,6 +361,7 @@ def collect_all_agent_traces(
     run_id: str = "",
     spawn_timestamp: float = 0.0,
     sde_mcp_only: bool = False,
+    claude_config_dir: Path | None = None,
 ) -> str:
     """Collect and parse JSONL traces for all agents in a run.
 
@@ -386,7 +389,11 @@ def collect_all_agent_traces(
     final_text = ""
 
     for agent_role, wt_path in worktree_map.items():
-        jsonl_files = find_agent_jsonl(wt_path, created_after=spawn_timestamp)
+        jsonl_files = find_agent_jsonl(
+            wt_path,
+            created_after=spawn_timestamp,
+            claude_config_dir=claude_config_dir,
+        )
         if not jsonl_files:
             log.warning("No JSONL found for agent %s at %s", agent_role, wt_path)
             continue
