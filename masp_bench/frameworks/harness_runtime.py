@@ -130,6 +130,9 @@ class HarnessRuntime(Protocol):
     ) -> list[str]:
         ...
 
+    def asset_stage_dir(self) -> Path | None:
+        ...
+
     def keepalive_enabled(self) -> bool:
         ...
 
@@ -238,6 +241,9 @@ class ClaudeHarnessRuntime:
             CLAUDE_CODE_DISALLOWED_TOOLS_FLAG,
             SDE_CLAUDE_NATIVE_TOOLS,
         )
+
+    def asset_stage_dir(self) -> Path | None:
+        return None
 
     def _command_supports_tools_flag(self, command: list[str]) -> bool:
         if self._supports_tools_flag is not None:
@@ -472,6 +478,9 @@ class CodexHarnessRuntime:
         del sde_mcp_only, catalog_names
         return list(command)
 
+    def asset_stage_dir(self) -> Path | None:
+        return None
+
     def keepalive_enabled(self) -> bool:
         return False
 
@@ -553,6 +562,7 @@ class OpenClawHarnessRuntime:
     _config_path: Path | None = field(default=None, init=False)
     _state_dir: Path | None = field(default=None, init=False)
     _sessions_dir: Path | None = field(default=None, init=False)
+    _agent_workspace_dir: Path | None = field(default=None, init=False)
     _agent_log_dir: Path | None = field(default=None, init=False)
     _run_id: str | None = field(default=None, init=False)
     name: str = "openclaw"
@@ -568,6 +578,10 @@ class OpenClawHarnessRuntime:
     @property
     def sessions_dir(self) -> Path | None:
         return self._sessions_dir
+
+    @property
+    def agent_workspace_dir(self) -> Path | None:
+        return self._agent_workspace_dir
 
     def register_mcp(
         self,
@@ -590,6 +604,8 @@ class OpenClawHarnessRuntime:
         state_dir = root_dir / "state"
         sessions_dir = state_dir / "agents" / "main" / "sessions"
         sessions_dir.mkdir(parents=True, exist_ok=True)
+        agent_workspace_dir = root_dir / "agent-workspace"
+        agent_workspace_dir.mkdir(parents=True, exist_ok=True)
         agent_log_dir = root_dir / "logs" / "agents"
         agent_log_dir.mkdir(parents=True, exist_ok=True)
         config_path = root_dir / "openclaw.json"
@@ -613,6 +629,32 @@ class OpenClawHarnessRuntime:
             mcp_config = dict(mcp_config)
         mcp_config["servers"] = managed_servers
         config["mcp"] = mcp_config
+
+        agents_config = config.get("agents")
+        if not isinstance(agents_config, dict):
+            agents_config = {}
+        else:
+            agents_config = dict(agents_config)
+        defaults = agents_config.get("defaults")
+        if not isinstance(defaults, dict):
+            defaults = {}
+        else:
+            defaults = dict(defaults)
+        defaults["workspace"] = str(agent_workspace_dir)
+        agents_config["defaults"] = defaults
+
+        agent_list = agents_config.get("list")
+        if isinstance(agent_list, list):
+            rewritten_list: list[Any] = []
+            for item in agent_list:
+                if isinstance(item, dict):
+                    rewritten_item = dict(item)
+                    rewritten_item["workspace"] = str(agent_workspace_dir)
+                    rewritten_list.append(rewritten_item)
+                else:
+                    rewritten_list.append(item)
+            agents_config["list"] = rewritten_list
+        config["agents"] = agents_config
 
         # Override the OpenClaw model when the benchmark requests a specific one.
         if model:
@@ -648,6 +690,7 @@ class OpenClawHarnessRuntime:
         self._config_path = config_path
         self._state_dir = state_dir
         self._sessions_dir = sessions_dir
+        self._agent_workspace_dir = agent_workspace_dir
         self._agent_log_dir = agent_log_dir
         self._run_id = run_id
 
@@ -709,6 +752,9 @@ class OpenClawHarnessRuntime:
     ) -> list[str]:
         del sde_mcp_only, catalog_names
         return list(command)
+
+    def asset_stage_dir(self) -> Path | None:
+        return self._agent_workspace_dir
 
     def keepalive_enabled(self) -> bool:
         return False
@@ -784,6 +830,7 @@ class OpenClawHarnessRuntime:
         self._config_path = None
         self._state_dir = None
         self._sessions_dir = None
+        self._agent_workspace_dir = None
         self._agent_log_dir = None
         self._run_id = None
         return None

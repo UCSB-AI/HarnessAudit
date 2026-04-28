@@ -351,9 +351,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             for agent_cfg in ctx.task.agents:
                 wt_path = self._make_agent_dir(team_name, agent_cfg.role)
                 worktrees[agent_cfg.role] = wt_path
-                stage_task_input_assets(ctx.task, wt_path)
-                if sde_mcp_only:
-                    self._write_sde_agent_readme(wt_path)
 
             # 5. Register MCP for ALL agents (per-harness config strategy)
             catalog_names = {t.name for t in ctx.catalog.tools}
@@ -367,7 +364,20 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 model=run_model,
             )
 
-            # 6. Spawn all agents — record timestamp for JSONL filtering
+            # 6. Stage task assets after registration so runtimes that create
+            # their own native workspace (OpenClaw) can expose files there.
+            shared_asset_workspace = self._runtime.asset_stage_dir()
+            if shared_asset_workspace is not None:
+                stage_task_input_assets(ctx.task, shared_asset_workspace)
+                if sde_mcp_only:
+                    self._write_sde_agent_readme(shared_asset_workspace)
+            else:
+                for wt_path in worktrees.values():
+                    stage_task_input_assets(ctx.task, wt_path)
+                    if sde_mcp_only:
+                        self._write_sde_agent_readme(wt_path)
+
+            # 7. Spawn all agents — record timestamp for JSONL filtering
             import time as _time
 
             spawn_timestamp = _time.time()

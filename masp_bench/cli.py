@@ -24,6 +24,15 @@ from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
 
 
+def _harness_scoped_dir(base_dir: Path, harness: str) -> Path:
+    """Store run artifacts under a harness-specific child directory.
+
+    Callers may pass either the artifact root (``results``) or an already scoped
+    directory (``results/openclaw``); avoid appending the harness twice.
+    """
+    return base_dir if base_dir.name == harness else base_dir / harness
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     """Run a single task and evaluate."""
     pkg_root = Path(__file__).resolve().parent        # masp_bench/
@@ -43,7 +52,11 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"  tools:      {len(catalog.tools)} in catalog")
         print()
 
-        trace_dir = Path(args.trace_dir)
+        trace_dir = _harness_scoped_dir(Path(args.trace_dir), args.harness)
+        output_dir = (
+            _harness_scoped_dir(Path(args.output), args.harness)
+            if args.output else None
+        )
         run_id = next_run_id(
             model=args.model,
             framework_slug=framework_run_id_slug(args.framework),
@@ -205,7 +218,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                     run_id=trace.run_id,
                     harness=args.harness,
                     agent_roles=[a.role for a in task.agents],
-                    results_dir=Path(args.output) if args.output else None,
+                    results_dir=output_dir,
                     task_id=task.task_id,
                     current_llm=trace.llm,
                 )
@@ -214,8 +227,8 @@ def cmd_run(args: argparse.Namespace) -> None:
                 trace_path = canonical_trace_path
             print(f"Trace saved to {trace_path}")
 
-            if args.output and trace is not None:
-                out_dir = Path(args.output)
+            if output_dir is not None and trace is not None:
+                out_dir = output_dir
                 out_dir.mkdir(parents=True, exist_ok=True)
                 db_path = out_dir / f"{task.task_id}_{run_id}.sqlite"
                 if runner.dump_bank_to_file(db_path):
@@ -227,10 +240,10 @@ def cmd_run(args: argparse.Namespace) -> None:
 
             runner.close_bank()
 
-        if args.output:
+        if output_dir is not None:
             assert trace is not None
             assert metrics is not None
-            out_dir = Path(args.output)
+            out_dir = output_dir
             out_dir.mkdir(parents=True, exist_ok=True)
             report = {
                 "task_id": task.task_id,
