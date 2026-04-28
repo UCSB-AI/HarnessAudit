@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
@@ -105,6 +106,30 @@ def _parse_json_response(response: Any) -> Any:
         raise OpenAIJSONError(f"Model returned non-JSON content: {content[:500]}") from exc
 
 
+def _close_sync_client(client: Any) -> None:
+    close = getattr(client, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception as exc:  # noqa: BLE001
+        log.debug("Failed to close OpenAI client cleanly: %s", exc)
+
+
+async def _close_async_client(client: Any) -> None:
+    close = getattr(client, "close", None)
+    if not callable(close):
+        close = getattr(client, "aclose", None)
+    if not callable(close):
+        return
+    try:
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+    except Exception as exc:  # noqa: BLE001
+        log.debug("Failed to close async OpenAI client cleanly: %s", exc)
+
+
 def create_json_response(
     *,
     model: str,
@@ -123,33 +148,36 @@ def create_json_response(
 
     attempts = _retry_attempts()
     base_delay = _retry_base_delay()
-    for attempt in range(1, attempts + 1):
-        try:
-            response = client.responses.create(
-                model=model,
-                instructions=system_prompt,
-                input=user_prompt,
-                temperature=0,
-                max_output_tokens=max_output_tokens,
-            )
-            break
-        except Exception as exc:  # noqa: BLE001
-            if attempt < attempts and _is_transient_openai_error(exc):
-                delay = _retry_delay(base_delay, attempt)
-                log.warning(
-                    "Transient OpenAI JSON request failure on attempt %d/%d; "
-                    "retrying in %.1fs: %s",
-                    attempt,
-                    attempts,
-                    delay,
-                    exc,
+    try:
+        for attempt in range(1, attempts + 1):
+            try:
+                response = client.responses.create(
+                    model=model,
+                    instructions=system_prompt,
+                    input=user_prompt,
+                    temperature=0,
+                    max_output_tokens=max_output_tokens,
                 )
-                if delay:
-                    time.sleep(delay)
-                continue
-            raise OpenAIJSONError(_request_error_message(exc)) from exc
+                break
+            except Exception as exc:  # noqa: BLE001
+                if attempt < attempts and _is_transient_openai_error(exc):
+                    delay = _retry_delay(base_delay, attempt)
+                    log.warning(
+                        "Transient OpenAI JSON request failure on attempt %d/%d; "
+                        "retrying in %.1fs: %s",
+                        attempt,
+                        attempts,
+                        delay,
+                        exc,
+                    )
+                    if delay:
+                        time.sleep(delay)
+                    continue
+                raise OpenAIJSONError(_request_error_message(exc)) from exc
 
-    return _parse_json_response(response)
+        return _parse_json_response(response)
+    finally:
+        _close_sync_client(client)
 
 
 async def create_json_response_async(
@@ -170,30 +198,33 @@ async def create_json_response_async(
 
     attempts = _retry_attempts()
     base_delay = _retry_base_delay()
-    for attempt in range(1, attempts + 1):
-        try:
-            response = await client.responses.create(
-                model=model,
-                instructions=system_prompt,
-                input=user_prompt,
-                temperature=0,
-                max_output_tokens=max_output_tokens,
-            )
-            break
-        except Exception as exc:  # noqa: BLE001
-            if attempt < attempts and _is_transient_openai_error(exc):
-                delay = _retry_delay(base_delay, attempt)
-                log.warning(
-                    "Transient OpenAI JSON request failure on attempt %d/%d; "
-                    "retrying in %.1fs: %s",
-                    attempt,
-                    attempts,
-                    delay,
-                    exc,
+    try:
+        for attempt in range(1, attempts + 1):
+            try:
+                response = await client.responses.create(
+                    model=model,
+                    instructions=system_prompt,
+                    input=user_prompt,
+                    temperature=0,
+                    max_output_tokens=max_output_tokens,
                 )
-                if delay:
-                    await asyncio.sleep(delay)
-                continue
-            raise OpenAIJSONError(_request_error_message(exc)) from exc
+                break
+            except Exception as exc:  # noqa: BLE001
+                if attempt < attempts and _is_transient_openai_error(exc):
+                    delay = _retry_delay(base_delay, attempt)
+                    log.warning(
+                        "Transient OpenAI JSON request failure on attempt %d/%d; "
+                        "retrying in %.1fs: %s",
+                        attempt,
+                        attempts,
+                        delay,
+                        exc,
+                    )
+                    if delay:
+                        await asyncio.sleep(delay)
+                    continue
+                raise OpenAIJSONError(_request_error_message(exc)) from exc
 
-    return _parse_json_response(response)
+        return _parse_json_response(response)
+    finally:
+        await _close_async_client(client)
