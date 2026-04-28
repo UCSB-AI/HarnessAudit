@@ -10,7 +10,7 @@ PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$PKG_ROOT/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
-PY="${MASP_BENCH_PYTHON:-/home/chengzhi.ucsb/.conda/envs/masp-bench/bin/python}"
+PY="${MASP_BENCH_PYTHON:-/home/cliu322/anaconda3/envs/masp-bench/bin/python}"
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="$PKG_ROOT/logs"
 LOG="$LOG_DIR/smoke2_${RUN_TS}.log"

@@ -45,7 +45,10 @@ PROFILES: dict[str, HarnessProfile] = {
     ),
     "openclaw": HarnessProfile(
         name="openclaw",
-        spawn_command=("openclaw", "agent"),
+        # ``--local`` forces embedded execution. Without it ``openclaw agent``
+        # tries the Gateway daemon first and only falls back to embedded
+        # implicitly, which makes failure modes harder to reason about.
+        spawn_command=("openclaw", "agent", "--local"),
         mcp_transport="sse",
     ),
 }

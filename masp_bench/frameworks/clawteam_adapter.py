@@ -409,6 +409,13 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                         command=spawn_command,
                         env=spawn_env,
                     )
+                    # ``apply_profile`` is a no-op for the openclaw profile —
+                    # it only knows how to inject ``--model`` for claude/pi/codex
+                    # CLI shapes. Pass the flag through explicitly so OpenClaw
+                    # actually uses the benchmark-requested model instead of
+                    # silently defaulting to its built-in (``gpt-5.5``).
+                    if self._profile.name == "openclaw":
+                        spawn_command.extend(["--model", run_model])
                 spawn_command = self._runtime.adjust_spawn_command(spawn_command)
                 result_msg = backend.spawn(
                     command=spawn_command,
@@ -424,6 +431,16 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     is_leader=is_leader,
                     keepalive=self._runtime.keepalive_enabled(),
                 )
+                # SubprocessBackend.spawn returns the validation error string
+                # instead of raising when the harness CLI is missing or the
+                # command is otherwise invalid. Detect that and fail loudly so
+                # we don't spend the whole agent_timeout polling for session
+                # files that will never be written.
+                if result_msg.startswith("Error:"):
+                    raise RuntimeError(
+                        f"Failed to spawn {agent_cfg.role} ({self._profile.name}): "
+                        f"{result_msg} (command={spawn_command!r})"
+                    )
                 spawned_agents.append(
                     SpawnedAgentProcess(
                         role=agent_cfg.role,
@@ -732,6 +749,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                     worktrees={},
                     hub_role=hub_role,
                     spawn_timestamp=spawn_timestamp,
+                    quiet=True,
                 ):
                     return
                 # File stable but no final text yet (LLM thinking gap).
@@ -773,11 +791,13 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
         while True:
             read_attempt += 1
+            at_deadline = asyncio.get_running_loop().time() >= deadline
             final_text = self._runtime.read_final_output(
                 run_id=self._current_run_id,
                 worktrees=worktrees,
                 hub_role=hub_role,
                 spawn_timestamp=spawn_timestamp,
+                quiet=not at_deadline,
             )
             if final_text:
                 log.info(
@@ -788,7 +808,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
 
             if not drain_paths:
                 return ""
-            if asyncio.get_running_loop().time() >= deadline:
+            if at_deadline:
                 log.info(
                     "Hub final text remained empty after %.1fs settle window (status=%s)",
                     settle_window,

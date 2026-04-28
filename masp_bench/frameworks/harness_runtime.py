@@ -116,6 +116,7 @@ class HarnessRuntime(Protocol):
         worktrees: dict[str, Path],
         hub_role: str,
         spawn_timestamp: float,
+        quiet: bool = False,
     ) -> str:
         ...
 
@@ -200,8 +201,9 @@ class ClaudeHarnessRuntime:
         worktrees: dict[str, Path],
         hub_role: str,
         spawn_timestamp: float,
+        quiet: bool = False,
     ) -> str:
-        del run_id, worktrees, hub_role, spawn_timestamp
+        del run_id, worktrees, hub_role, spawn_timestamp, quiet
         return ""
 
     def cleanup(self) -> None:
@@ -396,8 +398,9 @@ class CodexHarnessRuntime:
         worktrees: dict[str, Path],
         hub_role: str,
         spawn_timestamp: float,
+        quiet: bool = False,
     ) -> str:
-        del run_id, worktrees, hub_role, spawn_timestamp
+        del run_id, worktrees, hub_role, spawn_timestamp, quiet
         return ""
 
     def cleanup(self) -> None:
@@ -563,6 +566,7 @@ class OpenClawHarnessRuntime:
         worktrees: dict[str, Path],
         hub_role: str,
         spawn_timestamp: float,
+        quiet: bool = False,
     ) -> str:
         del worktrees
         from .openclaw_ingestor import read_openclaw_final_output
@@ -572,6 +576,7 @@ class OpenClawHarnessRuntime:
             hub_role=hub_role,
             spawn_timestamp=spawn_timestamp,
             sessions_dir=self._sessions_dir,
+            quiet=quiet,
         )
 
     def cleanup(self) -> None:

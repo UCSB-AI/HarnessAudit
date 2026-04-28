@@ -67,21 +67,26 @@ def _find_openclaw_sessions(
     *,
     created_after: float = 0.0,
     sessions_dir: Path | None = None,
+    quiet: bool = False,
 ) -> list[Path]:
     """Find OpenClaw session JSONL for an agent.
 
     The session ID is set via ``--session-id`` at spawn time (controlled by
     ``HarnessRuntime.session_name()``).  The JSONL file is at
     ``~/.openclaw/agents/main/sessions/{session-id}.jsonl``.
+
+    ``quiet=True`` downgrades missing/stale-file messages to ``debug`` so the
+    drain-poll loop does not spam ``warning`` once per second.
     """
+    miss_log = log.debug if quiet else log.warning
     root_dir = sessions_dir or _OPENCLAW_SESSIONS_DIR
     session_file = root_dir / f"{session_id}.jsonl"
     if not session_file.exists():
-        log.warning("No OpenClaw session file for %s at %s", agent_role, session_file)
+        miss_log("No OpenClaw session file for %s at %s", agent_role, session_file)
         return []
 
     if created_after > 0.0 and session_file.stat().st_mtime <= created_after:
-        log.warning("OpenClaw session %s is older than spawn timestamp", session_file)
+        miss_log("OpenClaw session %s is older than spawn timestamp", session_file)
         return []
 
     return [session_file]
@@ -348,21 +353,28 @@ def read_openclaw_final_output(
     hub_role: str,
     spawn_timestamp: float = 0.0,
     sessions_dir: Path | None = None,
+    quiet: bool = False,
 ) -> str:
-    """Read the hub's final text without re-emitting tool actions."""
+    """Read the hub's final text without re-emitting tool actions.
+
+    ``quiet=True`` suppresses missing-file logging — used by the drain-poll
+    loop where the file legitimately doesn't exist yet on every tick.
+    """
     sid = session_name(run_id, hub_role, "openclaw")
     session_files = _find_openclaw_sessions(
         hub_role,
         sid,
         created_after=spawn_timestamp,
         sessions_dir=sessions_dir,
+        quiet=quiet,
     )
     if not session_files:
-        log.info(
-            "No OpenClaw hub session available for late final-text read (role=%s, session=%s)",
-            hub_role,
-            sid,
-        )
+        if not quiet:
+            log.info(
+                "No OpenClaw hub session available for late final-text read (role=%s, session=%s)",
+                hub_role,
+                sid,
+            )
         return ""
 
     session_path = session_files[0]
