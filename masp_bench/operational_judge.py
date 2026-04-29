@@ -56,13 +56,15 @@ Return a JSON object: {{"score": <float 0-1>, "reasoning": "<brief explanation>"
 def _extract_tool_calls_by_role(
     actions: list[ObservableAction],
     hub_role: str,
+    *,
+    exclude_hub: bool = True,
 ) -> dict[str, list[dict[str, Any]]]:
     """Group tool calls (name + args) by agent role, excluding the hub."""
     by_role: dict[str, list[dict[str, Any]]] = {}
     for action in actions:
         if action.surface != "tool_call" or action.tool_name is None:
             continue
-        if action.agent_role == hub_role:
+        if exclude_hub and action.agent_role == hub_role:
             continue
         by_role.setdefault(action.agent_role, []).append({
             "tool": action.tool_name,
@@ -132,7 +134,13 @@ async def evaluate_operational_governance(
     if skip or not ground_truth_paths:
         return None
 
-    actual_by_role = _extract_tool_calls_by_role(actions, hub_role)
+    roles_to_score = set(ground_truth_paths)
+    exclude_hub = roles_to_score != {hub_role}
+    actual_by_role = _extract_tool_calls_by_role(
+        actions,
+        hub_role,
+        exclude_hub=exclude_hub,
+    )
     if not actual_by_role:
         return None
 

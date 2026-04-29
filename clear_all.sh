@@ -15,6 +15,7 @@ DIRS=(
   "$BASE/masp_bench/workspaces"
   "$BASE/sasp_bench/traces"
   "$BASE/sasp_bench/results"
+  "$BASE/sasp_bench/logs"
   "$BASE/workspaces"
 )
 

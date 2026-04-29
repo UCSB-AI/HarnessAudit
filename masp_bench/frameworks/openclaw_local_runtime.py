@@ -8,9 +8,40 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .harness_config_store import HarnessConfigStore
 from .openclaw_bootstrap import OpenClawBootstrapManager
 
-OPENAI_HARDCODED_BASE_URL = "https://api.openai.com/v1"
+KEEP_OPENCLAW_ISOLATION_ENV = "MASP_KEEP_OPENCLAW_ISOLATION"
+OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
+OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+
+
+def _mk_isolation_root(*, prefix: str, root_env: str | None = None) -> Path:
+    parent: Path | None = None
+    if root_env:
+        raw_parent = os.environ.get(root_env, "").strip()
+        if raw_parent:
+            parent = Path(raw_parent)
+            parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=str(parent) if parent else None))
+
+
+def _load_json_object(path: Path) -> dict[str, object]:
+    try:
+        raw = path.read_text(encoding="utf-8")
+        payload = json.loads(raw) if raw.strip() else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _openai_model_id(model: str) -> str | None:
+    if model.startswith("openai/"):
+        return model.split("/", 1)[1]
+    if "/" not in model:
+        return model
+    return None
+
 
 @dataclass(frozen=True)
 class OpenClawLocalSession:
@@ -28,8 +59,9 @@ class OpenClawLocalSession:
 class OpenClawLocalRuntime:
     """Build and clean up an isolated OpenClaw local-mode runtime."""
 
-    def __init__(self) -> None:
+    def __init__(self, config_store: HarnessConfigStore | None = None) -> None:
         self._root_dir: Path | None = None
+        self._config_store = config_store or HarnessConfigStore()
         self._bootstrap_manager = OpenClawBootstrapManager()
 
     def prepare_session(
@@ -45,7 +77,10 @@ class OpenClawLocalRuntime:
         # OpenClaw reads BOOTSTRAP.md on startup and can derail the task with
         # onboarding context, so hide it for the duration of this run.
         self._bootstrap_manager.suppress()
-        root_dir = Path(tempfile.mkdtemp(prefix="masp-openclaw-local-"))
+        root_dir = _mk_isolation_root(
+            prefix="masp-openclaw-local-",
+            root_env=OPENCLAW_ISOLATION_ROOT_ENV,
+        )
         self._root_dir = root_dir
 
         workspace_path = workspace or (root_dir / "workspace")
@@ -61,48 +96,73 @@ class OpenClawLocalRuntime:
         session_id = run_id
         session_path = state_dir / "agents" / agent_id / "sessions" / f"{session_id}.jsonl"
 
-        config = {
-            "agents": {
-                "defaults": {
-                    "workspace": str(workspace_path),
-                    "timeoutSeconds": timeout_seconds,
-                    "model": {"primary": model},
-                },
-                "list": [
-                    {
-                        "id": agent_id,
-                        "name": f"SASP Bench ({task_domain})",
-                        "workspace": str(workspace_path),
-                        "model": {"primary": model},
-                    }
-                ],
-            },
-            "mcp": {
-                "servers": {
-                    "masp_tools": {
-                        "url": mcp_url,
-                        "transport": "sse",
-                    }
-                }
-            },
-        }
-
-        if model.startswith("openai/"):
-            model_id = model.split("/", 1)[1]
-            config["models"] = {
-                "providers": {
-                    "openai": {
-                        "baseUrl": OPENAI_HARDCODED_BASE_URL,
-                        "models": [
-                            {
-                                "id": model_id,
-                                "name": model_id,
-                            }
-                        ],
-                    }
-                }
+        config = _load_json_object(self._config_store.openclaw_config_path)
+        agents_config = config.get("agents")
+        if not isinstance(agents_config, dict):
+            agents_config = {}
+        else:
+            agents_config = dict(agents_config)
+        defaults = agents_config.get("defaults")
+        if not isinstance(defaults, dict):
+            defaults = {}
+        else:
+            defaults = dict(defaults)
+        defaults.update(
+            {
+                "workspace": str(workspace_path),
+                "timeoutSeconds": timeout_seconds,
+                "model": {"primary": model},
             }
+        )
+        agents_config["defaults"] = defaults
+        agents_config["list"] = [
+            {
+                "id": agent_id,
+                "name": f"SASP Bench ({task_domain})",
+                "workspace": str(workspace_path),
+                "model": {"primary": model},
+            }
+        ]
+        config["agents"] = agents_config
 
+        mcp_config = config.get("mcp")
+        if not isinstance(mcp_config, dict):
+            mcp_config = {}
+        else:
+            mcp_config = dict(mcp_config)
+        servers = mcp_config.get("servers")
+        if not isinstance(servers, dict):
+            servers = {}
+        else:
+            servers = dict(servers)
+        servers["masp_tools"] = {
+            "url": mcp_url,
+            "transport": "sse",
+        }
+        mcp_config["servers"] = servers
+        config["mcp"] = mcp_config
+
+        model_id = _openai_model_id(model)
+        if model_id:
+            models_cfg = config.setdefault("models", {})
+            if not isinstance(models_cfg, dict):
+                models_cfg = {}
+                config["models"] = models_cfg
+            providers = models_cfg.setdefault("providers", {})
+            if not isinstance(providers, dict):
+                providers = {}
+                models_cfg["providers"] = providers
+            openai_cfg = providers.setdefault("openai", {})
+            if not isinstance(openai_cfg, dict):
+                openai_cfg = {}
+                providers["openai"] = openai_cfg
+            openai_cfg["baseUrl"] = (
+                os.environ.get("OPENCLAW_OPENAI_BASE_URL")
+                or os.environ.get("OPENAI_BASE_URL")
+                or openai_cfg.get("baseUrl")
+                or OPENCLAW_DEFAULT_OPENAI_BASE_URL
+            )
+            openai_cfg["models"] = [{"id": model_id, "name": model_id}]
 
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
@@ -146,7 +206,8 @@ class OpenClawLocalRuntime:
     def cleanup(self) -> None:
         try:
             if self._root_dir is not None:
-                shutil.rmtree(self._root_dir, ignore_errors=True)
+                if os.environ.get(KEEP_OPENCLAW_ISOLATION_ENV) != "1":
+                    shutil.rmtree(self._root_dir, ignore_errors=True)
                 self._root_dir = None
         finally:
             self._bootstrap_manager.restore()

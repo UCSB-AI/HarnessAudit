@@ -10,9 +10,15 @@ def _sa_fixtures_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "fixtures"
 
 
+def _fixture_domain(domain: str) -> str:
+    if domain == "office":
+        return "office_enterprise_management"
+    return domain
+
+
 def get_bank(domain: str) -> Any:
     """Return a Bank for the given domain using SA fixture seeds."""
-    seed_dir = _sa_fixtures_dir() / domain
+    seed_dir = _sa_fixtures_dir() / _fixture_domain(domain)
 
     if domain == "finance":
         from masp_bench.banks.finance import FinanceBank

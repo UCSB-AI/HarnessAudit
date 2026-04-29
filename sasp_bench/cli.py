@@ -29,6 +29,11 @@ from masp_bench.workspace import WorkspaceManager
 from sasp_bench.loader import load_sa_task_with_tools, resolve_sa_task_path
 
 
+def _scoped_dir(base_dir: Path, scope: str) -> Path:
+    """Store artifacts under a framework-specific child directory."""
+    return base_dir if base_dir.name == scope else base_dir / scope
+
+
 def _normalize_model(name: str) -> str:
     return re.sub(r"-\d{4}-\d{2}-\d{2}$", "", name)
 
@@ -54,11 +59,12 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"  tools:      {len(catalog.tools)} in catalog")
         print()
 
-        trace_dir = Path(args.trace_dir)
+        trace_dir = _scoped_dir(Path(args.trace_dir), args.framework)
+        output_dir = _scoped_dir(Path(args.output), args.framework) if args.output else None
         run_id = next_run_id(
             args.model,
             framework_slug=framework_run_id_slug(args.framework),
-            harness_slug="openclaw",
+            harness_slug=args.framework,
         )
         trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
@@ -97,6 +103,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             print(f"  tool_calls: {trace.n_tool_calls}")
             if trace.error:
                 print(f"  runner error: {trace.error}")
+                raise RuntimeError(trace.error)
             print()
 
             print("Checking access rules...")
@@ -199,19 +206,17 @@ def cmd_run(args: argparse.Namespace) -> None:
         finally:
             writer.close()
             print(f"Trace saved to {trace_path}")
-            if args.output and trace is not None:
-                out_dir = Path(args.output)
-                out_dir.mkdir(parents=True, exist_ok=True)
-                db_path = out_dir / f"{task.task_id}_{run_id}.sqlite"
+            if output_dir is not None and trace is not None:
+                output_dir.mkdir(parents=True, exist_ok=True)
+                db_path = output_dir / f"{task.task_id}_{run_id}.sqlite"
                 if runner.dump_bank_to_file(db_path):
                     print(f"Bank DB saved to {db_path}")
             runner.close_bank()
 
-        if args.output:
+        if output_dir is not None:
             assert trace is not None
             assert metrics is not None
-            out_dir = Path(args.output)
-            out_dir.mkdir(parents=True, exist_ok=True)
+            output_dir.mkdir(parents=True, exist_ok=True)
             report = {
                 "task_id": task.task_id,
                 "run_id": trace.run_id,
@@ -231,8 +236,9 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "violations_by_severity": metrics.violations_by_severity,
                 "trace_file": str(trace_path),
                 "error": trace.error,
+                "warnings": trace.warnings,
             }
-            out_path = out_dir / f"{task.task_id}_{trace.run_id}.json"
+            out_path = output_dir / f"{task.task_id}_{trace.run_id}.json"
             with open(out_path, "w") as f:
                 json.dump(report, f, indent=2)
             print(f"Report saved to {out_path}")
@@ -270,8 +276,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_p.add_argument(
         "--judge-model",
-        default="gpt-5.4-xhigh",
-        help="GPT model for completion and operational judges (default: gpt-5.4-xhigh)",
+        default="gpt-5.4",
+        help="GPT model for completion and operational judges (default: gpt-5.4)",
     )
     run_p.add_argument(
         "--judge-workers",

@@ -16,6 +16,10 @@ from masp_bench.loader import (
 from masp_bench.schemas.access_rules import AccessMatch, AccessRule
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
 
+_FIXTURE_DOMAIN_ALIASES = {
+    "office": "office_enterprise_management",
+}
+
 
 def sa_package_root() -> Path:
     """Root of the sasp_bench package."""
@@ -33,6 +37,10 @@ def sa_tools_dir() -> Path:
 
 def sa_fixtures_dir() -> Path:
     return sa_package_root() / "fixtures"
+
+
+def sa_fixture_domain(domain: str) -> str:
+    return _FIXTURE_DOMAIN_ALIASES.get(domain, domain)
 
 
 def resolve_sa_task_path(
@@ -85,7 +93,7 @@ def load_sa_tool_catalog(domain: str) -> ToolCatalog:
     catalog = ToolCatalog(**data)
 
     # Load fixture data from SA fixtures directory
-    fixtures_dir = sa_fixtures_dir() / domain
+    fixtures_dir = sa_fixtures_dir() / sa_fixture_domain(domain)
     for tool in catalog.tools:
         if tool.fixture and tool.fixture_key:
             fixture_path = fixtures_dir / tool.fixture
