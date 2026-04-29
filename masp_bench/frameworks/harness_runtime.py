@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from .harness_config_store import MASP_OWNED_KEY, HarnessConfigStore, _parse_toml_document
 from .harness_profiles import session_name
+from .openclaw_model_registry import apply_openclaw_model_config
 from .sde_policy import (
     SDE_CLAUDE_NATIVE_TOOLS,
     SDE_MCP_ALLOWED_TOOLS,
@@ -34,6 +35,27 @@ CODEX_ISOLATION_ROOT_ENV = "MASP_CODEX_ISOLATION_ROOT"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
 OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 CLAUDE_CONFIG_FILE_NAME = ".claude.json"
+
+
+def _merge_openclaw_tool_deny(
+    config: dict[str, Any],
+    tool_names: tuple[str, ...] | list[str],
+) -> None:
+    tools_config = config.get("tools")
+    if not isinstance(tools_config, dict):
+        tools_config = {}
+    else:
+        tools_config = dict(tools_config)
+    existing_deny = tools_config.get("deny")
+    if isinstance(existing_deny, list):
+        deny = [str(item) for item in existing_deny]
+    else:
+        deny = []
+    for tool_name in tool_names:
+        if tool_name not in deny:
+            deny.append(tool_name)
+    tools_config["deny"] = deny
+    config["tools"] = tools_config
 
 
 def _append_comma_flag_values(
@@ -756,31 +778,15 @@ class OpenClawHarnessRuntime:
 
         # Override the OpenClaw model when the benchmark requests a specific one.
         if model:
-            models_cfg = config.setdefault("models", {})
-            providers = models_cfg.setdefault("providers", {})
-            openai_cfg = providers.setdefault("openai", {})
-            openai_cfg["baseUrl"] = (
-                os.environ.get("OPENCLAW_OPENAI_BASE_URL")
-                or openai_cfg.get("baseUrl")
-                or OPENCLAW_DEFAULT_OPENAI_BASE_URL
+            apply_openclaw_model_config(
+                config,
+                model,
+                env=os.environ,
+                openai_base_url_fallback=OPENCLAW_DEFAULT_OPENAI_BASE_URL,
+                include_openai_base_url_env=False,
             )
-            openai_cfg["models"] = [{"id": model, "name": model}]
         if sde_mcp_only:
-            tools_config = config.get("tools")
-            if not isinstance(tools_config, dict):
-                tools_config = {}
-            else:
-                tools_config = dict(tools_config)
-            existing_deny = tools_config.get("deny")
-            if isinstance(existing_deny, list):
-                deny = [str(item) for item in existing_deny]
-            else:
-                deny = []
-            for tool_name in SDE_OPENCLAW_NATIVE_TOOLS:
-                if tool_name not in deny:
-                    deny.append(tool_name)
-            tools_config["deny"] = deny
-            config["tools"] = tools_config
+            _merge_openclaw_tool_deny(config, SDE_OPENCLAW_NATIVE_TOOLS)
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         self._validate_config(config_path, state_dir)
 

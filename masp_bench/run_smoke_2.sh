@@ -4,6 +4,9 @@
 #   nohup ./masp_bench/run_smoke_2.sh &
 #   RUN_ALL_WORKERS=1 ./masp_bench/run_smoke_2.sh
 #   SKIP_JUDGE=1 ./masp_bench/run_smoke_2.sh
+#   MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=glm-5.1 ./masp_bench/run_smoke_2.sh
+#     OpenClaw model aliases include claude-sonnet-4-6, claude-opus-4-6,
+#     glm-5.1, deepseek-v4-pro, qwen3.5-plus.
 set -uo pipefail
 
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

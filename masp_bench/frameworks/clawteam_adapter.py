@@ -434,10 +434,9 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                         command=spawn_command,
                         env=spawn_env,
                     )
-                    # For openclaw, the model is set via the isolated
-                    # openclaw.json config (models.providers.openai.models),
-                    # not via CLI flags — ``openclaw agent`` does not accept
-                    # ``--model``.
+                    # For OpenClaw, the model is set via the isolated
+                    # openclaw.json config (agents.defaults.model.primary and
+                    # provider-specific model catalogs), not via CLI flags.
                 spawn_command = self._runtime.adjust_spawn_command(
                     spawn_command,
                     sde_mcp_only=sde_mcp_only,

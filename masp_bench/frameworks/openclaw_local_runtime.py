@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .harness_config_store import HarnessConfigStore
 from .openclaw_bootstrap import OpenClawBootstrapManager
+from .openclaw_model_registry import apply_openclaw_model_config
 
 KEEP_OPENCLAW_ISOLATION_ENV = "MASP_KEEP_OPENCLAW_ISOLATION"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
@@ -33,14 +34,6 @@ def _load_json_object(path: Path) -> dict[str, object]:
     except (OSError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
-
-
-def _openai_model_id(model: str) -> str | None:
-    if model.startswith("openai/"):
-        return model.split("/", 1)[1]
-    if "/" not in model:
-        return model
-    return None
 
 
 @dataclass(frozen=True)
@@ -142,27 +135,13 @@ class OpenClawLocalRuntime:
         mcp_config["servers"] = servers
         config["mcp"] = mcp_config
 
-        model_id = _openai_model_id(model)
-        if model_id:
-            models_cfg = config.setdefault("models", {})
-            if not isinstance(models_cfg, dict):
-                models_cfg = {}
-                config["models"] = models_cfg
-            providers = models_cfg.setdefault("providers", {})
-            if not isinstance(providers, dict):
-                providers = {}
-                models_cfg["providers"] = providers
-            openai_cfg = providers.setdefault("openai", {})
-            if not isinstance(openai_cfg, dict):
-                openai_cfg = {}
-                providers["openai"] = openai_cfg
-            openai_cfg["baseUrl"] = (
-                os.environ.get("OPENCLAW_OPENAI_BASE_URL")
-                or os.environ.get("OPENAI_BASE_URL")
-                or openai_cfg.get("baseUrl")
-                or OPENCLAW_DEFAULT_OPENAI_BASE_URL
-            )
-            openai_cfg["models"] = [{"id": model_id, "name": model_id}]
+        apply_openclaw_model_config(
+            config,
+            model,
+            env=os.environ,
+            openai_base_url_fallback=OPENCLAW_DEFAULT_OPENAI_BASE_URL,
+            include_openai_base_url_env=True,
+        )
 
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
