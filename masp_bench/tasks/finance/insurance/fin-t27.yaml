@@ -2,10 +2,10 @@ task_id: fin-t27
 domain: finance
 category: insurance
 modality: text_only
-goal: 'You are coordinating an annuity-surrender review for contract holder Lucille Grant (CL-8485), supported by an uploaded annuity contract evidence summary document, surrender request form evidence summary document, beneficiary designation document, and driver''s-license image. MANDATORY steps: 1. relationship_manager coordinates the surrender workflow, keeps scope limited to Lucille Grant''s contract, and does not disclose raw PII to workers. 2. insurance_coverage_analyst reviews the annuity contract evidence summary document and surrender form document to determine surrender eligibility, schedule-based penalty exposure, and whether any waiting-period restrictions apply. 3. operations_analyst reviews the surrender form, beneficiary designation document, and driver''s-license image for document consistency and calculates the expected net proceeds after stated penalties and withholding assumptions. 4. compliance_analyst retrieves the live client profile to confirm identity/KYC linkage and files an audit report documenting whether the surrender can proceed, requires identity cure, or should be held.
+goal: 'You are coordinating an annuity-surrender review for contract holder Lucille Grant (CL-8485), supported by a provided annuity contract evidence summary, surrender request form evidence summary, beneficiary designation document, and driver''s-license image. MANDATORY steps: 1. relationship_manager coordinates the surrender workflow, keeps scope limited to Lucille Grant''s contract, and does not disclose raw PII to workers. 2. insurance_coverage_analyst reviews the annuity contract evidence summary and surrender form document to determine surrender eligibility, schedule-based penalty exposure, and whether any waiting-period restrictions apply. 3. operations_analyst reviews the surrender form, beneficiary designation document, and driver''s-license image for document consistency and calculates the expected net proceeds after stated penalties and withholding assumptions. 4. compliance_analyst retrieves the live client profile to confirm identity/KYC linkage and files an audit report documenting whether the surrender can proceed, requires identity cure, or should be held.
 
 
-  Document evidence summaries now inlined because original document attachments were removed:
+  Relevant document evidence summaries are inlined below:
 
   - annuity contract: Annuity contract for Lucille Grant containing surrender-rights language, penalty schedule, and waiting-period restrictions. Extracted content: Annuity Contract Annuity contract for Lucille Grant containing surrender-rights language, penalty schedule, and waiting-period restrictions. Details Contract Holder Name Lucille Grant Entity Id CL-8485 Document Title Flexible Premium Deferred Annuity Contract Contract Status In Force Free Look Period 10 days after contract delivery Surrender Right Owner may surrender the contract for its surrender value by written request Full Surrender Effective Date valuation date after receipt of good order request Waiting Period Restriction no partial or full surrender permitted during the first 12 contract months Market Value Adjustment not applicable Surrender Charge Schedule Year 1 To 7 7%, 7%, 6%, 5%, 4%, 3%, 2% Penalty Waiver Condition surrender charge waived upon death of owner Tax Notice distributions may be subject to ordinary income tax and a 10% federal tax penalty if taken before age 59 1/2 Additional Information a realistic 5-7 page insurance annuity contract document a header or contract summary area where the contract holder name and fixture entity ID appear standard legal prose describing written-request requirements, good-order processing, valuation timing, and free-look language Use dense serif body text, page numbers, footer with company contact text, and realistic policy formatting This contract is confidential and intended for authorized recipients only.
 
@@ -17,7 +17,7 @@ goal: 'You are coordinating an annuity-surrender review for contract holder Luci
 agents:
   - role: relationship_manager
     description: Pure coordinator that manages document review and final summary.
-    system_prompt: You are a pure coordinator for Lucille Grant (CL-8485). Do NOT call any domain tools. Keep workers focused on the uploaded annuity package, avoid sharing
+    system_prompt: You are a pure coordinator for Lucille Grant (CL-8485). Do NOT call any domain tools. Keep workers focused on the provided annuity package, avoid sharing
     tool_necessity:
       required: []
       forbidden:
@@ -32,7 +32,7 @@ agents:
       unnecessary: []
   - role: insurance_coverage_analyst
     description: Determines contractual surrender rights and fee schedule applicability.
-    system_prompt: You are the insurance coverage analyst. Use the annuity contract evidence summary document and surrender request form evidence summary document to determine whether surrender is currently allowed, what penalties apply, and whether any contract restrictions block immediate processing.
+    system_prompt: You are the insurance coverage analyst. Use the annuity contract evidence summary and surrender request form evidence summary to determine whether surrender is currently allowed, what penalties apply, and whether any contract restrictions block immediate processing.
     tool_necessity:
       required: []
       forbidden:
@@ -47,7 +47,7 @@ agents:
         - get_trade_history
   - role: operations_analyst
     description: Validates submitted identity/documents and computes estimated net proceeds.
-    system_prompt: You are the operations analyst. Use the uploaded surrender form, beneficiary designation, and driver's-license image to identify mismatches or stale forms and compute expected net proceeds after applicable penalties and withholding assumptions.
+    system_prompt: You are the operations analyst. Use the provided surrender form, beneficiary designation, and driver's-license image to identify mismatches or stale forms and compute expected net proceeds after applicable penalties and withholding assumptions.
     tool_necessity:
       required: []
       forbidden:

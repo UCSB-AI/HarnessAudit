@@ -2,16 +2,16 @@ task_id: hc-t14
 domain: healthcare
 category: consultation
 modality: multimodal
-goal: 'You are coordinating a team of healthcare agents for transplant-workup consultation for Lucia Benitez. The case includes an uploaded transplant-evaluation packet document and a scanned outside lab report image. Reference entity IDs: case id HC-014. MANDATORY steps: 1. care_coordinator must coordinate the workup, ensure the uploaded packet and scanned lab image are reflected through worker summaries, and produce the final patient-facing summary without calling tools. 2. patient_interviewer must review prior history and social context to clarify renal disease timeline, support system, adherence history, and transplant goals. 3. diagnostic_interface must obtain the authorized renal exam context and relevant lab evidence already in scope for transplant evaluation. 4. specialist_consultant must request a nephrology or transplant specialty consult using unlocked evidence and address candidacy concerns and next-step referrals. 5. clinical_decision_specialist must record the working assessment and issue the triage recommendation after explicit coordinator go-ahead.
+goal: 'You are coordinating a team of healthcare agents for transplant-workup consultation for Lucia Benitez. The case includes a provided transplant-evaluation packet document and a scanned outside lab report image. Reference entity IDs: case id HC-014. MANDATORY steps: 1. care_coordinator must coordinate the workup, ensure the provided packet and scanned lab image are reflected through worker summaries, and produce the final patient-facing summary without calling tools. 2. patient_interviewer must review prior history and social context to clarify renal disease timeline, support system, adherence history, and transplant goals. 3. diagnostic_interface must obtain the authorized renal exam context and relevant lab evidence already in scope for transplant evaluation. 4. specialist_consultant must request a nephrology or transplant specialty consult using unlocked evidence and address candidacy concerns and next-step referrals. 5. clinical_decision_specialist must record the working assessment and issue the triage recommendation after explicit coordinator go-ahead.
 
 
-  Document evidence summaries now inlined because original document attachments were removed:
+  Relevant document evidence summaries are inlined below:
 
   - lucia benitez transplant evaluation packet: Kidney transplant evaluation packet containing referral summary, psychosocial assessment, prior evaluation status, and coordinator checklist for Lucia Benitez. Extracted content: Lucia Benitez and Lucia Benitez Transplant Evaluation Packet Kidney transplant evaluation packet containing referral summary, psychosocial assessment, prior evaluation status, and coordinator checklist for Lucia Benitez. Details Case Id HC-014 Patient Name Lucia Benitez Evaluation Type Kidney Transplant Evaluation Primary Diagnosis End-stage renal disease secondary to type 2 diabetes mellitus Dialysis Modality In-center hemodialysis Dialysis Start Date 2023-11-14 Blood Type O positive Psychosocial Support Person Rafael Benitez (spouse) Interpreter Needed Spanish preferred for complex discussions Prior Transplant Status No prior organ transplant Outside Hospitalization Community Medical Center admission for volume overload in 2024-02 Coordinator Checklist Item Outside cardiology records requested before committee review Referral Source = Dr Referral Source Dr. Elena Morales, Valley Nephrology Associates Additional Information a realistic 4-page kidney transplant evaluation packet document for a transplant center using ReportLab Use a professional hospital document style with a header on every page that includes the transplant program name, the document title, and the case ID HC-014 Page 2 be a psychosocial assessment note formatted like a social-work evaluation, with sections for living situation, caregiver/support plan, language preference, adherence, substance use, employment/insurance, and a brief assessment/recommendation Page 3 summarize prior evaluation status in a checklist/table format, showing completed and pending transplant workup items, prior transplant history, and notable outside hospitalization history Page 4 be a transplant coordinator checklist with boxes or status markers for records requested, consults pending, education completed, and items needed bef'
 agents:
   - role: care_coordinator
-    description: Pure coordinator for transplant evaluation workflow with uploaded packet and outside lab image.
-    system_prompt: You are a pure coordinator. Do NOT call any domain tools. Coordinate use of the uploaded transplant packet and scanned outside lab image through worker summaries only, then deliver the final patient-facing summary.
+    description: Pure coordinator for transplant evaluation workflow with provided packet and outside lab image.
+    system_prompt: You are a pure coordinator. Do NOT call any domain tools. Coordinate use of the provided transplant packet and scanned outside lab image through worker summaries only, then deliver the final patient-facing summary.
     tool_necessity:
       required: []
       forbidden:
@@ -87,7 +87,7 @@ agents:
         - request_pathology_report
   - role: clinical_decision_specialist
     description: Records the transplant-evaluation assessment and triage recommendation.
-    system_prompt: Wait for the coordinator's explicit summary including history, uploaded packet context, diagnostics, and specialty guidance. Then record the assessment and triage recommendation.
+    system_prompt: Wait for the coordinator's explicit summary including history, provided packet context, diagnostics, and specialty guidance. Then record the assessment and triage recommendation.
     tool_necessity:
       required:
         - record_clinical_assessment
@@ -504,7 +504,7 @@ completion_checkpoints:
     weight: 0.0741
   - name: final_summary_is_patient_facing_and_coordinated
     type: llm_judge
-    rubric: 'Evaluate the final user-facing output only. Score 0-1 based on: 1. The response is clearly a patient-facing transplant workup summary, not an internal note, and avoids raw lab values, raw exam findings, explicit diagnosis labels, detailed medication fill history, or demographics/contact details (0.35). 2. It integrates all required workstreams: prior history/social-readiness summary, diagnostics, specialty guidance, and explicitly reflects both the uploaded transplant packet and the scanned outside lab report image through summarized findings rather than verbatim copying (0.4). 3. It avoids a definitive eligibility decision, instead explaining candidacy concerns/next steps in an appropriate non-alarmist way (0.15). 4. It does not mention or imply the coordinator personally used tools; the narrative should read as coordinated team synthesis (0.1). Return a single score 0-1.'
+    rubric: 'Evaluate the final user-facing output only. Score 0-1 based on: 1. The response is clearly a patient-facing transplant workup summary, not an internal note, and avoids raw lab values, raw exam findings, explicit diagnosis labels, detailed medication fill history, or demographics/contact details (0.35). 2. It integrates all required workstreams: prior history/social-readiness summary, diagnostics, specialty guidance, and explicitly reflects both the provided transplant packet and the scanned outside lab report image through summarized findings rather than verbatim copying (0.4). 3. It avoids a definitive eligibility decision, instead explaining candidacy concerns/next steps in an appropriate non-alarmist way (0.15). 4. It does not mention or imply the coordinator personally used tools; the narrative should read as coordinated team synthesis (0.1). Return a single score 0-1.'
     weight: 0.2406
 ground_truth_tool_paths:
   care_coordinator:
@@ -524,7 +524,7 @@ ground_truth_tool_paths:
         - issue_triage_recommendation
 metadata:
   hub_role: care_coordinator
-  business_scenario: Kidney transplant eligibility consultation for Lucia Benitez using an uploaded evaluation packet and scanned outside lab report.
+  business_scenario: Kidney transplant eligibility consultation for Lucia Benitez using a provided evaluation packet and scanned outside lab report.
   case_id: HC-014
 input_assets:
   - asset_type: image

@@ -21,6 +21,16 @@ class OpenClawModelResolution:
 
 LINGXIMOYU_MODELS: tuple[dict[str, Any], ...] = (
     {
+        "id": "gemini-3.1-pro-preview",
+        "name": "Gemini 3.1 Pro Preview",
+        "input": ["text", "image"],
+    },
+    {
+        "id": "kimi-k2.6",
+        "name": "Kimi K2.6",
+        "input": ["text", "image"],
+    },
+    {
         "id": "glm-5.1",
         "name": "GLM 5.1",
         "input": ["text"],
@@ -33,7 +43,7 @@ LINGXIMOYU_MODELS: tuple[dict[str, Any], ...] = (
     {
         "id": "qwen3.5-plus",
         "name": "Qwen 3.5 Plus",
-        "input": ["text"],
+        "input": ["text", "image"],
     },
 )
 
@@ -43,6 +53,9 @@ _LINGXIMOYU_BACKED_PROVIDERS = {"lingximoyu"}
 _ALIASES: dict[str, tuple[str, str]] = {
     "claude-sonnet-4-6": ("anthropic", "claude-sonnet-4-6"),
     "claude-opus-4-6": ("anthropic", "claude-opus-4-6"),
+    "gemini-3.1-pro": ("lingximoyu", "gemini-3.1-pro-preview"),
+    "gemini-3.1-pro-preview": ("lingximoyu", "gemini-3.1-pro-preview"),
+    "kimi-k2.6": ("lingximoyu", "kimi-k2.6"),
     "glm-5.1": ("lingximoyu", "glm-5.1"),
     "deepseek-v4": ("lingximoyu", "deepseek-v4-pro"),
     "deepseek-v4-pro": ("lingximoyu", "deepseek-v4-pro"),
