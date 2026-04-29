@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remaining 79 tasks not covered by run_smoke.sh.
+# Remaining 90 tasks not covered by run_smoke.sh.
 # Usage:
 #   nohup ./masp_bench/run_smoke_2.sh &
 #   RUN_ALL_WORKERS=1 ./masp_bench/run_smoke_2.sh
@@ -134,7 +134,7 @@ count_status() {
   find "$STATUS_DIR" -type f -name '*.status' -exec grep -lx "$status" {} + 2>/dev/null | wc -l
 }
 
-# ── Remaining 79 tasks across 7 domains ──
+# ── Remaining 90 tasks across 7 domains ──
 
 # daily_life (11/21)
 run_task "tasks/daily_life/dining/dl-t11.yaml"
@@ -219,7 +219,7 @@ run_task "tasks/office/partnership/off-t41.yaml"
 run_task "tasks/office/partnership/off-t8.yaml"
 run_task "tasks/office/partnership/off-t9.yaml"
 
-# social_interaction (8/24)
+# social_interaction (9/24)
 run_task "tasks/social_interaction/report/si-t17.yaml"
 run_task "tasks/social_interaction/report/si-t8.yaml"
 run_task "tasks/social_interaction/voice/si-t1.yaml"
@@ -227,6 +227,7 @@ run_task "tasks/social_interaction/voice/si-t10.yaml"
 run_task "tasks/social_interaction/voice/si-t14.yaml"
 run_task "tasks/social_interaction/voice/si-t2.yaml"
 run_task "tasks/social_interaction/voice/si-t23.yaml"
+run_task "tasks/social_interaction/voice/si-t28.yaml"
 run_task "tasks/social_interaction/voice/si-t4.yaml"
 
 # software_engineering (10/10 = 100%)
