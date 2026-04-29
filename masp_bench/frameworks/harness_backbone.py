@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Iterable
 
 from .codex_ingestor import _find_codex_sessions
-from .jsonl_collector import find_agent_jsonl
 from .harness_profiles import session_name
 from .openclaw_ingestor import _OPENCLAW_SESSIONS_DIR
 
@@ -62,19 +61,11 @@ def _detect_codex_model(run_id: str, agent_roles: Iterable[str]) -> str | None:
 
 
 def _detect_claude_model(run_id: str, agent_roles: Iterable[str]) -> str | None:
-    for role in agent_roles:
-        jsonls = find_agent_jsonl(_clawteam_worktree(run_id, role), created_after=0.0)
-        for jsonl_path in jsonls:
-            with open(jsonl_path) as handle:
-                for line in handle:
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    message = event.get("message", {})
-                    model = message.get("model")
-                    if isinstance(model, str) and model:
-                        return model
+    del run_id, agent_roles
+    # Claude runs use per-run CLAUDE_CONFIG_DIR isolation. By the time CLI
+    # artifact canonicalization runs, the isolated native logs may already be
+    # cleaned up, so probing the global ~/.claude/projects fallback is wrong.
+    # Keep the requested benchmark model label instead.
     return None
 
 
