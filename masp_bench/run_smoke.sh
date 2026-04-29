@@ -6,7 +6,7 @@
 #   RUN_ALL_WORKERS=1 ./masp_bench/run_smoke.sh    # serial task execution
 #   JUDGE_WORKERS=1 ./masp_bench/run_smoke.sh      # serial judge calls per task
 #   SKIP_JUDGE=1 ./masp_bench/run_smoke.sh         # disable LLM judge
-#   MASP_HARNESS=claude ./masp_bench/run_smoke.sh  # write results/traces under claude/
+#   MASP_HARNESS=claude ./masp_bench/run_smoke.sh  # write results/traces under claude/<model>/
 set -uo pipefail
 
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,8 +38,9 @@ JUDGE_WORKERS="${JUDGE_WORKERS:-2}"
 SKIP_JUDGE="${SKIP_JUDGE:-0}"
 RESULTS_DIR="$PKG_ROOT/results"
 TRACES_DIR="$PKG_ROOT/traces"
-HARNESS_RESULTS_DIR="$RESULTS_DIR/$HARNESS"
-HARNESS_TRACES_DIR="$TRACES_DIR/$HARNESS"
+MODEL_DIR="${HARNESS_MODEL//\//__}"
+HARNESS_RESULTS_DIR="$RESULTS_DIR/$HARNESS/$MODEL_DIR"
+HARNESS_TRACES_DIR="$TRACES_DIR/$HARNESS/$MODEL_DIR"
 STATUS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/masp-run-smoke-status.XXXXXX")"
 TASK_QUEUE=()
 

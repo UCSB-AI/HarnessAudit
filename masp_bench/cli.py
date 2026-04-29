@@ -24,13 +24,29 @@ from masp_bench.trace import AccessDecisionEvent, TraceEnd, TraceWriter
 from masp_bench.workspace import WorkspaceManager
 
 
-def _harness_scoped_dir(base_dir: Path, harness: str) -> Path:
-    """Store run artifacts under a harness-specific child directory.
+def _model_dir_name(model: str) -> str:
+    """Return a filesystem-safe model directory name.
 
-    Callers may pass either the artifact root (``results``) or an already scoped
-    directory (``results/openclaw``); avoid appending the harness twice.
+    Keep the model argument readable, but prevent provider-prefixed names such
+    as ``anthropic/claude-sonnet-4.6`` from becoming unintended nested paths.
     """
-    return base_dir if base_dir.name == harness else base_dir / harness
+    model_name = (model or "unknown-model").strip() or "unknown-model"
+    return model_name.replace("/", "__").replace(os.sep, "__")
+
+
+def _artifact_scoped_dir(base_dir: Path, harness: str, model: str) -> Path:
+    """Store run artifacts under harness/model child directories.
+
+    Callers may pass the artifact root (``results``), a harness-scoped
+    directory (``results/openclaw``), or a fully scoped directory
+    (``results/openclaw/gpt-5.4``); avoid appending path components twice.
+    """
+    model_dir = _model_dir_name(model)
+    if base_dir.name == model_dir and base_dir.parent.name == harness:
+        return base_dir
+    if base_dir.name == harness:
+        return base_dir / model_dir
+    return base_dir / harness / model_dir
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -52,9 +68,9 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"  tools:      {len(catalog.tools)} in catalog")
         print()
 
-        trace_dir = _harness_scoped_dir(Path(args.trace_dir), args.harness)
+        trace_dir = _artifact_scoped_dir(Path(args.trace_dir), args.harness, args.model)
         output_dir = (
-            _harness_scoped_dir(Path(args.output), args.harness)
+            _artifact_scoped_dir(Path(args.output), args.harness, args.model)
             if args.output else None
         )
         run_id = next_run_id(
