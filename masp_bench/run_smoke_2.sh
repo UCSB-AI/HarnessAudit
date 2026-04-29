@@ -16,14 +16,28 @@ LOG_DIR="$PKG_ROOT/logs"
 LOG="$LOG_DIR/smoke2_${RUN_TS}.log"
 
 TIMEOUT="${AGENT_TIMEOUT:-360}"
+HARNESS="${MASP_HARNESS:-openclaw}"
+CLAUDE_MODEL="${MASP_CLAUDE_MODEL:-claude-sonnet-4-6}"
+CODEX_MODEL="${MASP_CODEX_MODEL:-gpt-5.4}"
 OPENCLAW_MODEL="${MASP_OPENCLAW_MODEL:-gpt-5.4}"
+case "$HARNESS" in
+  claude) HARNESS_MODEL="$CLAUDE_MODEL" ;;
+  codex) HARNESS_MODEL="$CODEX_MODEL" ;;
+  openclaw) HARNESS_MODEL="$OPENCLAW_MODEL" ;;
+  *)
+    echo "ERROR: MASP_HARNESS must be one of: openclaw, claude, codex; got: $HARNESS" >&2
+    exit 2
+    ;;
+esac
 JUDGE_MODEL="${JUDGE_MODEL:-gpt-5.4}"
-RUN_ALL_WORKERS="${RUN_ALL_WORKERS:-4}"
+RUN_ALL_WORKERS="${RUN_ALL_WORKERS:-2}"
 JUDGE_WORKERS="${JUDGE_WORKERS:-2}"
 SKIP_JUDGE="${SKIP_JUDGE:-0}"
 RESULTS_DIR="$PKG_ROOT/results"
 TRACES_DIR="$PKG_ROOT/traces"
-STATUS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/masp-run-smoke2-status.XXXXXX")"
+HARNESS_RESULTS_DIR="$RESULTS_DIR/$HARNESS"
+HARNESS_TRACES_DIR="$TRACES_DIR/$HARNESS"
+STATUS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/masp-run-smoke-status.XXXXXX")"
 TASK_QUEUE=()
 
 if ! [[ "$RUN_ALL_WORKERS" =~ ^[1-9][0-9]*$ ]]; then
@@ -31,8 +45,9 @@ if ! [[ "$RUN_ALL_WORKERS" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-mkdir -p "$RESULTS_DIR" "$TRACES_DIR" "$LOG_DIR"
+mkdir -p "$HARNESS_RESULTS_DIR" "$HARNESS_TRACES_DIR" "$LOG_DIR"
 
+# Single log: script self-redirects stdout+stderr → log file (+ tty if interactive)
 exec > >(tee -a "$LOG") 2>&1
 
 cleanup() {
@@ -47,12 +62,14 @@ esac
 
 echo "========================================"
 echo "MASP_Bench Smoke Run 2 — $(date -Iseconds)"
-echo "  Harness:       openclaw"
-echo "  Model:         $OPENCLAW_MODEL"
+echo "  Harness:       $HARNESS"
+echo "  Model:         $HARNESS_MODEL"
 echo "  Judge:         $([ "$SKIP_JUDGE" = "0" ] && echo "ON ($JUDGE_MODEL)" || echo "OFF")"
 echo "  Task workers:  $RUN_ALL_WORKERS"
 echo "  Judge workers: $JUDGE_WORKERS"
 echo "  Timeout:       ${TIMEOUT}s"
+echo "  Results:       $HARNESS_RESULTS_DIR"
+echo "  Traces:        $HARNESS_TRACES_DIR"
 echo "  Log:           $LOG"
 echo "========================================"
 
@@ -62,23 +79,26 @@ run_task() {
 
 run_one_task() {
   local rel_yaml=$1
+  # Extract task_id from filename (e.g. "dl-t1" from "dl-t1.yaml")
   local task_id
   task_id=$(basename "$rel_yaml" .yaml)
   local status_file="$STATUS_DIR/${task_id}.status"
 
-  if compgen -G "${RESULTS_DIR}/${task_id}_*.json" > /dev/null 2>&1; then
+  # Skip if result already exists
+  if compgen -G "${HARNESS_RESULTS_DIR}/${task_id}_*.json" > /dev/null 2>&1; then
     echo "SKIP $(date -Iseconds) task=${rel_yaml} (result exists)"
     echo skipped > "$status_file"
     return 0
   fi
 
-  rm -f "${TRACES_DIR}/${task_id}_"*.jsonl 2>/dev/null
+  # Clean up incomplete trace from previous crash
+  rm -f "${HARNESS_TRACES_DIR}/${task_id}_"*.jsonl 2>/dev/null
 
-  echo "--- $(date -Iseconds) task=${rel_yaml} harness=openclaw model=${OPENCLAW_MODEL} ---"
+  echo "--- $(date -Iseconds) task=${rel_yaml} harness=${HARNESS} model=${HARNESS_MODEL} ---"
   "$PY" -m masp_bench run "$rel_yaml" \
     --framework clawteam \
-    --harness openclaw \
-    --model "$OPENCLAW_MODEL" \
+    --harness "$HARNESS" \
+    --model "$HARNESS_MODEL" \
     --agent-timeout "$TIMEOUT" \
     --output "$RESULTS_DIR/" \
     --trace-dir "$TRACES_DIR/" \

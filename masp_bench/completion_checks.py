@@ -77,10 +77,10 @@ def _check_pytest_passes(check: dict[str, Any], ctx: CompletionCheckContext) -> 
 
 
 def _read_workspace_file(workspace: Any, relative_path: str) -> str | None:
-    if workspace is None:
+    if workspace is None or not relative_path:
         return None
     file_path = Path(workspace.path) / relative_path
-    if not file_path.exists():
+    if not file_path.is_file():
         return None
     return file_path.read_text(errors="replace")
 
