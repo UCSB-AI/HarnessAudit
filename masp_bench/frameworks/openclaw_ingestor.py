@@ -56,11 +56,23 @@ MCP_SERVER_NAME = "masp_tools"
 
 # OpenClaw stores sessions under ~/.openclaw/agents/main/sessions/
 _OPENCLAW_SESSIONS_DIR = Path.home() / ".openclaw" / "agents" / "main" / "sessions"
+OPENCLAW_SESSION_SUFFIX = ".jsonl"
 
 
 # ---------------------------------------------------------------------------
 # Artifact discovery
 # ---------------------------------------------------------------------------
+
+def openclaw_session_path(
+    session_id: str,
+    *,
+    sessions_dir: Path | None = None,
+) -> Path:
+    """Return the native OpenClaw transcript path for a session id."""
+
+    root_dir = sessions_dir or _OPENCLAW_SESSIONS_DIR
+    return root_dir / f"{session_id}{OPENCLAW_SESSION_SUFFIX}"
+
 
 def _find_openclaw_sessions(
     agent_role: str,
@@ -73,21 +85,28 @@ def _find_openclaw_sessions(
     """Find OpenClaw session JSONL for an agent.
 
     The session ID is set via ``--session-id`` at spawn time (controlled by
-    ``HarnessRuntime.session_name()``).  The JSONL file is at
-    ``~/.openclaw/agents/main/sessions/{session-id}.jsonl``.
+    ``HarnessRuntime.session_name()``).  The JSONL file is
+    ``{session-id}.jsonl``.
 
     ``quiet=True`` downgrades missing/stale-file messages to ``debug`` so the
     drain-poll loop does not spam ``warning`` once per second.
     """
     miss_log = log.debug if quiet else log.warning
-    root_dir = sessions_dir or _OPENCLAW_SESSIONS_DIR
-    session_file = root_dir / f"{session_id}.jsonl"
+    session_file = openclaw_session_path(session_id, sessions_dir=sessions_dir)
     if not session_file.exists():
-        miss_log("No OpenClaw session file for %s at %s", agent_role, session_file)
+        miss_log(
+            "No OpenClaw session file for %s at %s",
+            agent_role,
+            session_file,
+        )
         return []
 
     if created_after > 0.0 and session_file.stat().st_mtime <= created_after:
-        miss_log("OpenClaw session %s is older than spawn timestamp", session_file)
+        miss_log(
+            "OpenClaw session file for %s is older than spawn timestamp: %s",
+            agent_role,
+            session_file,
+        )
         return []
 
     return [session_file]

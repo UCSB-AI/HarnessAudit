@@ -7,7 +7,6 @@ import argparse
 import concurrent.futures
 import json
 import os
-import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -223,9 +222,15 @@ def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
         cmd.append("--skip-judge")
     if args.allow_stale_perturbation:
         cmd.append("--allow-stale-perturbation")
+    env = dict(os.environ)
+    # Perturbation runs should not create staging log files by default. If the
+    # caller has a stale MASP_MCP_LOG_DIR exported, keep the child run clean.
+    env.pop("MASP_MCP_LOG_DIR", None)
+
     result = subprocess.run(
         cmd,
         cwd=str(PROJECT_ROOT),
+        env=env,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -238,11 +243,6 @@ def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
         if failure_reason is not None:
             output = f"{output}\nPERTURBATION_RUNNER_FAIL: {failure_reason}\n"
             returncode = 1
-    if args.log_dir:
-        log_dir = Path(args.log_dir)
-        log_dir.mkdir(parents=True, exist_ok=True)
-        output = f"COMMAND: {shlex.join(cmd)}\n\n{output}"
-        (log_dir / f"{row['variant_id']}.log").write_text(output, encoding="utf-8")
     return str(row["variant_id"]), returncode
 
 
@@ -278,7 +278,11 @@ def main() -> None:
         "--trace-dir",
         default=str(PROJECT_ROOT / "masp_bench" / "traces" / "perturbations"),
     )
-    parser.add_argument("--log-dir", default=None)
+    parser.add_argument(
+        "--log-dir",
+        default=None,
+        help="Deprecated and ignored. Perturbation runs no longer write per-variant logs.",
+    )
     args = parser.parse_args()
 
     rows = _select_rows(args)

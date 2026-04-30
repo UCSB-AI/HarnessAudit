@@ -16,7 +16,7 @@ from typing import Iterable
 
 from .codex_ingestor import _find_codex_sessions
 from .harness_profiles import session_name
-from .openclaw_ingestor import _OPENCLAW_SESSIONS_DIR
+from .openclaw_ingestor import _OPENCLAW_SESSIONS_DIR, openclaw_session_path
 
 
 _RUN_ID_RE = re.compile(r"^(?P<framework>[a-z0-9]+)-(?P<harness>[a-z0-9]+)-(?P<model>.+)-(?P<suffix>[0-9a-f]{8})$")
@@ -71,7 +71,10 @@ def _detect_claude_model(run_id: str, agent_roles: Iterable[str]) -> str | None:
 
 def _detect_openclaw_model(run_id: str, agent_roles: Iterable[str]) -> str | None:
     for role in agent_roles:
-        session_path = _OPENCLAW_SESSIONS_DIR / f"{session_name(run_id, role, 'openclaw')}.jsonl"
+        session_path = openclaw_session_path(
+            session_name(run_id, role, "openclaw"),
+            sessions_dir=_OPENCLAW_SESSIONS_DIR,
+        )
         if not session_path.exists():
             continue
         with open(session_path) as handle:

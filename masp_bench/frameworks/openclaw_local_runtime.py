@@ -14,6 +14,7 @@ from .openclaw_model_registry import apply_openclaw_model_config
 
 KEEP_OPENCLAW_ISOLATION_ENV = "MASP_KEEP_OPENCLAW_ISOLATION"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
+OPENCLAW_TRAJECTORY_DIR_ENV = "OPENCLAW_TRAJECTORY_DIR"
 OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
@@ -148,6 +149,7 @@ class OpenClawLocalRuntime:
         env = dict(os.environ)
         env["OPENCLAW_CONFIG_PATH"] = str(config_path)
         env["OPENCLAW_STATE_DIR"] = str(state_dir)
+        env[OPENCLAW_TRAJECTORY_DIR_ENV] = str(session_path.parent)
 
         command = (
             "openclaw",

@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -21,7 +22,7 @@ from masp_bench.perturbation import (
     load_variant_by_id,
     source_task_sha256,
 )
-from masp_bench.perturbation_eval import evaluate_perturbation
+from masp_bench.perturbation_eval import PerturbationEvaluation, evaluate_perturbation
 from masp_bench.runner import (
     BenchmarkRunner,
     framework_run_id_slug,
@@ -60,6 +61,23 @@ def _artifact_prefix(task_id: str, perturbation: PerturbationConfig | None) -> s
     if perturbation is None:
         return task_id
     return f"{task_id}_{perturbation.variant_id}"
+
+
+def _perturbation_trace_payload(
+    perturbation: PerturbationConfig | None,
+    perturbation_result: PerturbationEvaluation | None,
+) -> dict[str, Any] | None:
+    if perturbation is None:
+        return None
+    metadata = perturbation.trace_metadata()
+    if perturbation_result is None:
+        return {
+            **metadata,
+            "delivered": None,
+            "stable": None,
+            "stability_score": None,
+        }
+    return {**metadata, **perturbation_result.as_dict()}
 
 
 def _load_perturbation_config(
@@ -322,10 +340,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 comm_penalty=metrics.comm_penalty,
                 operational_safety_score=metrics.operational_safety_score,
                 task_completion_score=metrics.task_completion_score,
-                perturbation=(
-                    {**perturbation.trace_metadata(), **perturbation_result.as_dict()}
-                    if perturbation_result is not None else None
-                ),
+                perturbation=_perturbation_trace_payload(perturbation, perturbation_result),
                 violations_by_code=metrics.violations_by_code,
                 wall_time_s=trace.duration_seconds or 0.0,
                 error=trace.error,
@@ -415,16 +430,12 @@ def cmd_run(args: argparse.Namespace) -> None:
                     and action.raw_event.get("sde_native_bypass_detected") is True
                 ],
             }
-            if perturbation is not None:
-                report["perturbation"] = (
-                    {**perturbation.trace_metadata(), **perturbation_result.as_dict()}
-                    if perturbation_result is not None else {
-                        **perturbation.trace_metadata(),
-                        "delivered": None,
-                        "stable": None,
-                        "stability_score": None,
-                    }
-                )
+            perturbation_payload = _perturbation_trace_payload(
+                perturbation,
+                perturbation_result,
+            )
+            if perturbation_payload is not None:
+                report["perturbation"] = perturbation_payload
             out_path = out_dir / f"{artifact_prefix}_{trace.run_id}.json"
             with open(out_path, "w") as f:
                 json.dump(report, f, indent=2)
