@@ -177,10 +177,21 @@ def resolve_openclaw_model(
             _env_value(env_map, "OPENROUTER_BASE_URL"),
             OPENROUTER_DEFAULT_BASE_URL,
         )
+        authorization_header = f"Bearer {api_key}"
         provider_config = {
             "baseUrl": base_url,
             "apiKey": api_key,
+            "auth": "api-key",
+            "authHeader": True,
             "api": "openai-completions",
+            "headers": {
+                "Authorization": authorization_header,
+            },
+            "request": {
+                "headers": {
+                    "Authorization": authorization_header,
+                },
+            },
             "models": _openrouter_models_for_provider(model_id),
         }
     elif provider_id == "openai":

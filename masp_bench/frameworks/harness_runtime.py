@@ -35,19 +35,6 @@ CODEX_ISOLATION_ROOT_ENV = "MASP_CODEX_ISOLATION_ROOT"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
 OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 CLAUDE_CONFIG_FILE_NAME = ".claude.json"
-KIMI_OPENCLAW_NATIVE_SCHEMA_DENY_TOOLS = (
-    "group:fs",
-    "group:runtime",
-    "group:web",
-    "group:memory",
-    "group:sessions",
-    "group:ui",
-    "group:messaging",
-    "group:automation",
-    "group:nodes",
-    "group:agents",
-    "group:media",
-)
 
 
 def _merge_openclaw_tool_deny(
@@ -69,13 +56,6 @@ def _merge_openclaw_tool_deny(
             deny.append(tool_name)
     tools_config["deny"] = deny
     config["tools"] = tools_config
-
-
-def _is_openclaw_kimi_model(resolved_model: Any) -> bool:
-    return (
-        getattr(resolved_model, "provider_id", None) == "openrouter"
-        and getattr(resolved_model, "model_id", None) == "moonshotai/kimi-k2.6"
-    )
 
 
 def _append_comma_flag_values(
@@ -797,22 +777,13 @@ class OpenClawHarnessRuntime:
         config["agents"] = agents_config
 
         # Override the OpenClaw model when the benchmark requests a specific one.
-        resolved_model = None
         if model:
-            resolved_model = apply_openclaw_model_config(
+            apply_openclaw_model_config(
                 config,
                 model,
                 env=os.environ,
                 openai_base_url_fallback=OPENCLAW_DEFAULT_OPENAI_BASE_URL,
                 include_openai_base_url_env=False,
-            )
-        if _is_openclaw_kimi_model(resolved_model):
-            # Kimi-compatible OpenAI endpoints can reject some OpenClaw native
-            # tool schemas before the first model turn. Keep MASP MCP tools
-            # available, but remove the native OpenClaw tool surface.
-            _merge_openclaw_tool_deny(
-                config,
-                KIMI_OPENCLAW_NATIVE_SCHEMA_DENY_TOOLS,
             )
         if sde_mcp_only:
             _merge_openclaw_tool_deny(config, SDE_OPENCLAW_NATIVE_TOOLS)

@@ -79,7 +79,7 @@ async def _evaluate_llm_checkpoint(
     task_goal: str,
     final_output: str,
     *,
-    model: str = "gpt-5.4",
+    model: str = "gpt-5.4-nano",
 ) -> float:
     """Evaluate a single LLM-judge checkpoint.  Returns 0-1 score."""
     rubric = checkpoint.get("rubric", "")
