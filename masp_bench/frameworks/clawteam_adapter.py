@@ -50,6 +50,16 @@ DRAIN_POLL_SECONDS = 1.0
 STABLE_SNAPSHOT_POLLS = 2
 
 
+def _tail_text(path: Path, *, limit: int = 4000) -> str:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    if len(text) <= limit:
+        return text.strip()
+    return text[-limit:].strip()
+
+
 def _resolve_current_env_executable(name: str) -> str:
     resolved = shutil.which(name)
     if resolved:
@@ -589,12 +599,19 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         if ctx.perturbation is not None:
             cmd.extend(["--perturbation-json", ctx.perturbation.to_json()])
 
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
+        mcp_log_dir = Path(os.environ.get("MASP_MCP_LOG_DIR", "/tmp"))
+        mcp_log_dir.mkdir(parents=True, exist_ok=True)
+        mcp_stderr_path = mcp_log_dir / f"masp_mcp_{ctx.run_id}.stderr"
+        stderr_handle = mcp_stderr_path.open("w", encoding="utf-8")
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=stderr_handle,
+                text=True,
+            )
+        finally:
+            stderr_handle.close()
 
         loop = asyncio.get_running_loop()
         port = 0
@@ -611,11 +628,19 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 port = int(line.strip().split("=", 1)[1])
         except (asyncio.TimeoutError, ValueError) as exc:
             proc.kill()
-            raise RuntimeError(f"Failed to read MCP server port: {exc}") from exc
+            stderr_tail = _tail_text(mcp_stderr_path)
+            detail = f"Failed to read MCP server port: {exc}"
+            if stderr_tail:
+                detail = f"{detail}\nMCP stderr tail ({mcp_stderr_path}):\n{stderr_tail}"
+            raise RuntimeError(detail) from exc
 
         if port == 0:
             proc.kill()
-            raise RuntimeError("MCP server did not report a port")
+            stderr_tail = _tail_text(mcp_stderr_path)
+            detail = "MCP server did not report a port"
+            if stderr_tail:
+                detail = f"{detail}\nMCP stderr tail ({mcp_stderr_path}):\n{stderr_tail}"
+            raise RuntimeError(detail)
 
         await asyncio.sleep(0.5)
         return proc, port

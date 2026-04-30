@@ -33,6 +33,7 @@ KEEP_OPENCLAW_ISOLATION_ENV = "MASP_KEEP_OPENCLAW_ISOLATION"
 CLAUDE_ISOLATION_ROOT_ENV = "MASP_CLAUDE_ISOLATION_ROOT"
 CODEX_ISOLATION_ROOT_ENV = "MASP_CODEX_ISOLATION_ROOT"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
+OPENCLAW_VALIDATE_TIMEOUT_ENV = "MASP_OPENCLAW_VALIDATE_TIMEOUT"
 OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 CLAUDE_CONFIG_FILE_NAME = ".claude.json"
 
@@ -806,21 +807,39 @@ class OpenClawHarnessRuntime:
         env = dict(os.environ)
         env["OPENCLAW_CONFIG_PATH"] = str(config_path)
         env["OPENCLAW_STATE_DIR"] = str(state_dir)
-        result = subprocess.run(
-            [openclaw_bin, "config", "validate"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-            env=env,
-        )
+        timeout_s = float(os.environ.get(OPENCLAW_VALIDATE_TIMEOUT_ENV, "60"))
+        try:
+            result = subprocess.run(
+                [openclaw_bin, "config", "validate"],
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                check=False,
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            detail = "\n".join(
+                part.strip()
+                for part in (exc.stdout, exc.stderr)
+                if isinstance(part, str) and part.strip()
+            )
+            suffix = f"config={config_path} state_dir={state_dir}"
+            if detail:
+                suffix = f"{suffix}\n{detail}"
+            raise RuntimeError(
+                "Generated OpenClaw config validation timed out "
+                f"after {timeout_s:.1f}s: {suffix}"
+            ) from exc
         if result.returncode != 0:
             detail = "\n".join(
                 part.strip()
                 for part in (result.stdout, result.stderr)
                 if part.strip()
             )
-            raise RuntimeError(f"Generated OpenClaw config is invalid: {detail}")
+            suffix = f"config={config_path} state_dir={state_dir}"
+            if detail:
+                suffix = f"{suffix}\n{detail}"
+            raise RuntimeError(f"Generated OpenClaw config is invalid: {suffix}")
 
     def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
         del worktrees

@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -82,6 +84,26 @@ def _resolve_repo_path(path: str | Path) -> Path:
     return candidate
 
 
+def _python_executable() -> str:
+    """Mirror run_smoke.sh's MASP_BENCH_PYTHON override when present."""
+
+    return os.environ.get("MASP_BENCH_PYTHON") or sys.executable
+
+
+def _task_arg_for_cli(path: str | Path) -> str:
+    """Use the same task path shape as run_smoke.sh when possible."""
+
+    resolved = _resolve_repo_path(path)
+    if resolved.exists():
+        resolved = resolved.resolve()
+    elif not resolved.is_absolute():
+        resolved = (PROJECT_ROOT / resolved).resolve()
+    try:
+        return str(resolved.relative_to(PROJECT_ROOT / "masp_bench"))
+    except ValueError:
+        return str(resolved)
+
+
 def _completed_variant_ids(args: argparse.Namespace) -> set[str]:
     """Return perturbation variant IDs that already have result JSON reports."""
     output_dir = _artifact_scoped_dir(Path(args.output), args.harness, args.model)
@@ -105,24 +127,75 @@ def _completed_variant_ids(args: argparse.Namespace) -> set[str]:
 
 
 def _is_usable_completed_report(report: dict[str, Any]) -> bool:
-    if report.get("error"):
-        return False
+    return _completed_report_failure_reason(report) is None
+
+
+def _completed_report_failure_reason(report: dict[str, Any]) -> str | None:
+    error = report.get("error")
+    if error:
+        return f"report contains runner error: {error}"
     n_actions = int(report.get("n_actions") or 0)
     n_tool_calls = int(report.get("n_tool_calls") or 0)
     n_communications = int(report.get("n_communications") or 0)
     completion = float(report.get("task_completion_score") or 0.0)
+    if n_actions == 0 and n_tool_calls == 0 and n_communications == 0:
+        return "degenerate report: no actions, tool calls, or communications"
     if n_actions <= 1 and n_tool_calls == 0 and n_communications <= 1 and completion == 0.0:
+        if not _trace_has_nonempty_communication(report):
+            return "degenerate report: empty or missing final communication"
+    return None
+
+
+def _trace_has_nonempty_communication(report: dict[str, Any]) -> bool:
+    trace_file = report.get("trace_file")
+    if not isinstance(trace_file, str) or not trace_file:
         return False
-    return True
+    trace_path = _resolve_repo_path(trace_file)
+    try:
+        lines = trace_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") != "communication":
+            continue
+        content = event.get("content") or event.get("message") or event.get("text") or ""
+        if isinstance(content, str) and content.strip():
+            return True
+    return False
+
+
+def _extract_report_path(output: str) -> Path | None:
+    prefix = "Report saved to "
+    for line in output.splitlines():
+        if line.startswith(prefix):
+            value = line[len(prefix):].strip()
+            if value:
+                return _resolve_repo_path(value)
+    return None
+
+
+def _validate_run_report(output: str) -> str | None:
+    report_path = _extract_report_path(output)
+    if report_path is None:
+        return "masp_bench run did not print a report path"
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return f"could not read run report {report_path}: {exc}"
+    return _completed_report_failure_reason(report)
 
 
 def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
     cmd = [
-        sys.executable,
+        _python_executable(),
         "-m",
         "masp_bench",
         "run",
-        str(_resolve_repo_path(row["task_path"])),
+        _task_arg_for_cli(row["task_path"]),
         "--framework",
         "clawteam",
         "--harness",
@@ -158,11 +231,19 @@ def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
         stderr=subprocess.STDOUT,
         check=False,
     )
+    output = result.stdout
+    returncode = result.returncode
+    if returncode == 0:
+        failure_reason = _validate_run_report(output)
+        if failure_reason is not None:
+            output = f"{output}\nPERTURBATION_RUNNER_FAIL: {failure_reason}\n"
+            returncode = 1
     if args.log_dir:
         log_dir = Path(args.log_dir)
         log_dir.mkdir(parents=True, exist_ok=True)
-        (log_dir / f"{row['variant_id']}.log").write_text(result.stdout, encoding="utf-8")
-    return str(row["variant_id"]), result.returncode
+        output = f"COMMAND: {shlex.join(cmd)}\n\n{output}"
+        (log_dir / f"{row['variant_id']}.log").write_text(output, encoding="utf-8")
+    return str(row["variant_id"]), returncode
 
 
 def main() -> None:
