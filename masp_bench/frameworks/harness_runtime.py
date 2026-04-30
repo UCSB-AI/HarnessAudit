@@ -34,7 +34,6 @@ CLAUDE_ISOLATION_ROOT_ENV = "MASP_CLAUDE_ISOLATION_ROOT"
 CODEX_ISOLATION_ROOT_ENV = "MASP_CODEX_ISOLATION_ROOT"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
 OPENCLAW_VALIDATE_TIMEOUT_ENV = "MASP_OPENCLAW_VALIDATE_TIMEOUT"
-OPENCLAW_TRAJECTORY_DIR_ENV = "OPENCLAW_TRAJECTORY_DIR"
 OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 CLAUDE_CONFIG_FILE_NAME = ".claude.json"
 
@@ -807,7 +806,7 @@ class OpenClawHarnessRuntime:
         if sde_mcp_only:
             _merge_openclaw_tool_deny(config, SDE_OPENCLAW_NATIVE_TOOLS)
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-        self._validate_config(config_path, state_dir, sessions_dir)
+        self._validate_config(config_path, state_dir)
 
         self._root_dir = root_dir
         self._config_path = config_path
@@ -818,14 +817,13 @@ class OpenClawHarnessRuntime:
         self._run_id = run_id
 
     @staticmethod
-    def _validate_config(config_path: Path, state_dir: Path, sessions_dir: Path) -> None:
+    def _validate_config(config_path: Path, state_dir: Path) -> None:
         openclaw_bin = shutil.which("openclaw")
         if not openclaw_bin:
             return
         env = dict(os.environ)
         env["OPENCLAW_CONFIG_PATH"] = str(config_path)
         env["OPENCLAW_STATE_DIR"] = str(state_dir)
-        env[OPENCLAW_TRAJECTORY_DIR_ENV] = str(sessions_dir)
         timeout_s = float(os.environ.get(OPENCLAW_VALIDATE_TIMEOUT_ENV, "60"))
         try:
             result = subprocess.run(
@@ -838,7 +836,7 @@ class OpenClawHarnessRuntime:
             )
         except subprocess.TimeoutExpired as exc:
             detail = _process_output_text(exc.stdout, exc.stderr)
-            suffix = f"config={config_path} state_dir={state_dir} sessions_dir={sessions_dir}"
+            suffix = f"config={config_path} state_dir={state_dir}"
             if detail:
                 suffix = f"{suffix}\n{detail}"
             raise RuntimeError(
@@ -847,7 +845,7 @@ class OpenClawHarnessRuntime:
             ) from exc
         if result.returncode != 0:
             detail = _process_output_text(result.stdout, result.stderr)
-            suffix = f"config={config_path} state_dir={state_dir} sessions_dir={sessions_dir}"
+            suffix = f"config={config_path} state_dir={state_dir}"
             if detail:
                 suffix = f"{suffix}\n{detail}"
             raise RuntimeError(f"Generated OpenClaw config is invalid: {suffix}")
@@ -864,12 +862,15 @@ class OpenClawHarnessRuntime:
         sde_mcp_only: bool = False,
     ) -> dict[str, str]:
         del cwd, sde_mcp_only
-        if self._config_path is None or self._state_dir is None or self._sessions_dir is None:
+        if (
+            self._config_path is None
+            or self._state_dir is None
+            or self._sessions_dir is None
+        ):
             raise RuntimeError("OpenClaw runtime must register_mcp before spawning agents")
         env = dict(os.environ)
         env["OPENCLAW_CONFIG_PATH"] = str(self._config_path)
         env["OPENCLAW_STATE_DIR"] = str(self._state_dir)
-        env[OPENCLAW_TRAJECTORY_DIR_ENV] = str(self._sessions_dir)
         if self._agent_log_dir is not None and self._run_id:
             log_name = (
                 f"{_safe_temp_fragment(self._run_id)}-"
