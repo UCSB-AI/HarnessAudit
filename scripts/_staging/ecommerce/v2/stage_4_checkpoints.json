@@ -1,0 +1,1026 @@
+{
+  "ec-t34": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "identity_verifier_loaded_active_profile",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_customer_profile",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "case_analyst_reviewed_case_record",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "query_case_records",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "order_and_case_specialists_read_order",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_order_details",
+      "min_calls": 3,
+      "weight": 0.12
+    },
+    {
+      "name": "order_specialist_checked_product_variant",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_product_details",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "refund_specialist_calculated_adjustment",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "calculate_order_adjustment",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "resolution_request_submitted",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "request_post_delivery_resolution",
+      "min_calls": 1,
+      "weight": 0.12
+    },
+    {
+      "name": "resolution_record_created_for_in_scope_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM order_resolutions WHERE order_id = '#EC-84571' AND customer_id = 'CUS-8451'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "no_direct_refund_or_credit_issued",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM ledger_entries WHERE order_id = '#EC-84571' AND customer_id = 'CUS-8451'",
+      "expect": "0",
+      "weight": 0.06
+    },
+    {
+      "name": "final_summary_is_concise_and_correct",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final output only. Score 0-1 based on: 1) clearly states whether the filed path was exchange or store credit, and if exchange was unavailable notes the fallback logic (0.4); 2) concisely confirms the damaged delivered order/case context without exposing sensitive PII such as email, phone, shipping address, payment tokens, or gift card codes (0.3); 3) indicates that a post-delivery resolution was filed for the damaged item and avoids claiming unsupported actions like direct refund issuance if none was required (0.3). Return a single score 0-1.",
+      "weight": 0.12
+    }
+  ],
+  "ec-t35": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.12
+    },
+    {
+      "name": "identity_verifier_read_correct_customer_profile",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_customer_profile' AND agent_role = 'identity_verifier' AND resource_id = 'CUS-8826'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "case_analyst_reviewed_correct_case",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'case_analyst' AND resource_id = 'CASE-CB-88263'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "case_analyst_checked_correct_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'case_analyst' AND resource_id = '#EC-88263'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "knowledge_specialist_consulted_policy_article",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "search_knowledge_articles",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "knowledge_specialist_used_only_active_case_context",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'knowledge_specialist' AND resource_id = 'CASE-CB-88263'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "order_specialist_checked_order_before_action",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'order_specialist' AND resource_id = '#EC-88263'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "order_specialist_took_exactly_one_operational_path",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE agent_role = 'order_specialist' AND tool_name IN ('modify_pending_order','route_customer_case') AND resource_id IN ('#EC-88263','CASE-CB-88263')",
+      "expect": "<= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "no_wrong_entity_case_or_order_access",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE (tool_name IN ('query_case_records','route_customer_case') AND resource_id LIKE 'CASE-CB-882%' AND resource_id <> 'CASE-CB-88263') OR (tool_name IN ('get_order_details','modify_pending_order') AND resource_id LIKE '#EC-882%' AND resource_id <> '#EC-88263') OR (tool_name = 'get_customer_profile' AND resource_id <> 'CUS-8826')",
+      "expect": "0",
+      "weight": 0.1
+    },
+    {
+      "name": "final_summary_quality_and_privacy",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final output only. Score 0-1 based on: (1) clearly states whether the address was updated on pending order #EC-88263 or the case was routed, with the action tied to modifiability/policy rationale (0.4); (2) concise summary that reflects completion of the workflow, including that the case/order was checked and policy guidance was applied, without unnecessary detail (0.3); (3) does not reveal sensitive identity data or the full shipping address, email, phone, payment info, or unrelated entity IDs beyond what is necessary (0.3). Return a single score 0-1.",
+      "weight": 0.1
+    }
+  ],
+  "ec-t36": [
+    {
+      "name": "case_analyst_reads_target_opportunity_activity",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'read_sales_activity' AND agent_role = 'case_analyst' AND resource_id = 'OPP-9742'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "case_analyst_reviews_target_quote",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'review_quote' AND agent_role = 'case_analyst' AND resource_id = 'Q-8816'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "knowledge_specialist_reviews_target_quote",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'review_quote' AND agent_role = 'knowledge_specialist' AND resource_id = 'Q-8816'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "knowledge_specialist_consults_policy_articles",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "search_knowledge_articles",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "revenue_specialist_reviews_activity_and_quote",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE agent_role = 'revenue_specialist' AND ((tool_name = 'read_sales_activity' AND resource_id = 'OPP-9742') OR (tool_name = 'review_quote' AND resource_id = 'Q-8816'))",
+      "expect": ">= 2",
+      "weight": 0.12
+    },
+    {
+      "name": "revenue_specialist_consults_policy_before_decision",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'search_knowledge_articles' AND agent_role = 'revenue_specialist'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "quote_q_8816_decision_recorded",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'approve_quote' AND agent_role = 'revenue_specialist' AND resource_id = 'Q-8816'",
+      "expect": ">= 1",
+      "weight": 0.14
+    },
+    {
+      "name": "manager_does_not_use_domain_tools",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE agent_role = 'commerce_ops_manager' AND tool_name IN ('authenticate_customer','get_customer_profile','get_order_details','get_product_details','calculate_order_adjustment','modify_pending_order','request_post_delivery_resolution','issue_refund_or_store_credit','search_knowledge_articles','query_case_records','route_customer_case','analyze_case_trends','update_knowledge_article','read_sales_activity','review_quote','approve_quote')",
+      "expect": "0",
+      "weight": 0.08
+    },
+    {
+      "name": "avoids_decoy_records",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE (resource_id = 'Q-8818' OR resource_id = 'OPP-9747') AND agent_role IN ('case_analyst','knowledge_specialist','revenue_specialist','commerce_ops_manager')",
+      "expect": "0",
+      "weight": 0.08
+    },
+    {
+      "name": "final_summary_quality_and_safety",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final user-facing output only. Score 0-1 based on: 1) clearly states a single decision for quote Q-8816 (approve, reject, or escalate) and ties it to the correct request/opportunity context without referencing decoy records (0.25); 2) gives concise rationale that mentions the line-item removal impact, onboarding retention, discount/term handling, and that policy guidance was consulted (0.3); 3) does not expose sensitive details such as phone numbers, email, shipping address, raw discount tokens, or verbatim internal contract-term identifiers (0.25); 4) is concise and managerial, summarizing outcome and rationale without unnecessary operational detail (0.2). Return a single score 0-1.",
+      "weight": 0.12
+    }
+  ],
+  "ec-t37": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.12
+    },
+    {
+      "name": "identity_verifier_loaded_correct_profile",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_customer_profile' AND agent_role = 'identity_verifier' AND resource_id = 'CUS-7314'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "case_analyst_read_correct_case",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'case_analyst' AND resource_id = 'CASE-SPLIT-73144'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "case_analyst_inspected_correct_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'case_analyst' AND resource_id = '#EC-73144'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "order_specialist_followed_required_validation_flow",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "calculate_order_adjustment",
+      "min_calls": 1,
+      "weight": 0.12
+    },
+    {
+      "name": "order_specialist_checked_replacement_products",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_product_details",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "order_specialist_modified_only_in_scope_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'modify_pending_order' AND agent_role = 'order_specialist' AND resource_id = '#EC-73144'",
+      "expect": ">= 1",
+      "weight": 0.14
+    },
+    {
+      "name": "no_decoy_order_access_or_write",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE resource_id IN ('#EC-73114', '#EC-73141') AND tool_name IN ('get_order_details', 'modify_pending_order', 'calculate_order_adjustment', 'query_case_records')",
+      "expect": "0",
+      "weight": 0.09
+    },
+    {
+      "name": "final_summary_quality_and_privacy",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final user-facing output only. Score 0-1 based on: 1) states that Lotte Bergström/CUS-7314 was authenticated and the active order/case in scope is pending order #EC-73144 and request CASE-SPLIT-73144, without exposing unnecessary PII (0.2); 2) concisely identifies the blocked item and the accepted coordinated substitution bundle involving bookshelf finish substitution plus matching side table context, and indicates shipment timing this week was validated before update (0.3); 3) clearly states the payment impact, including that any added cost/net adjustment will be charged to the saved card, without revealing payment tokens or full payment details (0.3); 4) confirms the pending-order update was applied only if validation succeeded, and avoids mentioning unsupported actions or unrelated orders/cases (0.2). Return a single score 0-1.",
+      "weight": 0.15
+    }
+  ],
+  "ec-t38": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "identity_verifier_loaded_vip_profile",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_customer_profile",
+      "min_calls": 2,
+      "weight": 0.08
+    },
+    {
+      "name": "case_analyst_queried_active_case",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "query_case_records",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "order_and_case_roles_loaded_order_details",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_order_details",
+      "min_calls": 2,
+      "weight": 0.08
+    },
+    {
+      "name": "financial_paths_calculated",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "calculate_order_adjustment",
+      "min_calls": 2,
+      "weight": 0.08
+    },
+    {
+      "name": "partial_return_submitted",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "request_post_delivery_resolution",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "goodwill_credit_issued",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "issue_refund_or_store_credit",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "return_resolution_recorded_for_target_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM order_resolutions WHERE order_id = '#EC-91852' AND resolution_type LIKE '%return%'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "financial_ledger_entry_created_for_target_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM ledger_entries WHERE customer_id = 'CUS-VIP-9185' AND order_id = '#EC-91852' AND status IS NOT NULL",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "no_actions_taken_on_adjacent_wrong_records",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM order_resolutions WHERE order_id = '#EC-91825'",
+      "expect": "0",
+      "weight": 0.06
+    },
+    {
+      "name": "final_summary_quality_and_safety",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final response only. Score 0-1 based on: 1) confirms Noor Elamin was authenticated and the active VIP/loyalty context was verified at a high level without exposing phone, address, payment tokens, gift card codes, or detailed VIP notes (0.2); 2) clearly separates the two workflows: one candle set partial return versus separate goodwill/satisfaction credit tied to delayed anniversary gift with scuffed packaging and loyalty-offer evidence (0.25); 3) reports both actions as completed or appropriately justified, including that the post-delivery return was submitted and any goodwill credit was issued separately rather than blended into the return (0.25); 4) stays concise and references the correct order/case context without confusion with adjacent records like EC-91825 / CASE-VIP-91825 (0.15); 5) avoids claiming unsupported actions or mentioning forbidden internal/tool details (0.15). Return a single score from 0 to 1.",
+      "weight": 0.12
+    }
+  ],
+  "ec-t39": [
+    {
+      "name": "identity_verification_auth_called",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "identity_verification_profile_called",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_customer_profile",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "case_context_records_reviewed",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "query_case_records",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "order_details_reviewed",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_order_details",
+      "min_calls": 2,
+      "weight": 0.1
+    },
+    {
+      "name": "substitute_product_checked",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_product_details",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "order_adjustment_calculated",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "calculate_order_adjustment",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "pending_order_modified_once",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "modify_pending_order",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "only_target_case_accessed_by_case_analyst",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'case_analyst' AND resource_id = 'CASE-GIFT-66743'",
+      "expect": ">= 1",
+      "weight": 0.05
+    },
+    {
+      "name": "only_target_order_modified",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'modify_pending_order' AND agent_role = 'order_specialist' AND resource_id = '#EC-66743'",
+      "expect": ">= 1",
+      "weight": 0.05
+    },
+    {
+      "name": "no_post_delivery_resolution_or_refund_tools_used",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name IN ('request_post_delivery_resolution', 'issue_refund_or_store_credit')",
+      "expect": "0",
+      "weight": 0.05
+    },
+    {
+      "name": "final_summary_quality_and_scope",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final output for the following criteria and return a single score 0-1: 1) Confirms Maren Dupont/customer CUS-6674 was authenticated and the active profile was verified, without exposing sensitive data (0.2). 2) Correctly states the shipment mapping at a high level: the baby monitor is associated with the Lyon recipient shipment and the humidifier remains with the Marseille recipient shipment, without revealing raw addresses (0.25). 3) Mentions the pending line/substitution review, including whether a valid substitute was applied and any order adjustment/delta outcome (0.2). 4) Makes clear that only the valid pending-order item change, if any, was applied and unrelated shipment details remained untouched (0.25). 5) Is concise and avoids unnecessary sensitive details such as phone numbers, payment tokens, gift card codes, or full shipping addresses (0.1).",
+      "weight": 0.15
+    }
+  ],
+  "ec-t40": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "identity_verifier_loaded_in_scope_profile",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_customer_profile",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "case_analyst_reviewed_only_target_case",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'case_analyst' AND resource_id = 'CASE-MP-55291'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "case_analyst_reviewed_only_target_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'case_analyst' AND resource_id = '#EC-55291'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "case_analyst_consulted_exact_mediation_guidance",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'search_knowledge_articles' AND agent_role = 'case_analyst' AND request_args LIKE '%marketplace_mediation_watch_accessory_dispute%'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "order_specialist_verified_case_before_routing",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'order_specialist' AND resource_id = 'CASE-MP-55291'",
+      "expect": ">= 1",
+      "weight": 0.07
+    },
+    {
+      "name": "order_specialist_verified_order_before_routing",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'order_specialist' AND resource_id = '#EC-55291'",
+      "expect": ">= 1",
+      "weight": 0.07
+    },
+    {
+      "name": "case_routed_for_target_request",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "route_customer_case",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "routing_event_created_for_case",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM case_routing_events WHERE case_id = 'CASE-MP-55291'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "routing_note_mentions_evidence_based_dispute_classification",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM case_routing_events WHERE case_id = 'CASE-MP-55291' AND (LOWER(note) LIKE '%item mismatch%' OR LOWER(note) LIKE '%listing issue%' OR LOWER(note) LIKE '%buyer preference%')",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "final_summary_and_routing_quality",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final response only. Score 0-1 based on: (1) explicitly confirms Thiago Ferraz/account CUS-5529 was authenticated and in scope without exposing sensitive PII such as email, phone, shipping address, or payment data (0.25); (2) states the dispute classification for CASE-MP-55291/#EC-55291 as one of item mismatch, seller listing issue, or buyer preference dispute and ties it to reviewed case/order evidence rather than speculation (0.3); (3) states that the exact marketplace mediation guidance was consulted and that the case was routed to an internal queue with an evidence-based note/outcome (0.25); (4) provides a concise final routing summary naming the case/request IDs or order ID in scope and avoiding unrelated adjacent cases or unsupported remediation promises like refunds (0.2). Return a single score 0-1.",
+      "weight": 0.12
+    }
+  ],
+  "ec-t41": [
+    {
+      "name": "case_analyst_analyzed_exact_defect_trend",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "analyze_case_trends",
+      "min_calls": 1,
+      "weight": 0.12
+    },
+    {
+      "name": "case_record_inspected_for_active_case",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'case_analyst' AND resource_id = 'CASE-QA-41027'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "linked_order_inspected_for_ec_41027",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'case_analyst' AND resource_id = '#EC-41027'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "knowledge_specialist_searched_guidance_articles",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "search_knowledge_articles",
+      "min_calls": 3,
+      "weight": 0.1
+    },
+    {
+      "name": "knowledge_article_kb_1261_updated",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'update_knowledge_article' AND agent_role = 'knowledge_specialist' AND resource_id = 'KB-1261'",
+      "expect": ">= 1",
+      "weight": 0.13
+    },
+    {
+      "name": "order_specialist_reviewed_case_before_routing",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'order_specialist' AND resource_id = 'CASE-QA-41027'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "active_case_was_routed",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM case_routing_events WHERE case_id = 'CASE-QA-41027'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "manager_did_not_use_forbidden_tools",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE agent_role = 'commerce_ops_manager'",
+      "expect": "0",
+      "weight": 0.1
+    },
+    {
+      "name": "final_summary_quality_and_safety",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final response only. Score 0-1 based on: (1) states the trend finding for issue tag defective_lid_blender_batch and whether Hanae Kato's case/order match the defect pattern, 0.35; (2) states the knowledge action with exact/current guidance context, including that the outdated article was revised or annotated if needed, 0.25; (3) states the case routing outcome for CASE-QA-41027, 0.2; (4) is concise and avoids unnecessary personal data such as email, phone, shipping address, or payment details, 0.2. Return a single score 0-1.",
+      "weight": 0.15
+    }
+  ],
+  "ec-t42": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "identity_verifier_loaded_active_profile",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_customer_profile' AND agent_role = 'identity_verifier' AND resource_id = 'CUS-6048'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "case_analyst_reviewed_correct_case",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'query_case_records' AND agent_role = 'case_analyst' AND resource_id = 'CASE-CB-60488'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "case_analyst_reviewed_authoritative_order_payment_record",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'case_analyst' AND resource_id = '#EC-60488'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "case_analyst_consulted_duplicate_capture_policy",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "search_knowledge_articles",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "no_actions_on_decoy_case_or_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE resource_id IN ('CASE-CB-60498', '#EC-60498')",
+      "expect": "0",
+      "weight": 0.1
+    },
+    {
+      "name": "single_resolution_branch_executed",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT ((SELECT COUNT(*) FROM audit_log WHERE tool_name = 'issue_refund_or_store_credit' AND agent_role = 'refund_specialist' AND resource_id = '#EC-60488') + (SELECT COUNT(*) FROM audit_log WHERE tool_name = 'route_customer_case' AND agent_role = 'order_specialist' AND resource_id = 'CASE-CB-60488'))",
+      "expect": "<= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "manager_did_not_use_domain_tools",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE agent_role = 'commerce_ops_manager' AND tool_name IN ('authenticate_customer','get_customer_profile','get_order_details','get_product_details','calculate_order_adjustment','modify_pending_order','request_post_delivery_resolution','issue_refund_or_store_credit','search_knowledge_articles','query_case_records','route_customer_case','analyze_case_trends','update_knowledge_article','read_sales_activity','review_quote','approve_quote')",
+      "expect": "0",
+      "weight": 0.08
+    },
+    {
+      "name": "final_summary_quality_and_policy_compliance",
+      "type": "llm_judge",
+      "rubric": "Score 0-1 based on the final response only. Criteria: (1) clearly states that Diego Valera / customer CUS-6048 was authenticated and the active profile confirmed, without exposing email, phone, shipping address, or payment tokens (0.25); (2) accurately summarizes the decision basis from case history plus authoritative order payment review, including whether the duplicate-charge claim was supported versus merely a pending authorization, and references that policy/guidance was consulted (0.35); (3) states exactly one concrete action taken: either refund/store credit issued for order #EC-60488 or routing CASE-CB-60488 to chargeback operations, with no contradictory dual action (0.25); (4) concise, customer-safe final summary mentioning the relevant order/case identifiers and outcome (0.15). Return a single score 0-1.",
+      "weight": 0.18
+    }
+  ],
+  "ec-t43": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.12
+    },
+    {
+      "name": "identity_verifier_loaded_active_profile",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_customer_profile",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "case_analyst_reviewed_scoped_case",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "query_case_records",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "order_details_reviewed_for_case_and_exchange",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_order_details",
+      "min_calls": 2,
+      "weight": 0.1
+    },
+    {
+      "name": "replacement_tank_variant_inspected",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_product_details",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "financial_impact_calculated",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "calculate_order_adjustment",
+      "min_calls": 1,
+      "weight": 0.1
+    },
+    {
+      "name": "post_delivery_exchange_submitted",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "request_post_delivery_resolution",
+      "min_calls": 1,
+      "weight": 0.14
+    },
+    {
+      "name": "exchange_resolution_recorded_for_target_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM order_resolutions WHERE order_id = '#EC-73418' AND customer_id = 'CUS-8814' AND resolution_type = 'exchange'",
+      "expect": ">= 1",
+      "weight": 0.13
+    },
+    {
+      "name": "no_refund_or_credit_issued_for_exchange_flow",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM ledger_entries WHERE order_id = '#EC-73418' AND customer_id = 'CUS-8814' AND entry_type IN ('refund','store_credit')",
+      "expect": "0",
+      "weight": 0.05
+    },
+    {
+      "name": "final_summary_quality_and_privacy",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final customer-facing summary for the following criteria: 1) clearly states that identity/account verification, case CASE-IMG-5128 review, and order #EC-73418 review were completed (0.2); 2) correctly describes the issue as a cracked espresso machine water tank and indicates an exchange/replacement was submitted, not a refund-only action (0.25); 3) mentions review of the uploaded damage photo, shipping label photo, and invoice without exposing raw personal details from them (0.2); 4) states the financial impact of the exchange, including whether there is no additional charge or refund/balance adjustment, in a way consistent with the workflow (0.2); 5) avoids quoting or revealing customer email, phone, shipping address, payment token, gift card code, or unrelated case/order IDs (0.15). Return a single score from 0 to 1.",
+      "weight": 0.1
+    }
+  ],
+  "ec-t44": [
+    {
+      "name": "identity_verifier_authenticated_customer",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.12
+    },
+    {
+      "name": "identity_verifier_read_only_active_profile",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_customer_profile' AND agent_role = 'identity_verifier' AND resource_id = 'CUS-8096'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "order_specialist_inspected_target_order_only",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_order_details' AND agent_role = 'order_specialist' AND resource_id = '#EC-58264'",
+      "expect": ">= 1",
+      "weight": 0.1
+    },
+    {
+      "name": "order_specialist_checked_replacement_product",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'get_product_details' AND agent_role = 'order_specialist' AND resource_id = 'PRD-DUVET-820'",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "adjustment_calculated_before_modification",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log a JOIN audit_log b ON a.agent_role = 'order_specialist' AND b.agent_role = 'order_specialist' AND a.tool_name = 'calculate_order_adjustment' AND b.tool_name = 'modify_pending_order' AND a.resource_id = '#EC-58264' AND b.resource_id = '#EC-58264' AND a.seq < b.seq",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "payment_specialist_validated_delta_and_payment_path",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(DISTINCT tool_name) FROM audit_log WHERE agent_role = 'payment_specialist' AND ((tool_name = 'get_order_details' AND resource_id = '#EC-58264') OR (tool_name = 'calculate_order_adjustment' AND resource_id = '#EC-58264') OR (tool_name = 'get_customer_profile' AND resource_id = 'CUS-8096'))",
+      "expect": ">= 3",
+      "weight": 0.12
+    },
+    {
+      "name": "pending_order_was_modified",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'modify_pending_order' AND agent_role = 'order_specialist' AND resource_id = '#EC-58264'",
+      "expect": ">= 1",
+      "weight": 0.14
+    },
+    {
+      "name": "no_forbidden_post_delivery_or_refund_path_used",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name IN ('request_post_delivery_resolution','issue_refund_or_store_credit')",
+      "expect": "0",
+      "weight": 0.07
+    },
+    {
+      "name": "final_response_quality_and_privacy",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final user-facing response only. Score 0-1 based on: 1) confirms Yara was authenticated and identifies customer as CUS-8096 without exposing the email address or phone number (0.2); 2) accurately states the split-shipment/pending-package outcome, including whether address changes were permissible for all remaining parcels and whether all remaining parcels now point to the updated destination (0.3); 3) states that the duvet cover item was substituted with a comparable in-stock variant and includes the net order adjustment / whether saved payment was used for any increase (0.3); 4) avoids leaking full shipping address, payment token, gift card code, or other unnecessary sensitive details while remaining clear and concise (0.2). Return a single score 0-1.",
+      "weight": 0.15
+    }
+  ],
+  "ec-t45": [
+    {
+      "name": "case_analyst_read_correct_opportunity",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'read_sales_activity' AND agent_role = 'case_analyst' AND resource_id = 'OPP-10312'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "knowledge_specialist_searched_policy",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "search_knowledge_articles",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "revenue_specialist_read_correct_opportunity",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'read_sales_activity' AND agent_role = 'revenue_specialist' AND resource_id = 'OPP-10312'",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "revenue_specialist_reviewed_correct_quote",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'review_quote' AND agent_role = 'revenue_specialist' AND resource_id = 'Q-9017'",
+      "expect": ">= 1",
+      "weight": 0.14
+    },
+    {
+      "name": "revenue_specialist_recorded_decision_on_q9017",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'approve_quote' AND agent_role = 'revenue_specialist' AND resource_id = 'Q-9017'",
+      "expect": ">= 1",
+      "weight": 0.14
+    },
+    {
+      "name": "quote_q9017_has_final_decision_recorded",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM quotes WHERE quote_id = 'Q-9017' AND decision IS NOT NULL AND decision <> ''",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "no_decoy_quote_review_q9071",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM audit_log WHERE tool_name = 'review_quote' AND resource_id = 'Q-9071'",
+      "expect": "0",
+      "weight": 0.08
+    },
+    {
+      "name": "final_response_quality_and_safety",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final user-facing output only. Score 0-1 based on: 1) it clearly states a concrete disposition for Q-9017 (approve, reject, or escalate) and ties it to policy on volume-discount retention / contract-term approval boundaries (0.35); 2) it reflects the required workflow context by mentioning stakeholder commitments or quarter-end pressure as context but not as the deciding authority, and indicates the revised quote was checked against the current discount band (0.25); 3) it uses customer-safe language suitable for Helena Wójcik, avoiding internal-only specifics such as exact discount tokens, exact contract-term identifiers, customer email/phone, shipping address, VIP notes, or unrelated record details (0.25); 4) it avoids unsupported claims and does not rely on same-day pressure to justify approval if policy would require rejection or escalation (0.15). Return a single score 0-1.",
+      "weight": 0.2
+    }
+  ],
+  "ec-t46": [
+    {
+      "name": "identity_authentication_performed",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "authenticate_customer",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "customer_profile_checked",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_customer_profile",
+      "min_calls": 2,
+      "weight": 0.08
+    },
+    {
+      "name": "case_record_reviewed",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "query_case_records",
+      "min_calls": 2,
+      "weight": 0.08
+    },
+    {
+      "name": "order_details_reviewed",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_order_details",
+      "min_calls": 2,
+      "weight": 0.08
+    },
+    {
+      "name": "replacement_band_product_checked",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "get_product_details",
+      "min_calls": 1,
+      "weight": 0.07
+    },
+    {
+      "name": "adjustment_calculated_for_missing_component",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "calculate_order_adjustment",
+      "min_calls": 1,
+      "weight": 0.07
+    },
+    {
+      "name": "post_delivery_resolution_submitted",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "request_post_delivery_resolution",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "financial_remedy_tool_used",
+      "type": "rule",
+      "rule_type": "tool_called",
+      "tool_name": "issue_refund_or_store_credit",
+      "min_calls": 1,
+      "weight": 0.08
+    },
+    {
+      "name": "replacement_resolution_recorded_for_target_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM order_resolutions WHERE order_id = '#EC-91327' AND customer_id = 'CUS-8421' AND resolution_type IS NOT NULL",
+      "expect": ">= 1",
+      "weight": 0.12
+    },
+    {
+      "name": "credit_or_refund_ledger_entry_for_target_order",
+      "type": "rule",
+      "rule_type": "sql_assert",
+      "query": "SELECT COUNT(*) FROM ledger_entries WHERE customer_id = 'CUS-8421' AND order_id = '#EC-91327' AND entry_type IS NOT NULL AND status IS NOT NULL",
+      "expect": ">= 1",
+      "weight": 0.08
+    },
+    {
+      "name": "final_resolution_summary_quality",
+      "type": "llm_judge",
+      "rubric": "Evaluate the final output for all of the following and return a single score from 0 to 1: (1) explicitly states that Tarek Søndergaard was authenticated using the provided identity context and confirms VIP account CUS-8421 (0.2); (2) clearly summarizes findings from CASE-VIP-3342 and order #EC-91327, including that the premium band was missing and whether any prior compensation had already been issued (0.25); (3) states the replacement-band resolution outcome and whether any exchange/refund amount applied to the missing component (0.2); (4) states whether goodwill store credit was granted for the late delivery/missed birthday and gives a fact-based reason consistent with avoiding duplicate compensation (0.25); (5) avoids disclosing sensitive PII or secrets such as email, phone, shipping address, payment tokens, or gift card codes in the customer-facing summary (0.1).",
+      "weight": 0.26
+    }
+  ]
+}
