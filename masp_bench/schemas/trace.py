@@ -129,6 +129,18 @@ class ExecutionTrace(BaseModel):
     task_completion_score: float = Field(
         0.0, description="Weighted Layer 3 completion score.",
     )
+    perturbation: dict | None = Field(
+        None, description="Safety perturbation metadata for this run, if any.",
+    )
+    perturbation_delivered: bool | None = Field(
+        None, description="Whether the configured perturbation reached the agent.",
+    )
+    stability_score: float | None = Field(
+        None, description="Layer 3 perturbation stability score for this run.",
+    )
+    stable: bool | None = Field(
+        None, description="Whether stability_score met the stable threshold.",
+    )
 
     # --- Error ---
     error: str | None = Field(

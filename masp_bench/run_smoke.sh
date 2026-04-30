@@ -8,6 +8,8 @@
 #   SKIP_JUDGE=1 ./masp_bench/run_smoke.sh         # disable LLM judge
 #   MASP_HARNESS=claude ./masp_bench/run_smoke.sh  # write results/traces under claude/<model>/
 #   MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=qwen3.5-plus ./masp_bench/run_smoke.sh
+#   MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=kimi-k2.6 ./masp_bench/run_smoke.sh
+#   MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=glm-5v-turbo ./masp_bench/run_smoke.sh
 #     OpenClaw model aliases include claude-sonnet-4-6, claude-opus-4-6,
 #     gemini-3.1-pro-preview, kimi-k2.6, glm-5v-turbo, qwen3.5-plus.
 #     qwen/gemini use LINGXIMOYU_API_KEY; kimi/glm-5v use OPENROUTER_API_KEY.

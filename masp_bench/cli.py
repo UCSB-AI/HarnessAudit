@@ -15,6 +15,13 @@ from masp_bench.checker import check_trace, compute_metrics
 from masp_bench.frameworks.harness_backbone import canonicalize_clawteam_artifacts
 from masp_bench.loader import load_task_with_tools, resolve_task_path
 from masp_bench.operational_judge import evaluate_operational_governance
+from masp_bench.perturbation import (
+    PerturbationConfig,
+    default_index_path,
+    load_variant_by_id,
+    source_task_sha256,
+)
+from masp_bench.perturbation_eval import evaluate_perturbation
 from masp_bench.runner import (
     BenchmarkRunner,
     framework_run_id_slug,
@@ -49,6 +56,53 @@ def _artifact_scoped_dir(base_dir: Path, harness: str, model: str) -> Path:
     return base_dir / harness / model_dir
 
 
+def _load_perturbation_config(
+    args: argparse.Namespace,
+    *,
+    task_id: str,
+    domain: str,
+    task_path: Path,
+) -> PerturbationConfig | None:
+    variant_id = getattr(args, "perturbation_id", None)
+    if not variant_id:
+        return None
+    if args.framework != "clawteam":
+        raise ValueError("Perturbations are only supported for --framework clawteam")
+
+    index_path = Path(args.perturbation_index) if args.perturbation_index else default_index_path()
+    variant, row = load_variant_by_id(variant_id, index_path=index_path)
+    if variant.task_id != task_id or variant.domain != domain:
+        raise ValueError(
+            f"Perturbation {variant_id!r} is for {variant.domain}/{variant.task_id}, "
+            f"but loaded task is {domain}/{task_id}"
+        )
+    current_hash = source_task_sha256(task_path)
+    if (
+        variant.source_task_sha256
+        and variant.source_task_sha256 != current_hash
+        and not args.allow_stale_perturbation
+    ):
+        raise ValueError(
+            f"Perturbation {variant_id!r} was generated for a different task file hash. "
+            "Pass --allow-stale-perturbation to override."
+        )
+    return PerturbationConfig(
+        variant=variant,
+        spec_path=str(row.get("variant_path") or row.get("spec_path") or ""),
+        index_path=str(index_path),
+    )
+
+
+def _final_output_from_trace_actions(actions: list) -> str:
+    for action in reversed(actions):
+        if (
+            str(getattr(action, "surface", "")) == "communication"
+            and getattr(action, "target_role", "") == "user"
+        ):
+            return str(getattr(action, "content", "") or "")
+    return ""
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     """Run a single task and evaluate."""
     pkg_root = Path(__file__).resolve().parent        # masp_bench/
@@ -60,12 +114,20 @@ def cmd_run(args: argparse.Namespace) -> None:
 
         print(f"Loading task: {task_path}")
         task, catalog = load_task_with_tools(task_path)
+        perturbation = _load_perturbation_config(
+            args,
+            task_id=task.task_id,
+            domain=task.domain,
+            task_path=task_path,
+        )
 
         print(f"  task_id:    {task.task_id}")
         print(f"  domain:     {task.domain}")
         print(f"  agents:     {[a.role for a in task.agents]}")
         print(f"  rules:      {len(task.access_rules)}")
         print(f"  tools:      {len(catalog.tools)} in catalog")
+        if perturbation is not None:
+            print(f"  perturbation: {perturbation.variant_id} ({perturbation.attack_type})")
         print()
 
         trace_dir = _artifact_scoped_dir(Path(args.trace_dir), args.harness, args.model)
@@ -104,11 +166,13 @@ def cmd_run(args: argparse.Namespace) -> None:
             judge_model=args.judge_model,
             skip_judge=args.skip_judge,
             judge_workers=args.judge_workers,
+            perturbation=perturbation,
         )
 
         metrics = None
         violations: list = []
         trace = None
+        perturbation_result = None
 
         try:
             trace = runner.run(run_id=run_id)
@@ -174,6 +238,34 @@ def cmd_run(args: argparse.Namespace) -> None:
                 task_completion_score=trace.task_completion_score,
                 operational_safety_score=operational_safety_score,
             )
+            if perturbation is not None:
+                print("Evaluating perturbation stability...")
+                perturbation_result = asyncio.run(
+                    evaluate_perturbation(
+                        variant=perturbation.variant,
+                        actions=trace.actions,
+                        decisions=decisions,
+                        final_output=_final_output_from_trace_actions(trace.actions),
+                        task_completion_score=trace.task_completion_score,
+                        clean_task_completion_score=None,
+                        model=args.judge_model,
+                        skip_judge=args.skip_judge,
+                    )
+                )
+                trace.perturbation_delivered = perturbation_result.delivered
+                trace.stability_score = perturbation_result.stability_score
+                trace.stable = perturbation_result.stable
+                stability_display = (
+                    f"{perturbation_result.stability_score:.2f}"
+                    if perturbation_result.stability_score is not None else "n/a"
+                )
+                print(
+                    "  perturbation: "
+                    f"delivered={perturbation_result.delivered}, "
+                    f"stable={perturbation_result.stable}, "
+                    f"stability_score={stability_display}"
+                )
+                print()
             print("Metrics:")
             print("  Layer 1 — Protocol Integrity:")
             print(f"    protocol_safety_score: {metrics.protocol_safety_score:.2f}")
@@ -204,6 +296,10 @@ def cmd_run(args: argparse.Namespace) -> None:
                 comm_penalty=metrics.comm_penalty,
                 operational_safety_score=metrics.operational_safety_score,
                 task_completion_score=metrics.task_completion_score,
+                perturbation=(
+                    {**perturbation.trace_metadata(), **perturbation_result.as_dict()}
+                    if perturbation_result is not None else None
+                ),
                 violations_by_code=metrics.violations_by_code,
                 wall_time_s=trace.duration_seconds or 0.0,
                 error=trace.error,
@@ -292,6 +388,16 @@ def cmd_run(args: argparse.Namespace) -> None:
                     and action.raw_event.get("sde_native_bypass_detected") is True
                 ],
             }
+            if perturbation is not None:
+                report["perturbation"] = (
+                    {**perturbation.trace_metadata(), **perturbation_result.as_dict()}
+                    if perturbation_result is not None else {
+                        **perturbation.trace_metadata(),
+                        "delivered": None,
+                        "stable": None,
+                        "stability_score": None,
+                    }
+                )
             out_path = out_dir / f"{task.task_id}_{trace.run_id}.json"
             with open(out_path, "w") as f:
                 json.dump(report, f, indent=2)
@@ -359,6 +465,26 @@ def main() -> None:
                        help="Maximum framework turns per run (default: 30)")
     run_p.add_argument("--repeat", type=int, default=1,
                        help="Repeat the same task sequentially (default: 1)")
+    run_p.add_argument(
+        "--perturbation-id",
+        default=None,
+        help="Run a specific safety perturbation variant ID",
+    )
+    run_p.add_argument(
+        "--perturbation-index",
+        default=str(default_index_path()),
+        help="Path to perturbation index.jsonl",
+    )
+    run_p.add_argument(
+        "--perturbation-specs-dir",
+        default=None,
+        help="Reserved for compatibility; variants are resolved through --perturbation-index",
+    )
+    run_p.add_argument(
+        "--allow-stale-perturbation",
+        action="store_true",
+        help="Allow running a perturbation whose source_task_sha256 differs from the task file",
+    )
 
     args = parser.parse_args()
 

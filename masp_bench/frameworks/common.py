@@ -24,6 +24,7 @@ def dispatch_tool(
     bank: Any = None,
     tool_def: Any = None,
     workspace: Any = None,
+    perturbation_runtime: Any = None,
 ) -> str:
     """Execute a domain tool through the Bank→real→fixture→mock cascade.
 
@@ -35,12 +36,28 @@ def dispatch_tool(
       3. Fixture JSON lookup via ``tool_def.fixture_key``
       4. Static ``tool_def.mock_response`` fallback
     """
+    if perturbation_runtime is not None and perturbation_runtime.should_short_circuit(
+        tool_name,
+        tool_def,
+    ):
+        return str(perturbation_runtime.short_circuit_response(tool_name))
+
+    result: str
+
     # 1. Bank dispatch (authoritative when available)
     if bank is not None:
         try:
-            return str(bank.dispatch(tool_name, args))
+            result = str(bank.dispatch(tool_name, args))
         except Exception as exc:
-            return f"Error dispatching {tool_name}: {exc}"
+            result = f"Error dispatching {tool_name}: {exc}"
+        if perturbation_runtime is not None:
+            result = perturbation_runtime.postprocess_tool_result(
+                tool_name,
+                args,
+                result,
+                tool_def=tool_def,
+            )
+        return result
 
     # 2. Real backend (SDE domain). Real tools must never silently fall back to
     # fixtures/mocks, otherwise SDE tasks can appear to run while touching no
@@ -53,7 +70,15 @@ def dispatch_tool(
             )
         from masp_bench.sde_backend import dispatch_real_tool
 
-        return str(dispatch_real_tool(tool_name, args, workspace))
+        result = str(dispatch_real_tool(tool_name, args, workspace))
+        if perturbation_runtime is not None:
+            result = perturbation_runtime.postprocess_tool_result(
+                tool_name,
+                args,
+                result,
+                tool_def=tool_def,
+            )
+        return result
 
     # 3. Fixture lookup
     if tool_def is not None:
@@ -73,12 +98,31 @@ def dispatch_tool(
                 lines.append(entry if entry is not None else f"{key}: {default}")
             if footer:
                 lines.append(footer)
-            return "\n".join(lines)
+            result = "\n".join(lines)
+            if perturbation_runtime is not None:
+                result = perturbation_runtime.postprocess_tool_result(
+                    tool_name,
+                    args,
+                    result,
+                    tool_def=tool_def,
+                )
+            return result
 
         # 4. Mock fallback
-        return tool_def.mock_response or f"{tool_name}: OK"
+        result = tool_def.mock_response or f"{tool_name}: OK"
+        if perturbation_runtime is not None:
+            result = perturbation_runtime.postprocess_tool_result(
+                tool_name,
+                args,
+                result,
+                tool_def=tool_def,
+            )
+        return result
 
-    return f"{tool_name}: OK"
+    result = f"{tool_name}: OK"
+    if perturbation_runtime is not None:
+        result = perturbation_runtime.postprocess_tool_result(tool_name, args, result)
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ from masp_bench.frameworks import (
 from masp_bench.frameworks.action_sink import ActionSink
 from masp_bench.frameworks.common import build_task_input
 from masp_bench.frameworks.sde_policy import SDE_DOMAIN
+from masp_bench.perturbation import PerturbationConfig, apply_task_perturbation
 from masp_bench.schemas.actions import ObservableAction
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
 from masp_bench.schemas.trace import ExecutionTrace
@@ -60,6 +61,7 @@ def _build_execution_trace(
     completion: CompletionEvaluation,
     error: str | None = None,
     warnings: list[str] | None = None,
+    perturbation: dict[str, Any] | None = None,
 ) -> ExecutionTrace:
     trace = ExecutionTrace(
         run_id=run_id,
@@ -74,6 +76,10 @@ def _build_execution_trace(
         started_at=started_at,
         error=error,
         warnings=warnings or [],
+        perturbation=perturbation,
+        perturbation_delivered=None,
+        stability_score=None,
+        stable=None,
     )
     trace.finalize()
     return trace
@@ -97,6 +103,7 @@ class BenchmarkRunner:
         judge_model: str = "gpt-5.4",
         skip_judge: bool = False,
         judge_workers: int = 4,
+        perturbation: PerturbationConfig | None = None,
     ) -> None:
         self.task = task
         self.catalog = catalog
@@ -111,6 +118,7 @@ class BenchmarkRunner:
         self._judge_model = judge_model
         self._skip_judge = skip_judge
         self._judge_workers = judge_workers
+        self._perturbation = perturbation
         self._bank: Any = None
         self._workspace: Workspace | None = None
 
@@ -161,13 +169,14 @@ class BenchmarkRunner:
             self._bank = self._bank_factory(self.task.domain)
             if self._bank is not None and hasattr(self._bank, "apply_task_metadata"):
                 self._bank.apply_task_metadata(self.task.metadata)
+            active_task = apply_task_perturbation(self.task, self._perturbation)
 
             if trace_writer:
                 trace_writer.write_event(
                     TraceStart(
                         trace_id=run_id,
-                        task_id=self.task.task_id,
-                        domain=self.task.domain,
+                        task_id=active_task.task_id,
+                        domain=active_task.domain,
                         framework=self.framework,
                         model=self.model,
                         agents=[
@@ -176,9 +185,13 @@ class BenchmarkRunner:
                                 role=agent_cfg.role,
                                 allowed_tools=agent_cfg.allowed_tools,
                             )
-                            for agent_cfg in self.task.agents
+                            for agent_cfg in active_task.agents
                         ],
-                        n_rules=len(self.task.access_rules),
+                        n_rules=len(active_task.access_rules),
+                        perturbation=(
+                            self._perturbation.trace_metadata()
+                            if self._perturbation else None
+                        ),
                     )
                 )
 
@@ -190,7 +203,7 @@ class BenchmarkRunner:
             outcome = await adapter.run(
                 RunContext(
                     run_id=run_id,
-                    task=self.task,
+                    task=active_task,
                     catalog=self.catalog,
                     model=self.model,
                     max_turns=self.max_turns,
@@ -198,8 +211,9 @@ class BenchmarkRunner:
                     workspace=self._workspace,
                     action_sink=action_sink,
                     bank_source=self._bank_source(),
+                    perturbation=self._perturbation,
                 ),
-                build_task_input(self.task),
+                build_task_input(active_task),
             )
             final_text = outcome.final_output
             run_error = outcome.error
@@ -230,6 +244,10 @@ class BenchmarkRunner:
             completion=completion,
             error=run_error,
             warnings=run_warnings,
+            perturbation=(
+                self._perturbation.trace_metadata()
+                if self._perturbation else None
+            ),
         )
 
     def dump_bank_to_file(self, path: Any) -> bool:

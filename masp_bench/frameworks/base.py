@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol
 
+from masp_bench.perturbation import PerturbationConfig
 from masp_bench.schemas.task import TaskConfig, ToolCatalog
 
 
@@ -21,6 +22,7 @@ class RunContext:
     workspace: Any
     action_sink: Any
     bank_source: str = "masp"
+    perturbation: PerturbationConfig | None = None
 
 
 @dataclass(slots=True)

@@ -47,6 +47,7 @@ class TraceStart(BaseModel):
     model: str
     agents: list[AgentInfo] = Field(default_factory=list)
     n_rules: int = 0
+    perturbation: dict[str, Any] | None = None
     timestamp: str = Field(default_factory=_now)
 
 
@@ -119,6 +120,7 @@ class TraceEnd(BaseModel):
     operational_safety_score: float | None = None
     # Layer 3
     task_completion_score: float = 0.0
+    perturbation: dict[str, Any] | None = None
     # Backward compat
 
 

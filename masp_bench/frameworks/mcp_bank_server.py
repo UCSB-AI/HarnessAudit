@@ -78,6 +78,7 @@ def build_mcp_server(
     bank: Any = None,
     task_metadata: dict[str, Any] | None = None,
     workspace_path: Path | None = None,
+    perturbation_runtime: Any = None,
     *,
     host: str = "127.0.0.1",
     port: int = 8000,
@@ -119,10 +120,12 @@ def build_mcp_server(
                         return dispatch_tool(
                             td.name, args, bank=bank, tool_def=td,
                             workspace=workspace_path,
+                            perturbation_runtime=perturbation_runtime,
                         )
                 return dispatch_tool(
                     td.name, args, bank=None, tool_def=td,
                     workspace=workspace_path,
+                    perturbation_runtime=perturbation_runtime,
                 )
 
             async def handler(**kwargs: str) -> str:
@@ -174,6 +177,11 @@ def _run_server() -> None:
         choices=["masp", "sasp"],
         help="Which benchmark package should provide the bank/tool catalog.",
     )
+    parser.add_argument(
+        "--perturbation-json",
+        default=None,
+        help="Serialized PerturbationConfig for tool-return perturbations.",
+    )
     args = parser.parse_args()
 
     bank, catalog = _load_runtime_components(args.domain, args.bank_source)
@@ -204,9 +212,17 @@ def _run_server() -> None:
             port = s.getsockname()[1]
 
     workspace_path = Path(args.workspace_path).resolve() if args.workspace_path else None
+    perturbation_runtime = None
+    if args.perturbation_json:
+        from masp_bench.perturbation import PerturbationRuntime
+
+        perturbation_runtime = PerturbationRuntime.from_json(args.perturbation_json)
     mcp = build_mcp_server(
         args.domain, catalog, bank=bank, task_metadata=task_metadata,
-        workspace_path=workspace_path, host=args.host, port=port,
+        workspace_path=workspace_path,
+        perturbation_runtime=perturbation_runtime,
+        host=args.host,
+        port=port,
     )
 
     print(f"PORT={port}", flush=True)

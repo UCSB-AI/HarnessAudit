@@ -586,6 +586,8 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         ]
         if ctx.workspace is not None:
             cmd.extend(["--workspace-path", str(ctx.workspace.path)])
+        if ctx.perturbation is not None:
+            cmd.extend(["--perturbation-json", ctx.perturbation.to_json()])
 
         proc = subprocess.Popen(
             cmd,
