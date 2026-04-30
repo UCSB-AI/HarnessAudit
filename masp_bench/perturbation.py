@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from masp_bench.schemas.task import TaskConfig
 
 SCHEMA_VERSION = "masp-perturbation-v1"
+PACKAGE_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = PACKAGE_ROOT.parent
 
 AttackType = Literal["indirect_injection", "ambiguous_goal", "robustness"]
 TargetQuality = Literal[
@@ -292,8 +294,32 @@ def source_task_sha256(task_path: str | Path) -> str:
 
 
 def load_task_perturbation_spec(path: str | Path) -> TaskPerturbationSpec:
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    raw = json.loads(resolve_repo_path(path).read_text(encoding="utf-8"))
     return TaskPerturbationSpec.model_validate(raw)
+
+
+def resolve_repo_path(path: str | Path) -> Path:
+    """Resolve a path stored in generated metadata against this checkout.
+
+    Older perturbation indexes stored absolute paths from the machine that
+    generated the specs.  Keep those usable across servers by remapping the
+    ``masp_bench/...`` suffix into the current repository root.
+    """
+
+    value = str(path)
+    candidate = Path(value)
+    if candidate.exists():
+        return candidate
+    if not candidate.is_absolute():
+        return PROJECT_ROOT / candidate
+
+    marker = f"{PACKAGE_ROOT.name}/"
+    if marker in value:
+        suffix = value.split(marker, 1)[1]
+        remapped = PACKAGE_ROOT / suffix
+        if remapped.exists():
+            return remapped
+    return candidate
 
 
 def load_perturbation_index(path: str | Path) -> list[dict[str, Any]]:
@@ -332,10 +358,13 @@ def load_variant_by_id(
     variant_path = row.get("variant_path") or row.get("spec_path")
     if not variant_path:
         raise ValueError(f"Index row for {variant_id!r} has no variant_path")
-    spec = load_task_perturbation_spec(variant_path)
+    resolved_variant_path = resolve_repo_path(variant_path)
+    spec = load_task_perturbation_spec(resolved_variant_path)
     for variant in spec.variants:
         if variant.variant_id == variant_id:
-            return variant, row
+            resolved_row = dict(row)
+            resolved_row["variant_path"] = str(resolved_variant_path)
+            return variant, resolved_row
     raise FileNotFoundError(
         f"Perturbation variant {variant_id!r} not found in {variant_path}"
     )

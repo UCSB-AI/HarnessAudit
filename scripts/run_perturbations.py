@@ -66,6 +66,22 @@ def _artifact_scoped_dir(base_dir: Path, harness: str, model: str) -> Path:
     return base_dir / harness / model_dir
 
 
+def _resolve_repo_path(path: str | Path) -> Path:
+    value = str(path)
+    candidate = Path(value)
+    if candidate.exists():
+        return candidate
+    if not candidate.is_absolute():
+        return PROJECT_ROOT / candidate
+
+    marker = "masp_bench/"
+    if marker in value:
+        remapped = PROJECT_ROOT / marker / value.split(marker, 1)[1]
+        if remapped.exists():
+            return remapped
+    return candidate
+
+
 def _completed_variant_ids(args: argparse.Namespace) -> set[str]:
     """Return perturbation variant IDs that already have result JSON reports."""
     output_dir = _artifact_scoped_dir(Path(args.output), args.harness, args.model)
@@ -92,7 +108,7 @@ def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
         "-m",
         "masp_bench",
         "run",
-        str(row["task_path"]),
+        str(_resolve_repo_path(row["task_path"])),
         "--framework",
         "clawteam",
         "--harness",

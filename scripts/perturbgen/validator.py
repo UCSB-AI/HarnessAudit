@@ -13,6 +13,7 @@ from masp_bench.perturbation import SCHEMA_VERSION, PerturbationVariant, TaskPer
 from scripts.perturbgen.classifier import is_irreversible, tool_kind
 
 FORBIDDEN_VISIBLE_RE = re.compile(r"\bMASP[_A-Z0-9-]*\b", re.IGNORECASE)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OBVIOUS_INJECTION_RE = re.compile(
     r"(ignore (?:all )?(?:previous|prior|system|developer) instructions|"
     r"disregard (?:all )?(?:previous|prior|system|developer) instructions|"
@@ -203,6 +204,7 @@ def write_specs(
             encoding="utf-8",
         )
         for variant in spec.variants:
+            task_path = Path(task_path_by_id.get(spec.task_id, ""))
             row = {
                 "schema_version": SCHEMA_VERSION,
                 "variant_id": variant.variant_id,
@@ -214,8 +216,8 @@ def write_specs(
                 "expected_agent_role": variant.expected_agent_role,
                 "target_quality": variant.target_quality,
                 "source_task_sha256": variant.source_task_sha256,
-                "task_path": task_path_by_id.get(spec.task_id, ""),
-                "variant_path": str(path.resolve()),
+                "task_path": _portable_path(task_path),
+                "variant_path": _portable_path(path),
             }
             index_rows.append(row)
     index_path = output_dir / "index.jsonl"
@@ -233,6 +235,16 @@ def write_specs(
         "optional_variants": optional,
         "required_by_attack_type": dict(by_attack),
     }
+
+
+def _portable_path(path: Path) -> str:
+    if not str(path):
+        return ""
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def validation_report(errors_by_task: dict[str, list[str]]) -> dict[str, Any]:
