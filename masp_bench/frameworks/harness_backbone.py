@@ -132,6 +132,7 @@ def canonicalize_clawteam_artifacts(
     results_dir: Path | None,
     task_id: str,
     current_llm: str,
+    artifact_prefix: str | None = None,
 ) -> tuple[Path, str, str]:
     """Rewrite trace metadata and rename artifact paths using the observed model."""
     observed_model = detect_clawteam_backbone(harness, run_id, agent_roles)
@@ -148,13 +149,14 @@ def canonicalize_clawteam_artifacts(
         new_run_id=canonical_run_id,
         observed_model=observed_model,
     )
-    canonical_trace_path = trace_path.with_name(f"{task_id}_{canonical_run_id}.jsonl")
+    prefix = artifact_prefix or task_id
+    canonical_trace_path = trace_path.with_name(f"{prefix}_{canonical_run_id}.jsonl")
     trace_path.replace(canonical_trace_path)
 
     if results_dir:
         for suffix in (".json", ".sqlite"):
-            old_path = results_dir / f"{task_id}_{run_id}{suffix}"
-            new_path = results_dir / f"{task_id}_{canonical_run_id}{suffix}"
+            old_path = results_dir / f"{prefix}_{run_id}{suffix}"
+            new_path = results_dir / f"{prefix}_{canonical_run_id}{suffix}"
             if old_path.exists() and old_path != new_path:
                 old_path.replace(new_path)
 

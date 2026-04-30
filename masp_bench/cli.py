@@ -56,6 +56,12 @@ def _artifact_scoped_dir(base_dir: Path, harness: str, model: str) -> Path:
     return base_dir / harness / model_dir
 
 
+def _artifact_prefix(task_id: str, perturbation: PerturbationConfig | None) -> str:
+    if perturbation is None:
+        return task_id
+    return f"{task_id}_{perturbation.variant_id}"
+
+
 def _load_perturbation_config(
     args: argparse.Namespace,
     *,
@@ -103,6 +109,19 @@ def _final_output_from_trace_actions(actions: list) -> str:
     return ""
 
 
+def _is_degenerate_empty_trace(trace: object) -> bool:
+    """Detect harness runs that produced no usable native agent transcript."""
+
+    if getattr(trace, "error", None):
+        return False
+    if int(getattr(trace, "n_actions", 0) or 0) > 1:
+        return False
+    if int(getattr(trace, "n_tool_calls", 0) or 0) != 0:
+        return False
+    final_output = _final_output_from_trace_actions(getattr(trace, "actions", []) or [])
+    return not final_output.strip()
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     """Run a single task and evaluate."""
     pkg_root = Path(__file__).resolve().parent        # masp_bench/
@@ -140,7 +159,8 @@ def cmd_run(args: argparse.Namespace) -> None:
             framework_slug=framework_run_id_slug(args.framework),
             harness_slug=args.harness,
         )
-        trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
+        artifact_prefix = _artifact_prefix(task.task_id, perturbation)
+        trace_path = trace_dir / f"{artifact_prefix}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
 
         # --- Workspace manager for SDE real fixtures ---
@@ -186,6 +206,12 @@ def cmd_run(args: argparse.Namespace) -> None:
                 for warning in trace.warnings:
                     print(f"  warning: {warning}")
             print()
+
+            if _is_degenerate_empty_trace(trace):
+                raise RuntimeError(
+                    "Degenerate empty harness run: no tool calls and empty final output. "
+                    "Native agent session files may be missing or the harness failed silently."
+                )
 
             print("Checking access rules...")
             scope_keys = {t.name: t.dedup_scope_keys for t in catalog.tools if t.dedup_scope_keys}
@@ -333,6 +359,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                     results_dir=output_dir,
                     task_id=task.task_id,
                     current_llm=trace.llm,
+                    artifact_prefix=artifact_prefix,
                 )
                 trace.run_id = canonical_run_id
                 trace.llm = canonical_llm
@@ -342,10 +369,10 @@ def cmd_run(args: argparse.Namespace) -> None:
             if output_dir is not None and trace is not None:
                 out_dir = output_dir
                 out_dir.mkdir(parents=True, exist_ok=True)
-                db_path = out_dir / f"{task.task_id}_{run_id}.sqlite"
+                db_path = out_dir / f"{artifact_prefix}_{run_id}.sqlite"
                 if runner.dump_bank_to_file(db_path):
                     if args.framework == "clawteam" and trace.run_id != run_id:
-                        canonical_db_path = out_dir / f"{task.task_id}_{trace.run_id}.sqlite"
+                        canonical_db_path = out_dir / f"{artifact_prefix}_{trace.run_id}.sqlite"
                         db_path.replace(canonical_db_path)
                         db_path = canonical_db_path
                     print(f"Bank DB saved to {db_path}")
@@ -398,7 +425,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                         "stability_score": None,
                     }
                 )
-            out_path = out_dir / f"{task.task_id}_{trace.run_id}.json"
+            out_path = out_dir / f"{artifact_prefix}_{trace.run_id}.json"
             with open(out_path, "w") as f:
                 json.dump(report, f, indent=2)
             print(f"Report saved to {out_path}")

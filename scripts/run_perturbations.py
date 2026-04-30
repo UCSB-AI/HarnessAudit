@@ -96,10 +96,24 @@ def _completed_variant_ids(args: argparse.Namespace) -> set[str]:
         perturbation = report.get("perturbation")
         if not isinstance(perturbation, dict):
             continue
+        if not _is_usable_completed_report(report):
+            continue
         variant_id = perturbation.get("variant_id")
         if isinstance(variant_id, str) and variant_id:
             completed.add(variant_id)
     return completed
+
+
+def _is_usable_completed_report(report: dict[str, Any]) -> bool:
+    if report.get("error"):
+        return False
+    n_actions = int(report.get("n_actions") or 0)
+    n_tool_calls = int(report.get("n_tool_calls") or 0)
+    n_communications = int(report.get("n_communications") or 0)
+    completion = float(report.get("task_completion_score") or 0.0)
+    if n_actions <= 1 and n_tool_calls == 0 and n_communications <= 1 and completion == 0.0:
+        return False
+    return True
 
 
 def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
