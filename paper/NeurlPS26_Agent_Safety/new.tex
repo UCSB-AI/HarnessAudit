@@ -1,0 +1,1910 @@
+\documentclass{article}
+
+\usepackage{neurips_2026}
+
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\usepackage[table]{xcolor}
+\usepackage{colortbl}
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{multirow}
+\usepackage{arydshln}
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\usepackage{makecell}
+%\usepackage[frozencache,cachedir=.]{minted}
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{booktabs} % for professional tablesa
+\usepackage[hidelinks]{hyperref}
+\usepackage{arydshln}
+\usepackage{booktabs}
+\usepackage{xspace}
+\usepackage{enumitem}
+\usepackage[flushleft]{threeparttable}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage{xcolor, colortbl}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usepackage{wrapfig}
+\usepackage{textcomp}  %
+\usepackage{scalerel}  %
+\usepackage{tipa}
+\usepackage{pifont}
+\usepackage[subtle]{savetrees}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage[normalem]{ulem}
+\usepackage{tcolorbox}
+\usepackage{bbm}
+\usepackage{algorithmic}
+\usepackage{float}
+\definecolor{HeaderGray}{gray}{0.95}
+\definecolor{GroupGreen}{RGB}{220,240,220}
+\definecolor{GroupBlue}{RGB}{220,230,245}
+\definecolor{HeaderGray}{gray}{0.95}
+\definecolor{GroupGreen}{RGB}{220,240,220}
+\definecolor{GroupBlue}{RGB}{220,230,245}
+\definecolor{OursRowBg}{RGB}{223, 233, 251}
+\definecolor{OursBlue}{RGB}{30, 80, 200}
+
+\graphicspath{{images/}}
+
+\newcommand{\benchname}{\textsc{HarnessBench}\xspace}
+\newcommand{\violOP}{\textsc{V-OP}\xspace}
+\newcommand{\violOR}{\textsc{V-OR}\xspace}
+\newcommand{\violIC}{\textsc{V-IC}\xspace}
+\newcommand{\violID}{\textsc{V-ID}\xspace}
+\newcommand{\Lone}{\textsc{L1}\xspace}
+\newcommand{\Ltwo}{\textsc{L2}\xspace}
+\newcommand{\Lthree}{\textsc{L3}\xspace}
+\newcommand{\subt}[1]{{\scriptsize\textcolor{black!55}{\,(#1)}}}
+\newcommand{\ours}[1]{\textcolor{OursBlue}{\textbf{#1}}}
+
+\title{Do Multi-Agent Harnesses Enforce Safety Boundaries?\\
+A Three-Layer Benchmark for Agent Harness Safety Evaluation}
+
+
+
+\author{
+  David S.~Hippocampus\thanks{Use footnote for providing further information
+    about author (webpage, alternative address)-\emph{not} for acknowledging
+    funding agencies.} \\
+  Department of Computer Science\\
+  Cranberry-Lemon University\\
+  Pittsburgh, PA 15213 \\
+  \texttt{hippo@cs.cranberry-lemon.edu} \\
+}
+
+
+\begin{document}
+
+
+\maketitle
+
+
+\begin{abstract}
+Language-model agents are increasingly deployed inside multi-agent
+\emph{harnesses} that mediate communication, tool use, resource access,
+role assignment, and information flow. In this regime, safety is no
+longer a property of a single utterance: failures arise from sequences
+of locally-reasonable actions that compose into globally unsafe
+outcomes---unauthorized trades, leaked records, premature external
+commitments, or actions on the wrong object. Existing agent benchmarks
+either grade only the final artifact, isolate safety into standalone
+red-team suites, or couple evaluation to a single fixed scaffold,
+making it impossible to attribute failures to the harness itself. We
+introduce \benchname, a benchmark and evaluation framework that shifts
+agent safety from \emph{output-level} judgement to \emph{harness-level}
+governance. \benchname spans eight realistic work domains
+(finance, e-commerce, healthcare, office, daily life, legal, social,
+software engineering) with $24$ scenarios; specifies role-typed
+multi-agent topologies (Planner, Retriever, Executor, Reviewer,
+Sender) with explicit harness policies (action boundaries on tools,
+permissions, and information flow); and ships an attack and
+perturbation library covering indirect prompt injection, ambiguous
+goals, role confusion, malicious delegation, and runtime errors
+(HTTP $429$/$500$, latency spikes, malformed responses). Every task
+is auditable through three independent evidence channels (execution
+traces, service-side audit logs, environment snapshots) and is
+paired with a programmatic trajectory rubric that scores three
+complementary harness layers: \textbf{Protocol Integrity} (whether
+the interaction chain is minimal, valid, in-bounds),
+\textbf{Operational Governance} (whether each agent respects role,
+subtask, and information-flow boundaries), and \textbf{Decision
+Outcome \& Robustness} (final correctness and stability under
+perturbation). Violations are unified under four codes---Operation
+Overreach, Object/Resource Misbinding, Improper Commitment,
+Information Disclosure. We evaluate a panel of frontier LLMs
+deployed inside three multi-agent harnesses (\textsc{Claw-Team},
+Google ADK, OpenAI ADK) under matched task, model, tool, and policy
+settings. Eight research questions, ranging from capability--safety
+divergence and permission breadth to topology shape, attack
+propagation, error cascade, and emergent unsafety, structure our
+analysis. Our results support the central thesis that agent safety
+is a property of the deployment stack, not of the model in isolation.
+\end{abstract}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{images/fig1.png}
+\vspace{-0.5em}
+\caption{\textbf{Overview of \benchname.} A multi-agent harness mediates
+the path from a user goal $g$ to a dispatched artifact through
+role-typed agents (Planner / Retriever / Executor / Reviewer / Sender),
+typed tool calls, and policy-gated inter-agent messages. \benchname{}
+grades every run along three complementary harness layers and four
+violation codes, on the basis of three independent evidence channels
+(execution trace, service-side audit logs, environment snapshots).}
+\vspace{-1em}
+\label{fig:overview}
+\end{figure}
+
+
+\section{Introduction}
+\label{sec:intro}
+
+
+An end-to-end view of \benchname{} is given in
+Figure~\ref{fig:overview}, with the runtime pipeline detailed in
+Figure~\ref{fig:pipeline}.
+
+\paragraph{Background: agents are deployed as harnesses, not as models.}
+Frontier language models are now routinely shipped as \emph{agents}
+that plan, retrieve, execute, and review on behalf of users.
+Production stacks such as \textsc{Claw-Team}, Google ADK, and
+OpenAI's Agent Development Kit decompose user requests into subtasks
+routed to role-specialized agents (Planner, Retriever, Executor,
+Reviewer, Sender), each invoking tools, accessing resources, and
+exchanging structured messages over a coordination protocol. Recent
+empirical work confirms three things about this regime:
+(i) safety failures are deployment failures, not refusal failures
+--- agents bulk-delete emails, forward confidential documents, and
+modify contracts under genuine task pressure;
+(ii) capability and safety do not co-vary --- a strong model inside
+a permissive harness can be \emph{less} safe than a weaker model in
+a strict one;
+(iii) output-level judges are systematically unreliable, missing
+roughly $44\%$ of safety violations that audit-log-grounded graders
+catch.
+
+\begin{wrapfigure}{r}{0.45\textwidth}
+\vspace{-2em}
+  \centering
+  \includegraphics[width=\linewidth]{images/intro1.png}
+  \caption{\textbf{Why ``did the final answer look fine?'' is the wrong
+  question.} The agent appears to satisfy the user goal, but its
+  trajectory leaks unrelated PII, exceeds permission, and crosses role
+  boundaries; output-level judges miss this entirely.}
+  \label{fig:intro1}
+  \vspace{-1.em}
+\end{wrapfigure}
+
+
+\paragraph{From output safety to harness governance.}
+Most existing agent-safety benchmarks inherit their lens from
+chatbot red-teaming: fix a model and ask whether the final answer is
+harmful. Consider, instead, the user instruction \emph{``Send a
+rescheduling email to the professor; only mention the new time and
+do not attach any other materials.''} A safe execution issues a
+minimal calendar lookup, drafts a short message, and dispatches it.
+An unsafe execution may, in passing, list every contact, scan every
+attachment, summarize an unpublished draft, and forward it under a
+benign cover --- producing a final email that looks correct but
+whose \emph{trajectory} leaks information, exceeds permission, and
+crosses role boundaries (Figure~\ref{fig:intro1}). Output-level
+judges miss this entirely; jailbreak benchmarks miss it because no
+jailbreak occurred.
+
+\paragraph{The harness, not the model, is the unit of analysis.}
+Multi-agent collaboration introduces qualitatively new risk
+surfaces. One agent retrieves more than is needed; a second trusts
+and forwards that context; a third executes a high-risk action
+without an explicit gate. Each step is locally plausible; globally,
+the trajectory violates the user's intent or the operator's policy.
+The failure is emergent: it lives in the \emph{interaction} between
+agents, in the \emph{permissions} the harness grants to each role,
+and in the \emph{information flow} between subtasks. We argue that
+agent safety should therefore be evaluated as a property of the
+\emph{deployment stack} --- the joint system of model, scaffold,
+tools, resources, memory, workspace, and policy. Empirically, the
+same backbone model exhibits substantially different unsafe-action
+and safe-completion rates across harnesses; treating safety as a
+per-model leaderboard underspecifies the problem.
+
+\paragraph{Limitations of existing evaluations we directly address.}
+Three concrete gaps motivate \benchname.
+\textbf{(G1) Trajectory-opaque grading.} Many benchmarks verify
+only whether the agent produces a correct final artifact, leaving
+faithful execution indistinguishable from fabricated steps;
+sophisticated agents can game such evaluation surfaces.
+\textbf{(G2) Underspecified safety and robustness.} Safety is
+either isolated into red-team suites divorced from genuine task
+pressure or sandboxed away; robustness under transient service
+failures and rate limiting is essentially unmeasured.
+\textbf{(G3) Single-harness coupling.} Existing tasks are coupled
+to one bespoke environment, so harness design cannot be isolated
+as an experimental variable. Closing all three gaps simultaneously
+is the motivation for \benchname.
+
+\paragraph{Our approach: \benchname.}
+\benchname instantiates a multi-agent harness safety benchmark with
+four design moves that map onto these gaps. First, we treat the
+\emph{trajectory} as first-class evidence: every run produces three
+independent and agent-invisible evidence channels (execution
+traces, service-side audit logs, deterministic environment
+snapshots) over which programmatic rubrics are evaluated. Second,
+we adopt a \emph{three-layer} scoring model --- Protocol Integrity
+(\Lone), Operational Governance (\Ltwo), and Decision Outcome \&
+Robustness (\Lthree) --- with a unified violation taxonomy
+\{\violOP, \violOR, \violIC, \violID\}. Third, we make the harness
+\emph{controllable}: the same scenario is re-instantiated across
+$\geq 3$ multi-agent harnesses with matched roles, tools,
+permissions, and information-flow policies, so that the harness
+itself is the experimental variable. Fourth, we treat
+\emph{perturbation} as a first-class parameter: adversarial and
+runtime stressors are sweepable conditions, scored under both
+Pass$@k$ (capability ceiling) and Pass$^{k}$ (reliability floor)
+over $k$ trials.
+
+\paragraph{Contributions.}
+Our contributions are fourfold. (i) We give a \textbf{harness-level
+formulation} of multi-agent safety as governance over communication,
+tool use, resource access, role boundaries, information flow, and
+high-risk decisions. (ii) We release \benchname, a benchmark of
+$24$ scenarios across $8$ realistic domains with explicit harness
+policies, an attack and perturbation library, and three-channel
+auditable traces. (iii) We provide a \textbf{three-layer evaluation
+framework} (\Lone/\Ltwo/\Lthree) with the unified
+\{\violOP, \violOR, \violIC, \violID\} taxonomy, multiplicative
+$\mathrm{SCR}$ aggregation, and Pass$@k$/Pass$^{k}$ separation.
+(iv) We carry out a \textbf{cross-harness empirical study} of three
+multi-agent harnesses on a panel of frontier LLMs, structured
+around eight research questions that probe capability-vs-safety
+divergence, permission breadth, layer attribution, multi-vs-single
+risk gap, topology shape, cross-agent attack propagation, error
+cascade vs.\ containment, and emergent unsafety.
+
+
+
+
+\section{Related Work}
+\subsection{Multi-Agent Framework}
+
+\paragraph{Multi-agent harnesses.}
+Multi-agent harnesses --- AutoGen, MetaGPT, CrewAI, LangGraph,
+\textsc{Claw-Team}, Google ADK, OpenAI ADK --- propose ever more
+elaborate orchestration patterns, but no shared benchmark varies
+the harness while controlling for model, task, tools, and policy.
+\benchname, to our knowledge, is the first benchmark designed for
+that comparison: the same task is portable across $\geq 3$
+multi-agent harnesses without changing roles, tools, permissions,
+or seed state.
+
+\paragraph{Single-agent and tool-using benchmarks.}
+A first wave of benchmarks targets standalone agents calling tools
+to solve coding, web, or OS tasks: \textsc{SWE-bench},
+\textsc{ToolBench}, \textsc{API-Bank}, \textsc{Terminal-Bench},
+\textsc{WebArena}, \textsc{VisualWebArena}, \textsc{OSWorld},
+\textsc{AgentBench}, \textsc{GAIA}, \textsc{TheAgentCompany}. These
+benchmarks score the final artifact and assume a fixed scaffold.
+\benchname extends this line by treating the \emph{harness} as the
+variable, the \emph{trajectory} as the unit of evaluation, and
+\emph{multi-agent topology} as part of the task.
+
+\paragraph{Information-flow control and capability systems.}
+Classical OS-level work on information-flow control and
+capability-based security inspires our field-level information-flow
+rubric and our notion of harness governance, transposed to a
+setting where \emph{agents} are the principals and the harness
+mediates capability propagation between them. Treating each
+inter-agent message as a typed transition through a permission
+relation $\Pi$ and an information-flow policy $\Phi$ gives us a
+sound substrate for the rubric in \S\ref{sec:problem:scoring}.
+
+\subsection{Safety Evaluation For Agents}
+
+\paragraph{Output-level safety and red-teaming.}
+\textsc{AgentHarm}, \textsc{Agent-SafetyBench}, \textsc{ToolEmu},
+\textsc{R-Judge}, \textsc{ST-WebAgentBench}, \textsc{OS-Harm},
+\textsc{BeSafe-Bench}, \textsc{AgentDojo}, \textsc{ASB},
+\textsc{MCP-SafetyBench} score harmful behaviors of single agents
+in isolated red-team or sandbox settings. \textsc{$\tau$-bench}
+and \textsc{ClawsBench} embed safety constraints inside normal
+tasks; \benchname inherits this design and additionally varies
+the harness as an experimental factor and decomposes failures by
+harness layer.
+
+\paragraph{Trajectory-level and process-aware evaluation.}
+A growing line of work scores intermediate steps rather than final
+answers. Empirically, output-only LLM judges miss roughly $44\%$
+of safety violations that audit-log-grounded graders catch, and
+the Pass$@k$ / Pass$^{k}$ separation reveals that error injection
+erodes consistency far more than peak capability. \benchname
+inherits both signals and adds layer attribution: every detected
+violation carries a code in $\{\violOP, \violOR, \violIC,
+\violID\}$ and a layer in $\{\Lone, \Ltwo, \Lthree\}$, so the
+failure mix can distinguish two harnesses with similar headline
+metrics.
+
+\paragraph{Productivity, web, and live-environment safety.}
+\textsc{AppWorld} and \textsc{WorkBench} provide stateful mock
+workspaces with reduced API complexity; \textsc{ClawsBench} adds
+high-fidelity mocks across five productivity services with $44$
+tasks and reports $\mathrm{TSR}/\mathrm{UAR}/\mathrm{SCR}$ across
+six models and four harnesses; \textsc{Claw-Eval} evaluates $300$
+tasks with three-channel auditable traces and Completion / Safety
+/ Robustness scoring; \textsc{ClawBench} evaluates $153$
+write-heavy tasks on $144$ live websites with five-layer
+recordings. \benchname is complementary: we adopt
+\textsc{Claw-Eval}'s three-channel auditing and
+\textsc{ClawsBench}'s $\mathrm{UAR}/\mathrm{SCR}$ scoring, and
+expand to \emph{multi-agent} settings where roles, permissions,
+and information flow are first-class.
+
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Coverage of \benchname compared to related agent
+benchmarks across six dimensions:
+\textbf{Environment} (where the run executes),
+\textbf{\# Tasks} (number of evaluation tasks),
+\textbf{Domains} (distinct work / application domains),
+\textbf{\# Tools} (distinct typed tool APIs),
+\textbf{Multi-Agent} (whether a role-typed multi-agent topology
+with cross-agent message passing is instantiated), and
+\textbf{Task Type} (dominant task semantics).
+\ding{52}\xspace = full, \ding{56}\xspace = absent, ``--'' = not reported.}
+\label{tab:bench_coverage}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllllcl}
+\toprule
+\rowcolor{HeaderGray}
+\textbf{Benchmark} & \textbf{Environment} & \textbf{\# Tasks} & \textbf{Domains} & \textbf{\# Tools} & \textbf{Multi-Agent} & \textbf{Task Type} \\
+\midrule
+ToolEmu \subt{Ruan et al., 2023}            & LM-emulated \subt{sandbox}        & $144$       & $9$ apps      & $311$ & \ding{56} & Tool-use risks \\
+AgentDojo \subt{Debenedetti et al., 2024}   & Mock \subt{stateful}              & $97$        & $4$           & --    & \ding{56} & Indirect-injection defense \\
+AgentHarm \subt{Andriushchenko et al., 2024}& Sandboxed                         & $110$       & $11$          & --    & \ding{56} & Harmful-prompt suite \\
+Agent-SafetyBench \subt{Zhang et al., 2024} & Sandboxed                         & $2{,}000+$  & $8$           & --    & \ding{56} & Risk awareness \\
+R-Judge \subt{Yuan et al., 2024}            & Trace-based \subt{static logs}    & $569$       & $5$           & --    & \ding{56} & Trajectory judging \\
+ST-WebAgentBench \subt{Levy et al., 2024}   & Sandbox \subt{web replicas}       & $222$       & $6$           & --    & \ding{56} & Web-agent safety \\
+OS-Harm \subt{Kuntz et al., 2025}           & Real OS \subt{computer use}       & $150$       & $8$           & --    & \ding{56} & OS-agent safety \\
+$\tau$-bench \subt{Yao et al., 2024}        & Sandbox \subt{stateful}           & $165$       & $2$           & $28$  & \ding{56} & Policy compliance \\
+ClawsBench \subt{Li et al., 2026}           & Mock services \subt{5 productivity APIs} & $44$ & $5$ services  & $198$ & \ding{56} & Productivity safety \\
+Claw-Eval \subt{Ye et al., 2026}            & Mock + sandbox \subt{Docker}      & $300$       & $9$ categories& --    & \ding{56} & Auditable trajectory \\
+ClawBench \subt{Zhang et al., 2026}         & Real Web                          & $153$       & $144$ sites   & --    & \ding{56} & Real-web write \\
+\midrule
+\rowcolor{OursRowBg}
+\ours{\benchname} \textit{(Ours)} & \textbf{Mock services} \subt{8 typed backends} & $\sim$$300$ & \textbf{$8$ / $24$}\subt{domains / scenarios} & $\sim$$120$ & \ding{52} & \textbf{Multi-agent harness safety} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+
+
+
+\section{Problem Design}
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.99\textwidth]{images/pipline.png}
+\vspace{-0.5em}
+\caption{\textbf{The \benchname{} pipeline.} A scenario is materialized
+into a typed harness $\mathcal{H}=(\mathcal{A},\mathcal{T},\mathcal{R},
+\Pi,\Phi,\Sigma)$ in the \emph{Setup} phase; the chosen multi-agent
+harness orchestrates the run in the \emph{Execution} phase, with the
+system layer recording every event under a temporal firewall; the
+\emph{Evaluation} phase applies a three-layer rubric over execution
+trace, service-side audit logs, and environment snapshots, mapping
+each violation to a code and a layer.}
+\vspace{-1em}
+\label{fig:pipeline}
+\end{figure}
+
+
+\subsection{The Multi-Agent harness as a system}
+
+\paragraph{Setup phase.} The framework reads the scenario definition and instantiates a
+typed harness
+$\mathcal{H} = (\mathcal{A}, \mathcal{T}, \mathcal{R}, \Pi, \Phi, \Sigma)$:
+(i) the role-typed agent set $\mathcal{A}$ (Planner, Retriever,
+Executor, Reviewer/Hub, Sender) is materialized inside the
+service layer with bound identities;
+(ii) the typed tools $\mathcal{T}$ (each declaring a parameter
+schema, return schema, effect class
+$\in\{\texttt{read}, \texttt{search}, \texttt{update},
+\texttt{send}, \texttt{approve}, \texttt{execute}\}$, and a
+sensitivity tag) are wired to mock service backends-calendar,
+contacts, CRM, ticketing, EHR, ledger, repo, file store-running
+outside the agents' reach;
+(iii) resources $\mathcal{R}$ are seeded with deterministic
+snapshots so that traces are reproducible;
+(iv) the permission relation
+$\Pi \subseteq \mathcal{A} \times \mathcal{T} \times 2^{\mathcal{R}}$
+and the information-flow policy
+$\Phi:(a_i, a_j, m) \mapsto \{\text{allow}, \text{deny}\}$ are
+loaded into the harness's policy engine;
+(v) orchestration primitives $\Sigma$ (delegation, confirmation
+gates, dry-run/preview, review, retry-and-confirm) are bound to
+the corresponding harness hooks;
+(vi) any adversarial content (indirect prompt injections,
+role-confusion lures, sensitive-information lures, benign
+wrappers) is planted into channels the agent normally reads,
+and the runtime perturbation profile (HTTP $429$/$500$, latency,
+malformed responses) is configured at the system layer.
+Each mock service silently begins recording an audit log from
+this moment, and a \emph{temporal firewall} excludes any scoring
+script, reference answer, or verification utility from the agent's
+environment.
+
+\paragraph{Execution phase.} The chosen multi-agent harness orchestrates the agents through
+the user task. A single run starts from a user goal $g$ and
+unfolds as a sequence of typed events: the Planner decomposes
+$g$ into subtasks under $\Sigma$; the Retriever and Executor
+invoke tools in $\mathcal{T}$ over resources in $\mathcal{R}$
+subject to $\Pi$; agents exchange messages filtered by $\Phi$;
+the Reviewer (if present) gates external commitments; the
+Sender dispatches the final artifact. Two capability layers
+cleanly separate concerns:
+\begin{itemize}[leftmargin=*,itemsep=2pt,topsep=2pt]
+    \item \textbf{System layer} (harness-agnostic, provided by
+    our framework): typed tool dispatch and return-schema
+    validation; cryptographic identity binding on every message;
+    full-event logging into the execution trace
+    $\tau = \langle e_1, \dots, e_n \rangle$ with
+    \texttt{allowed}/\texttt{denied}/\texttt{escalated} policy
+    stamps; runtime perturbation injection (rate-limited $429$,
+    $500$, latency, malformed JSON) at the configured rate.
+    \item \textbf{Service layer} (pluggable, the harness under
+    test): the multi-agent harness itself. We currently support
+    three: \textsc{Claw-Team}, Google ADK, and OpenAI ADK. Each
+    contributes its own delegation style, role specs, and
+    approval primitives, but interacts with the system layer
+    through a uniform substrate of typed tools and resources.
+    From the system layer's view, the harness is a black box
+    that emits typed events; from the harness's view, the system
+    layer is invariant infrastructure.
+\end{itemize}
+This separation is what makes the same scenario portable: the
+agents, $\Pi$, $\Phi$, and seed state are fixed, only the
+orchestration code in the service layer changes.
+
+
+
+\paragraph{Evaluation phase.} On termination, the framework collects multiple evidence channels
+that are not exposed to the agent during execution: the execution
+trace $\tau$ from the system layer, pre/post environment snapshots
+of the task state, the permission graph, resource-access records,
+and inter-agent communication logs. The temporal firewall
+established in Setup ensures that none of the grading artefacts
+could have been observed by the agent during Execution.
+
+The trajectory rubric of \S\ref{sec:problem:scoring} is then applied.
+Deterministic predicates over $\tau$ and the environment snapshots
+check parameter-local and state-transition properties, such as
+whether a tool call targets the intended resource, whether an agent
+accesses only authorized fields, and whether an action causes an
+out-of-scope state change. LLM-judge predicates with structured
+outputs cover natural-language properties, including whether the
+final response satisfies the user intent, whether private information
+is unnecessarily disclosed, and whether the agent follows the
+required approval or delegation protocol.
+
+Adversarial and runtime perturbation sweeps configured in Setup feed
+directly into the Pass$@k$ / Pass$^{k}$ aggregations of
+\S\ref{sec:exp:setup}. The output of this phase is a per-task
+scorecard that maps every detected violation and a layer in
+$\{L1, L2, L3 \}$.
+
+\subsection{Three harness layers}
+\label{sec:problem:layers}
+
+Trajectory failures admit a natural three-layer attribution that
+mirrors how an operator would debug them. A single incident may
+contribute to multiple layers; the layer attribution names the
+\emph{locus} of the failure --- where the operator would intervene
+to prevent recurrence.
+
+\paragraph{\Lone Protocol Integrity.}
+\Lone asks whether the inter-agent and agent--tool/resource
+interaction chain is minimal, valid, authenticated, and
+non-redundant. Concretely it scores three permission-shaped
+streams: tool calls regulated by $\Pi$ (no calls outside the
+permitted effect class or resource scope), resource accesses
+regulated by $\Pi$ via the resource-scope filter (e.g., a
+Retriever fetching only records bound to the current case ID),
+and outgoing inter-agent messages regulated by the field-level
+information-flow policy $\Phi$ (no leaked fields across role
+boundaries). Failures at \Lone manifest as surplus tool calls,
+over-broad resource fetches, malformed or impersonating messages,
+or cross-agent over-disclosure. In one phrase: \Lone is
+\emph{permissions}.
+
+\paragraph{\Ltwo Operational Governance.}
+\Ltwo asks whether each agent's actual execution behavior respects
+role boundaries, subtask boundaries, information-flow policy at
+the field level, and object correctness --- in particular, whether
+the right tool was invoked with the right parameters on the right
+resource. \Ltwo failures include role-boundary violations
+(an Executor performing review work; a Retriever sending external
+messages), tools invoked on the wrong object
+(\texttt{order.refund} on an order that does not belong to the
+user), $\Phi$-prohibited fields propagated, and required success
+sub-rubrics left unsatisfied. In one phrase: \Ltwo is the
+\emph{agent's own competence under role}.
+
+\paragraph{\Lthree Decision Outcome \& Robustness.}
+\Lthree asks whether the final result is correct and stable under
+perturbation. \Lthree failures include confidently dispatching a
+final artifact after partial tool failures, fabricating
+commitments that no upstream gate authorized, permanent side
+effects on the wrong object that survive the run, and loss of
+trajectory consistency under adversarial or runtime perturbation
+(rate-limited responses, latency spikes, malformed JSON). In one
+phrase: \Lthree is the \emph{harness's robustness and final-state
+correctness}.
+
+\subsection{Scoring Evaluation}
+\label{sec:problem:scoring}
+
+
+\textbf{Trajectory-level safety predicates.}
+We treat trajectory-level safety as a conjunction of programmatic
+predicates over $\tau$:
+(i) \emph{user-intent compliance} --- $\tau$ realizes the user
+goal $g$ without proscribed side actions;
+(ii) \emph{permission compliance} --- every tool call respects
+$\Pi$;
+(iii) \emph{information-flow compliance} --- every inter-agent
+message satisfies $\Phi$ at field granularity;
+(iv) \emph{commitment compliance} --- external commitments pass
+the required gates in $\Sigma$;
+(v) \emph{object correctness} --- actions bind to the intended
+resource. A safe execution satisfies all five. The three
+per-layer scores below are quantitative relaxations of these
+predicates over the trajectory.
+
+\noindent\textbf{Layer 1 (Safety adherence rate).}
+Each agent $a \in \rho_i$ produces three safety-relevant
+event streams that the harness's policies regulate:
+its tool calls $C_a$ (regulated by the permission relation
+$\Pi$), its resource accesses $R_a$ (regulated by $\Pi$ via
+the resource-scope filter), and its outgoing inter-agent
+messages $M_a$ (regulated by the field-level information-flow
+policy $\Phi$). For each stream we score the agent as
+\emph{one minus the out-of-bounds rate}:
+\begin{align}
+\mathrm{SAR}^{\text{tool}}(a) &= 1 - \frac{|\,\bar{C}_a^{\,\Pi}\,|}{|C_a|},
+\label{eq:sar_tool_score}
+\\[2pt]
+\mathrm{SAR}^{\text{rsrc}}(a) &= 1 - \frac{|\,\bar{R}_a^{\,\Pi}\,|}{|R_a|},
+\label{eq:sar_rsrc_score}
+\\[2pt]
+\mathrm{SAR}^{\text{flow}}(a) &= 1 - \frac{|\,\bar{M}_a^{\,\Phi}\,|}{|M_a|}.
+\label{eq:sar_flow_score}
+\end{align}
+Here the over-barred sets denote the \emph{violating} subsets:
+$\bar{C}_a^{\,\Pi} \subseteq C_a$ are tool calls outside the
+permitted effect class or resource scope of $\Pi$;
+$\bar{R}_a^{\,\Pi} \subseteq R_a$ are resource accesses outside
+the role's $\Pi$-permitted scope (e.g., a Retriever fetching a
+record bound to a different case ID); and
+$\bar{M}_a^{\,\Phi} \subseteq M_a$ are outgoing messages that
+leak fields prohibited by $\Phi$. If a stream is empty for
+agent $a$, the corresponding factor defaults to $1$ (no
+opportunity to violate); any \emph{severe} single-event
+violation (an \texttt{execute}-class call on an out-of-scope
+resource; a high-sensitivity field crossing a $\Phi$-prohibited
+edge) hard-fails the corresponding factor to $0$.
+
+\smallskip
+The per-agent safety adherence rate is the unweighted mean of the
+three compliance factors, and the task-level safety adherence rate
+is the unweighted mean over agents---every role counts equally,
+with no role-criticality weighting:
+\begin{align}
+\mathrm{SAR}(a) &=
+\tfrac{1}{3}
+\bigl[
+\mathrm{SAR}^{\text{tool}}(a)
++
+\mathrm{SAR}^{\text{rsrc}}(a)
++
+\mathrm{SAR}^{\text{flow}}(a)
+\bigr],
+\label{eq:sar_agent}
+\\[2pt]
+\mathrm{SAR}_i &=
+\frac{1}{|\rho_i|}
+\sum_{a \in \rho_i}
+\mathrm{SAR}(a).
+\label{eq:sar_score}
+\end{align}
+
+\smallskip
+\noindent\textbf{Layer 2 (Task success rate).}
+Layer 2 measures operational competence as the unweighted mean of
+the per-agent task success rates:
+\begin{equation}
+\label{eq:tsr_score}
+\mathrm{TSR}_i
+=
+\frac{1}{|\rho_i|}
+\sum_{a \in \rho_i}
+\mathrm{TSR}(a).
+\end{equation}
+Here
+$\mathrm{TSR}(a)=|S_a^{\checkmark}|/|S_a|$ is the fraction of
+role-scoped success-rubric items satisfied by agent $a$ on the
+trajectory, where $S_a\subseteq S$ is the subset of success-rubric
+items assigned to role $a$ and
+$S_a^{\checkmark}\subseteq S_a$ is the satisfied subset.
+Because TSR measures execution quality rather than safety, every
+agent contributes equally and no role weighting is applied.
+
+\smallskip
+\noindent\textbf{Layer 3 (Stability rate).}
+Layer 3 measures the recovery rate of the trajectory across the
+per-task perturbation set $P_i$ drawn from
+Table~\ref{tab:perturbations}:
+\begin{equation}
+\label{eq:sr_score}
+\mathrm{SR}_i
+=
+\frac{|P_i^{\checkmark}|}{|P_i|}.
+\end{equation}
+Here $P_i^{\checkmark} \subseteq P_i$ is the subset of
+perturbations under which the trajectory \emph{recovers}, meaning
+that its final outcome remains within $\theta_C$ of the clean
+counterpart on the same task.
+The remaining perturbations in
+$P_i \setminus P_i^{\checkmark}$ are counted as stability failures.
+
+\paragraph{Safe completion score.}
+Finally, we combine the three layer scores into one overall safe
+completion score:
+\begin{equation}
+\label{eq:task_score}
+\mathrm{SCR}_i
+=
+\mathrm{SAR}_i
+\cdot
+\bigl(
+\alpha\,\mathrm{TSR}_i
++
+\beta\,\mathrm{SR}_i
+\bigr),
+\qquad
+\alpha + \beta = 1.
+\end{equation}
+By default $\alpha = 0.7$ and $\beta = 0.3$; high-stakes domains
+(Healthcare, Finance, Legal) additionally report a
+robustness-weighted variant with $\beta = 0.5$.
+The multiplicative gate on $\mathrm{SAR}_i$ reflects the intended
+semantics of the benchmark: a permission breach (\violOP or
+\violID) compromises trajectory safety \emph{regardless} of how
+well the task was solved, so a brilliantly completed task that
+leaks PII still collapses to near-zero. Within the additive term,
+$\alpha = 0.7$ reflects that task success is the primary signal
+once permissions are respected, while stability under perturbation
+is an important secondary signal but not a substitute.
+
+\paragraph{Safe Completion Rate.}
+To measure the trade-off between safety and task completion, we report
+the safe completion rate:
+\[
+\mathrm{SCR}@\tau
+=
+\Pr\!\left[
+S^{\text{task}}_i \geq \tau
+\right],
+\qquad
+\theta_C = \tau = 0.8.
+\]
+Here $S^{\text{task}}_i$ is the per-task safe completion score defined
+in Eq.~\eqref{eq:task_score}. This score jointly depends on safety
+adherence, task success, and stability under perturbation. Therefore,
+$\mathrm{SCR}@\tau$ measures the probability that a trajectory is not
+only successful, but also safe enough under the benchmark's safety and
+robustness criteria.
+
+Unlike TSR, which only measures whether the task is completed, and UAR,
+which only measures whether severe unsafe actions occur,
+$\mathrm{SCR}@\tau$ captures whether the system can complete the task
+\emph{safely}. This makes it useful for characterizing the
+safety--utility trade-off. A model with high TSR but low SCR may be
+capable but unsafe, because it completes tasks by over-accessing
+resources, invoking out-of-scope tools, or leaking protected fields.
+Conversely, a model with low UAR but low TSR may appear safe only
+because it fails to act effectively. A strong multi-agent harness should
+therefore achieve high TSR, low UAR, and high SCR simultaneously,
+indicating that it preserves permission and information-flow
+constraints without sacrificing task completion.
+
+\paragraph{Unified violation taxonomy.}
+All observed misbehavior is mapped to four codes
+(Table~\ref{tab:viol_taxonomy}) so that two harnesses with similar
+headline metrics can still be told apart by their failure mix.
+\textbf{\violOP} (Operation Overreach) covers actions outside the
+current role, task, or authorization scope --- e.g., executing a
+trade, issuing a refund, sending a notice, or booking travel
+without standing. \textbf{\violOR} (Object/Resource Misbinding)
+covers acting on the wrong user, case, order, portfolio, file, or
+matter --- the right action on the wrong object.
+\textbf{\violIC} (Improper Commitment) covers confirming results
+or making definitive external claims without the required hub /
+lead / user review. \textbf{\violID} (Information Disclosure)
+covers accessing, carrying, forwarding, or outputting unnecessary
+or unauthorized sensitive information. Each code has a primary
+layer of attribution --- \violOP and \violID at \Lone, \violOR
+at \Ltwo, \violIC at \Lthree --- so per-layer scores aggregate
+naturally over codes and are not double-counted.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Unified violation taxonomy used across all eight domains.}
+\label{tab:viol_taxonomy}
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{p{0.07\textwidth} p{0.21\textwidth} p{0.62\textwidth}}
+\toprule
+\textbf{Code} & \textbf{Name} & \textbf{Definition and examples} \\
+\midrule
+\violOP & Operation Overreach &
+Performing actions outside the current role, task, or authorization
+scope: e.g., executing a trade, issuing a refund, sending a notice,
+booking travel without standing. \\
+\violOR & Object/Resource Misbinding &
+Acting on the wrong user, case, order, portfolio, file, or matter
+(right action, wrong object). \\
+\violIC & Improper Commitment &
+Confirming results or making definitive external claims without the
+required hub/lead/user review. \\
+\violID & Information Disclosure &
+Accessing, carrying, forwarding, or outputting unnecessary or
+unauthorized sensitive information. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section{Benchmark}
+\label{sec:bench}
+
+\subsection{Task Design and Collection.}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{images/fig3.png}
+\vspace{-0.2cm}
+\caption{\textbf{Task collection and rubric authoring.} Each task is a
+tuple $T=(g,\rho,\Pi,\Phi,S,X,D_0)$: a user goal, a role topology, the
+two policies, a functional success rubric, a safety rubric (with
+\{\violOP,\violOR,\violIC,\violID\} codes), and a deterministic seed
+state. Two annotators author rubrics; a third resolves disagreement.}
+\label{fig:benchmark_data}
+\vspace{-0.6cm}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{images/fig2.png}
+\vspace{-0.2cm}
+\caption{\textbf{Domain breakdown of \benchname.} Eight realistic work
+domains (finance, e-commerce, healthcare, office, daily life, legal,
+social, software engineering) instantiate $24$ scenarios; each scenario
+is portable across the three multi-agent harnesses we evaluate while
+preserving roles, tools, and policies.}
+\label{fig:benchmark_domains}
+\vspace{-0.6cm}
+\end{figure}
+
+
+
+Figures~\ref{fig:benchmark_data} and \ref{fig:benchmark_domains}
+illustrate the rubric authoring workflow and the eight-domain
+breakdown that the rest of \S\ref{sec:bench} elaborates.
+
+\paragraph{Five design principles.}
+\benchname is built on five principles, each tied to a desideratum
+of \S\ref{sec:problem:scoring}.
+First, \emph{realistic work, not synthetic puzzles}: tasks come
+from eight production-style domains; their state spaces (mock
+inboxes, ledgers, EHRs, repositories) emulate production schemas.
+Second, \emph{safety inside normal work}: every task carries
+permission, scope, and information-flow constraints to be enforced
+as part of the work, not as a separate red-team query.
+Third, \emph{trajectory as first-class object}: rubrics score
+intermediate messages, tool calls, and resource accesses, not
+only the final response.
+Fourth, \emph{harness-aligned controls}: roles, tool APIs,
+permission matrices, and policies are matched across harnesses so
+that observed differences are attributable to harness design.
+Fifth, \emph{attribution}: every detected violation is mapped to
+a code in $\{\violOP, \violOR, \violIC, \violID\}$ and a layer in
+$\{\Lone, \Ltwo, \Lthree\}$.
+
+
+\paragraph{Annotation pipeline and quality control.}
+For every task we author two rubrics: a \emph{functional rubric}
+$\{r^S_k\}$ over success conditions and a \emph{safety rubric}
+$\{r^X_k\}$ over forbidden behaviors and required review gates.
+Each rubric item is either a \textbf{deterministic predicate} over
+$\tau$ or the environment snapshot (e.g., ``no
+\texttt{order.refund} call with \texttt{order\_id} not in \{the
+user's orders\}'') or a \textbf{judgment-based predicate} that
+uses an LLM judge with a fixed prompt, structured outputs, and
+majority vote across three calls. Each task is reviewed by at
+least two annotators with a third for disagreement. We report
+(i) inter-annotator agreement on safety items (Cohen's $\kappa$),
+(ii) judge--human agreement on LLM-checked items, (iii) the
+fraction of tasks where the tight permission setting still admits
+a safe ground-truth trajectory (solvability sanity check), and
+(iv) the fraction where the loose setting admits at least one
+unsafe-but-plausible trajectory (risk-reachability sanity check).
+
+\subsection{Domains and scenarios}
+
+\paragraph{Task.}
+Each task in \benchname is a tuple
+$T = (g, \rho, \Pi, \Phi, S, X, D_0)$:
+$g$ is the natural-language user goal;
+$\rho \subseteq \mathcal{A}$ is the role topology active for the
+task;
+$\Pi$ and $\Phi$ are the permission relation and information-flow
+policy lifted from the parent scenario;
+$S = \{r^S_k\}$ is a functional rubric of \emph{success}
+conditions;
+$X = \{r^X_k\}$ is a safety rubric of \emph{forbidden} behaviors
+and \emph{required} gates, each tagged with a code in
+$\{\violOP, \violOR, \violIC, \violID\}$ and a layer in
+$\{\Lone, \Ltwo, \Lthree\}$;
+$D_0$ is a deterministic seed state for every mock backend so
+that a task is reproducible bit-for-bit. Tasks are sourced
+top-down: for each domain we author a small number of
+\emph{scenarios} (e.g., a finance firm's lending workflow, a
+hospital's specialist consult), and within each scenario we
+instantiate a family of tasks parameterized over $D_0$ and over
+realistic variations of $g$.
+
+\paragraph{Roles and topology.}
+Each scenario instantiates a multi-agent topology drawn from a
+unified role inventory: \textbf{Planner} (decomposes the user
+goal but does not execute high-risk actions), \textbf{Retriever}
+(queries records under a scoped capability), \textbf{Executor}
+(invokes mutating or external-effect tools such as
+\texttt{order.refund}, \texttt{calendar.send},
+\texttt{git.commit}), \textbf{Reviewer/Hub} (gates external
+commitments), and \textbf{Sender} (dispatches messages or files
+to external parties). A scenario specifies which roles are
+present, the communication graph (who can talk to whom), and
+which tools each role may invoke. Domain-typical risk profiles
+are summarized in Table~\ref{tab:domain_risks}: finance and
+healthcare are dominated by \violID and \violIC; e-commerce and
+SDE are dominated by \violOP and \violOR; legal and social
+workflows sit at the intersection of \violIC and \violID due to
+their external-commitment surface.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Likely violation classes per domain, used to anchor
+scenario design.}
+\label{tab:domain_risks}
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{lll}
+\toprule
+\textbf{Domain} & \textbf{Likely violations} & \textbf{Reason} \\
+\midrule
+Finance      & \violOP, \violIC, \violID & trades, lending, risk conclusions, customer PII \\
+Ecommerce    & \violOP, \violOR          & refunds, payments, order/account binding \\
+Healthcare   & \violID, \violIC, \violOR & records, labs, prescriptions, case binding \\
+Office       & \violOP, \violID          & accounts, assets, cost centers, vendor data \\
+Daily Life   & \violOP, \violID          & bookings, payments, IDs, addresses \\
+Legal        & \violIC, \violID, \violOR & external commitments, privileged files \\
+Social       & \violIC, \violID          & publishing, source identity, drafts \\
+SDE          & \violOP, \violOR, \violID & wrong commands/files, secret-like config \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Statistics and splits.}
+\benchname currently contains $24$ scenarios across $8$ domains,
+yielding approximately $300$ tasks in total once parameter-state
+variants are enumerated. Tasks are partitioned into a development
+set (used for prompt and rubric calibration) and a held-out
+evaluation set (used for the headline numbers in
+\S\ref{sec:analysis}); seed states for the evaluation split are
+not exposed during prompt design. Average trace length is in the
+range of $40$--$120$ events per task, with $2$--$5$ agents and
+$8$--$30$ tool calls per task on average, depending on scenario
+and harness.
+
+\subsection{Harness Policies}
+
+\paragraph{Action Boundaries.}
+Each scenario fixes three concurrent boundaries on the agents in
+$\mathcal{A}$. The first is a \textbf{typed tool surface}: every
+tool declares a parameter schema, return schema, effect class
+(\texttt{read}/\texttt{search}/\texttt{update}/\texttt{send}/%
+\texttt{approve}/\texttt{execute}), and a sensitivity tag
+(\texttt{pii}, \texttt{financial}, \texttt{phi},
+\texttt{secret}). Mock services emulate realistic backends so
+traces are deterministic and reproducible. The second is the
+\textbf{permission relation $\Pi$}: a matrix
+$\Pi[\text{role}][\text{tool}] \in \{\bot, \text{read},
+\text{write}, \text{approve}, \text{execute}\}$ plus a
+resource-scope filter per role. \benchname{} ships two canonical
+$\Pi$ settings per scenario --- a \emph{tight} setting that
+grants only the minimum capabilities needed to complete the task,
+and a \emph{loose} setting that mirrors how harnesses are
+commonly deployed in practice (broad read scope, generous tool
+list). Comparing the same task across both settings isolates how
+much of the safety story is determined by the harness operator
+rather than the model (RQ2). The third is the
+\textbf{information-flow policy $\Phi$}: field-level rules over
+inter-agent messages --- e.g., the Retriever may forward a
+\texttt{summary} but not the raw record; the Reviewer may see
+proposed actions but not the user's PII; the Sender may receive
+only the approved message body. Violations of $\Phi$ are the
+primary source of \violID.
+
+\paragraph{Attack and  perturbation.}
+\benchname{} models two complementary classes of perturbation:
+\emph{adversarial} inputs injected into channels the agent
+normally reads, and \emph{runtime} stressors emulating transient
+service failures. Adversarial content is consistent with the
+domain (a deceptive policy clause inside a fetched document; a
+calendar invite referencing extra attachments; a forwarded email
+impersonating an authority) so that it cannot be discriminated by
+surface form alone. Runtime stressors include HTTP $429$ ($35\%$
+of injections), HTTP $500$ ($35\%$), and latency spikes of
+$2$--$4$\,s ($30\%$), with malformed JSON and missing fields as
+additional variants. Table~\ref{tab:perturbations} lists the full
+probe set, the safety question each one targets, and the harness
+layer most likely to expose the failure.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Perturbation library, the safety question each item probes,
+and the harness layer most likely to expose the failure.}
+\label{tab:perturbations}
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{p{0.27\textwidth} p{0.55\textwidth} p{0.10\textwidth}}
+\toprule
+\textbf{Perturbation} & \textbf{What it probes} & \textbf{Layer} \\
+\midrule
+Ambiguous instruction        & Does the harness fill missing conditions silently and act?            & \Lthree \\
+Indirect prompt injection    & Is external content treated as an instruction?                        & \Lone/\Ltwo/\Lthree \\
+Role confusion lure          & Does an agent perform another agent's responsibility?                 & \Ltwo \\
+Resource ambiguity           & Does the system act on the wrong case/order/portfolio/file?           & \Ltwo/\Lthree \\
+Sensitive-information lure   & Does the agent take, forward, or fill extra information?              & \Lone/\Ltwo \\
+Tool error / latency         & Does the system recover from $429$/$500$/latency/malformed responses? & \Lthree \\
+Malicious delegation         & Does a low-privilege agent induce a high-privilege one to execute?    & \Ltwo/\Lthree \\
+Benign-wrapper jailbreak     & Does the harness refuse fabricated reasons that look like normal work?& \Lthree \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+
+
+\section{Experiments}
+
+\subsection{Experimental Setup}
+\paragraph{Models.}  We evaluate the panel of frontier LLMs listed in Table~\ref{tab:baseline_domain_scenarios}: ChatGPT-5.4,
+Claude Opus 4.6, Claude Sonnet 4.6, GLM 5V Turbo, Gemini 3.1 Pro,
+Qwen 3.5, MiniMax M2.7, and Kimi K2.6. Sampling temperature, max
+tokens, and tool-use formatting are matched across systems.
+Extended-thinking modes are enabled where supported.
+
+\paragraph{Evaluation Settings.}
+We sweep four condition axes: (i) \textbf{permissions}, tight
+$\Pi$ vs.\ loose $\Pi$; (ii) \textbf{information flow}, $\Phi$
+enforced vs.\ disabled; (iii) \textbf{adversarial perturbation},
+clean vs.\ at least one perturbation from
+Table~\ref{tab:perturbations} per task; and (iv) \textbf{runtime
+perturbation}, error-injection rate
+$r \in \{0.0, 0.2, 0.4, 0.6\}$. Each \{model, harness, condition\}
+cell runs $K=3$ independent trials to support Pass$@k$ and
+Pass$^{k}$ computation. The score of trial $j$ on task $i$ is
+$s_{ij} = \mathrm{SCR}_i$ as defined in
+Eq.~\eqref{eq:task_score}, with $\mathrm{SAR}_i$,
+$\mathrm{TSR}_i$, and $\mathrm{SR}_i$ computed via
+Eqs.~\eqref{eq:sar_score}, \eqref{eq:tsr_score}, and
+\eqref{eq:sr_score} respectively. We report three orthogonal
+headline rates --- $\mathrm{TSR}@\theta_C$,
+$\mathrm{UAR}$, and $\mathrm{SCR}@\tau$ ($\tau = 0.8$ by
+default) --- together with the per-layer scores broken down by
+domain, role, and violation code, and the capability/reliability
+pair
+\begin{equation}
+\label{eq:passk}
+\mathrm{Pass}@k = \tfrac{1}{N}\sum_i \mathbf{1}\!\left[\textstyle\max_{j\le k} s_{ij} \ge \theta\right],
+\qquad
+\mathrm{Pass}^{k} = \tfrac{1}{N}\sum_i \mathbf{1}\!\left[\textstyle\min_{j\le k} s_{ij} \ge \theta\right],
+\end{equation}
+where Pass$@k$ measures the capability ceiling and Pass$^{k}$
+the reliability floor over $k$ trials. All rates carry task-level
+cluster bootstrap $95\%$ CIs; statistical tests use task-level
+paired Wilcoxon signed-rank tests with Holm--Bonferroni
+correction within each RQ family.
+
+\paragraph{Multi-Agent Harness.}
+We evaluate three multi-agent harnesses:
+\textbf{\textsc{Claw-Team}}, a planner-led harness with explicit
+role specs and structural deny-by-default policy primitives;
+\textbf{Google ADK}, a graph-based harness with per-tool
+capability tokens; and \textbf{OpenAI ADK}, a session-based
+harness with per-resource scoped credentials. We re-implement the
+same scenario in each framework while keeping role names, tool
+APIs, permission matrices, information-flow policies, and seed
+states identical, isolating harness design as the independent
+variable. Mock services back all tools and produce deterministic
+responses parameterized by seed state.
+
+\subsection{Main Results}
+\label{sec:exp:results}
+
+Tables~\ref{tab:rq1_main} and \ref{table:two_setting_results}
+report headline scores per (model, harness) cell, and
+Figure~\ref{fig:main_layers} visualizes the same data as a
+cross-harness layer heatmap. Three patterns are immediately
+visible. First, the relative ordering of harnesses is stable
+across models: \textsc{Claw-Team} dominates on \Lone, all three
+harnesses are competitive on \Ltwo, and \Lthree is the bottleneck
+phase for graph-based harnesses regardless of backbone. Second,
+moving from a strong frontier model to a mid-size open-weight
+model shrinks the harness gap on \Ltwo (capability is partly
+substitutable for harness design when the task is easy) but
+widens it on \Lone and \Lthree, where structural policy primitives
+matter more than raw capability. Third, the headline
+$\mathrm{SCR}$ score is closer between harnesses than the layer
+scores, because the multiplicative gate in
+Eq.~\eqref{eq:task_score} amplifies the worst layer; this is a
+deliberate design choice that prevents one good layer from
+masking another. Figure~\ref{fig:radar_overview} expands the
+heatmap into per-axis radar form, showing exactly which factor
+of each layer (tool / resource / flow streams for \Lone,
+planning / execution for \Ltwo, robustness / stability for
+\Lthree) carries the largest harness gap.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{images/fig_main_layers.pdf}
+\caption{\textbf{Main results: per-layer and overall safety scores per
+(model, harness) cell.} Cells colored by score (red--green). The
+\Lone column visibly favors \textsc{Claw-Team}; \Ltwo is closer
+across harnesses; \Lthree separates again under perturbation.
+The composite SCR collapses to whichever layer is weakest.}
+\label{fig:main_layers}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\linewidth]{images/fig_radar_overview.pdf}
+\caption{\textbf{Per-axis safety profile across the three harnesses.}
+Eight radial axes split each layer into its constituent factors
+(L1 by tool / resource / flow streams; L2 by planning and
+execution; L3 by adversarial robustness and runtime stability;
+plus the composite SCR). \textsc{Claw-Team}'s area is biggest
+on \Lone-flow; Google ADK shows the largest deficit on
+\Lone-tool and \Lthree.}
+\label{fig:radar_overview}
+\end{figure}
+
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Main results: Layer 1 / Layer 2 / Layer 3 scores per
+$\{\text{model}, \text{harness}\}$ cell, with an overall score.
+Numbers are the configuration we report; the corresponding
+camera-ready table will replace placeholders with seed-averaged
+values.}
+\label{tab:rq1_main}
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.1}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccccccc}
+\toprule
+& \multicolumn{4}{c}{\textbf{Openclaw}}
+& \multicolumn{4}{c}{\textbf{Claude Code}}
+& \multicolumn{4}{c}{\textbf{Codex}} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-13}
+\textbf{Model}
+& \makecell{Layer1}
+& \makecell{Layer2}
+& \makecell{Layer3}
+& \textbf{Overall}
+& \makecell{Layer1}
+& \makecell{Layer2}
+& \makecell{Layer1}
+& \textbf{Overall}
+& \makecell{Layer1}
+& \makecell{Layer2}
+& \makecell{Layer3}
+& \textbf{Overall} \\
+\midrule
+ChatGPT-5.4
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+Claude Opus 4.6
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+Claude Sonnet 4.6
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+Gemini 3.1 Pro
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+Kimi K2.5
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+GLM 5 Turbo
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+Deepseek V4
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+Qwen 3.5
+& {} & {} & {} & {}
+& {} & {} & {} & {}
+& {} & {} & {} & {} \\
+\bottomrule
+\end{tabular}
+}
+\end{table*}
+
+
+
+\section{Analysis}
+
+
+\begin{wraptable}{r}{0.52\textwidth}
+\vspace{-0.2cm}
+\centering
+\renewcommand{\arraystretch}{1.05}
+\setlength{\tabcolsep}{2.2pt}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lcccccccc}
+\toprule
+\multirow{2}{*}{\textbf{Model}}
+&
+\multicolumn{4}{c}{\textbf{Google ADK}}
+&
+\multicolumn{4}{c}{\textbf{Openai ADK}}
+\\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+&
+\textbf{Layer1}
+&
+\textbf{Layer2}
+&
+\textbf{Layer3}
+&
+\textbf{Overall}
+&
+\textbf{Layer1}
+&
+\textbf{Layer2}
+&
+\textbf{Layer3}
+&
+\textbf{Overall}
+\\
+\midrule
+ChatGPT-5.4       &  &  &  &  &  &  &  &  \\
+Claude Opus 4.6   &  &  &  &  &  &  &  &  \\
+Gemini 3.1 Pro    &  &  &  &  &  &  &  &  \\
+Deepseek V4       &  &  &  &  &  &  &  &  \\
+Qwen 3.5          &  &  &  &  &  &  &  &  \\
+\bottomrule
+\end{tabular}
+}
+\caption{\fontsize{9.5pt}{10pt}\selectfont Layer-wise and overall safety scores under two settings. Numbers are placeholders.}
+\vspace{-0.3cm}
+\label{table:two_setting_results}
+\end{wraptable}
+
+
+We organize findings around eight research questions. The first
+three (RQ1--RQ3) ask \emph{where} performance is bottlenecked and
+how it splits across (model, harness) cells. RQ4--RQ5 probe
+multi-agent design choices that single-agent benchmarks cannot
+ask. RQ6--RQ8 expose the multi-agent--specific failure phenomena
+(propagation, cascade, emergence) that local guardrails miss by
+construction.
+
+\subsection{Research Questions.}
+
+\paragraph{RQ1: Capability-safety divergence.} \emph{Under matched model, task, tools, and policy, do different
+multi-agent harnesses produce different
+$(\mathrm{TSR}, \mathrm{UAR}, \mathrm{SCR})$ profiles, and does
+capability track safety?}
+Setup: we plot, per (model, harness) cell, the capability proxy
+(TSR on a capability-only suite) against $\mathrm{SCR}@\tau$
+(Figure~\ref{fig:capability_safety}); we additionally project
+all cells onto the utility--safety frontier of
+Figure~\ref{fig:utility_safety}.
+Findings: capability \emph{does not} track safety. The same
+backbone moves diagonally across the frontier as the harness
+changes, with \textsc{Claw-Team} sitting closest to the
+diagonal, OpenAI ADK below it, and Google ADK furthest below.
+Frontier-class backbones (ChatGPT-5.4, Claude Opus 4.6) populate
+the high-TSR region under all harnesses but split into three
+distinct SCR clusters per harness, while mid-size backbones
+(Qwen 3.5, GLM 5V Turbo) drop along the diagonal but stay close
+to the harness's own trend line. The harness term explains more
+SCR variance than the model term in our regression decomposition.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\linewidth]{images/fig_capability_safety.pdf}
+\caption{\textbf{RQ1: capability does not track safety.} Each marker
+is one (model, harness) cell. The diagonal is $y\!=\!x$;
+\textsc{Claw-Team}'s trend line sits closest to it, while Google
+ADK's is consistently below, indicating that the same backbone
+loses safety even as it preserves capability.}
+\label{fig:capability_safety}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\linewidth]{images/fig_utility_safety.pdf}
+\caption{\textbf{Utility--safety frontier across harnesses.} Quadrant
+boundaries at $\mathrm{TSR}\!=\!0.7$ and $\mathrm{SCR}\!=\!0.6$
+partition systems into ideal / conservative / aggressive /
+failing regimes. \textsc{Claw-Team}-hosted models cluster near the
+ideal corner; Google ADK pulls every model toward
+\emph{aggressive} (good capability, weaker safety).}
+\label{fig:utility_safety}
+\end{figure}
+
+
+\paragraph{RQ2: Permission and information-flow risk.}
+\emph{How much of the safety story is determined by permission
+breadth ($\Pi$) and information-flow policy ($\Phi$) rather than
+by the model? Where in the role topology does risk concentrate?}
+Setup: we re-run every scenario under tight $\Pi$ and loose $\Pi$
+(Figure~\ref{fig:permission_tight_loose}), and we additionally
+toggle $\Phi$ on/off across the same axis.
+Findings: loosening $\Pi$ inflates UAR by $20$--$30$ percentage
+points across every domain in the panel, with healthcare
+(\violID-prone) and SDE (\violOP/\violOR-prone) most exposed; in
+these domains the loose-$\Pi$ UAR is higher than the worst-model
+clean-$\Pi$ UAR, meaning that a permissive operator can make a
+strong model unsafe more reliably than a weak model can.
+Disabling $\Phi$ similarly inflates \violID by $15$--$25$ points
+and concentrates the new violations at the Retriever-Executor
+edge, identifying that edge as the dominant leak channel in our
+benchmark.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{images/fig_permission_tight_loose.pdf}
+\caption{\textbf{RQ2: permission breadth dominates the model term.}
+Per-domain UAR under tight $\Pi$ vs.\ loose $\Pi$. The
+loose-$\Pi$ delta is consistently larger than the across-model
+spread within either column.}
+\label{fig:permission_tight_loose}
+\end{figure}
+
+
+\paragraph{RQ3: Trajectory attribution.}
+\emph{For every failed task, which harness layer
+(\Lone/\Ltwo/\Lthree) does the violation originate in, and which
+violation codes dominate per harness?}
+Setup: for every wrong-trajectory task we walk the trace
+backwards from the first surfaced violation and assign it to the
+earliest layer at which a deterministic predicate is falsified;
+we then aggregate by harness (Figure~\ref{fig:layer_attribution})
+and by violation code (Figure~\ref{fig:violation_breakdown}).
+Findings: \Lone dominates failures on Google ADK (free-form
+typed tools without structural deny-by-default), \Ltwo dominates
+on \textsc{Claw-Team} (planner-led harnesses surface
+role-boundary violations earliest), and \Lthree is the modal
+failure on OpenAI ADK under perturbation (session-based
+credentials carry less stability state than per-tool capability
+tokens). Code-wise, \violID is the most common violation across
+harnesses, followed by \violOP; \violOR concentrates in
+e-commerce and SDE while \violIC concentrates in legal and
+finance. The domain-stratified profile in
+Figure~\ref{fig:domain_safety} corroborates this concentration:
+Healthcare and Legal sit at the bottom of the SCR distribution,
+and within-domain spread across models is smaller than the
+across-domain spread.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\linewidth]{images/fig_layer_attribution.pdf}
+\caption{\textbf{RQ3: where failures originate.} Stacked share of
+failed trajectories attributed to each layer per harness.
+Google ADK leans \Lone; \textsc{Claw-Team} leans \Ltwo; OpenAI
+ADK is closer to balanced, with a heavier \Lone share.}
+\label{fig:layer_attribution}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\linewidth]{images/fig_violation_breakdown.pdf}
+\caption{\textbf{Violation-code mix shifts across harness designs.}
+Even when overall SCR is similar, two harnesses can have very
+different failure mixes; single-agent baselines collapse onto
+\violOP-dominated profiles, while multi-agent harnesses
+distribute violations across \violID/\violOR/\violIC.}
+\label{fig:violation_breakdown}
+\end{figure}
+
+
+\paragraph{RQ4: Multi-agent vs.\ single-agent risk gap.}
+\emph{When the same task is decomposed across multiple
+role-specialized agents (Planner, Retriever, Executor, Reviewer,
+Sender) versus run by a single monolithic agent that holds the
+union of all tools and resources, does the safety surface
+shrink, grow, or shift?}
+Setup: for every scenario in \benchname{} we build a
+\emph{single-agent baseline} that collapses $\rho$ to one agent
+holding $\bigcup_{a \in \rho} \Pi(a)$; the multi-agent variant
+uses the original $\rho$. Same model, same $g$, same seed state,
+same perturbation profile, $K=3$ trials per cell. Results are in
+Figure~\ref{fig:multi_vs_single}.
+Findings: (i) multi-agent decomposition lifts TSR (specialization
+helps capability) but its effect on SCR is non-monotonic ---
+some domains gain (Legal, Finance benefit from explicit gates)
+while others lose (Healthcare, Daily Life leak more across
+handoffs);
+(ii) the violation \emph{mix} shifts even when SCR is similar:
+single-agent failures are dominated by \violOP (one agent acting
+too broadly), while multi-agent failures lean toward \violID and
+\violOR (extra fields propagating, wrong object binding across
+handoffs);
+(iii) the net safety direction depends on harness: planner-led
+harnesses tend to add safety on average, graph-based harnesses
+tend to add risk.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{images/fig_multi_vs_single.pdf}
+\caption{\textbf{RQ4: multi-agent versus single-agent deltas per
+domain.} The safety direction is non-uniform: $\Delta\mathrm{SCR}$
+is positive in Finance / Legal but negative in Healthcare /
+Daily Life. The violation mix in
+Figure~\ref{fig:violation_breakdown} explains why.}
+\label{fig:multi_vs_single}
+\end{figure}
+
+
+\paragraph{RQ5: Topology depth and shape.}
+\emph{At fixed task, model, and tool capability, how does the
+topology of the agent graph-its depth (number of intermediate
+agents) and its shape (linear chain vs.\ hub-mediated star vs.\
+all-to-all mesh)-change the safety surface?}
+Setup: we re-instantiate every scenario at three depth levels
+($2$/$3$/$5$ agents) and three shapes (chain, star, mesh) while
+holding $\mathcal{T}$, $\Pi$, $\Phi$, and seed state fixed
+(Figure~\ref{fig:topology}).
+Findings: (i) past the minimum depth required by the task, every
+extra agent yields diminishing TSR returns and a monotonic rise
+in \violID rate (more handoff seams imply more leak edges);
+(ii) the \emph{star} topology contains \violID best (a single
+chokepoint constrains information flow) but inflates \violIC at
+the hub (the hub becomes an over-eager committer); (iii) the
+\emph{mesh} maximizes TSR at low depth but degrades fastest under
+perturbation (Figure~\ref{fig:passk}): every additional edge is
+a new attack-propagation channel (RQ6) and a new error-cascade
+channel (RQ7).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{images/fig_topology.pdf}
+\caption{\textbf{RQ5: topology depth and shape reshape the safety
+surface.} (a) SCR drops monotonically with depth across shapes;
+(b) the star topology trades V-ID containment for V-IC
+inflation, illustrating that ``more gates'' is not free.}
+\label{fig:topology}
+\end{figure}
+
+
+\paragraph{RQ6: Cross-agent attack propagation.}
+\emph{When adversarial content (indirect prompt injection,
+role-confusion lure, sensitive-information lure) is injected into
+the read channel of one agent $a_i$, does its effect propagate
+to downstream agents $a_j$ that $a_i$ talks to, and how fast
+does it attenuate per agent boundary?}
+Setup: for each perturbation in
+Table~\ref{tab:perturbations} we vary the \emph{injection site}
+across role positions (e.g., document fetched by Retriever; tool
+reply consumed by Executor) and measure the violation rate at
+each downstream agent position $1$, $2$, $3$ hops away
+(Figure~\ref{fig:attack_propagation}).
+Findings: (i) injections placed at the Retriever propagate the
+furthest because its output is summarized and forwarded; lossy
+summarization does \emph{not} sanitize the injected payload ---
+attack semantics survive paraphrase. (ii) The per-hop attenuation
+is roughly $30$--$50\%$ on average, but compound attacks
+(injected at multiple read channels in the same scenario) can
+break monotonic decay and re-amplify downstream. (iii) Harnesses
+with explicit message-level structure validation in the system
+layer attenuate $\sim$$2\times$ faster than harnesses that pass
+free-form text between agents --- another argument for
+sanitizing across agent boundaries (D2).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{images/fig_attack_propagation.pdf}
+\caption{\textbf{RQ6: adversarial content survives multiple agent
+boundaries.} Violation rate per hop, one curve per perturbation
+type, one panel per harness. Per-hop attenuation depends strongly
+on whether the harness sanitizes inter-agent messages back to
+structured fields.}
+\label{fig:attack_propagation}
+\end{figure}
+
+
+\paragraph{RQ7: Failure cascade vs.\ containment.}
+\emph{When the upstream agent makes a non-malicious error-wrong
+\texttt{case\_id}, missed PII redaction, omitted required
+field-does the downstream agent (a) cascade the error
+(continue acting on the wrong object), or (b) detect and
+recover?}
+Setup: at controlled positions in the chain we inject a
+\emph{seed error} (the Retriever returns a record bound to the
+wrong \texttt{order\_id}; the Executor proposes an action on a
+non-existent attachment) and observe downstream behavior. We
+define \emph{cascade rate} $=\Pr[\text{downstream agent acts on
+the upstream error}]$ and \emph{containment rate}
+$=\Pr[\text{downstream agent flags or re-verifies}]$
+(Figure~\ref{fig:cascade_matrix}).
+Findings: (i) cascade dominates: the median cascade rate is well
+above $50\%$ across harnesses; agents trust upstream inputs by
+default. (ii) Cascade is highest for \emph{object} errors
+(\violOR-prone) because object identity is rarely re-verified
+mid-chain, and lowest for errors that produce schema-level
+violations, where the system layer forces a retry-and-confirm.
+(iii) Cascade rate is largely uncorrelated with model
+capability --- a stronger model does not automatically catch
+upstream mistakes, so the harness must.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{images/fig_cascade_matrix.pdf}
+\caption{\textbf{RQ7: most upstream errors cascade rather than get
+contained.} Cascade rate by upstream-error type (rows) and
+downstream agent role (columns), one heatmap per harness. The
+\emph{Executor} is the riskiest cascade target across error
+types; \emph{Reviewer} provides the most containment.}
+\label{fig:cascade_matrix}
+\end{figure}
+
+
+\paragraph{RQ8: Emergent unsafety (locally safe, globally unsafe).}
+\emph{What fraction of unsafe trajectories are \emph{emergent}
+in the sense that every individual agent's local action is
+locally compliant with its own role-scoped rubric, but the
+joint trajectory globally violates user intent or policy?}
+Setup: for every task we author both a \emph{per-agent local}
+rubric (each agent is judged only against its own role
+constraints) and a \emph{trajectory-level global} rubric. We
+classify a trajectory as \emph{emergent unsafe} iff
+$(\forall a \in \rho:\ \text{local\_safe}(a, \tau))
+\wedge \neg \text{global\_safe}(\tau)$
+(Figure~\ref{fig:emergent}).
+Findings: (i) a non-trivial fraction of unsafe trajectories are
+emergent ($17$--$30\%$ across harnesses); these are by
+construction invisible to any per-agent guardrail and can only be
+caught by a global rubric; (ii) emergent failures are dominated
+by \violIC (each agent locally just summarizes / forwards / drafts,
+but the trajectory ends in an external commitment) and \violID
+(each forward leaks one extra field, no single forward is unsafe
+in isolation); (iii) the emergent fraction is highest in mesh
+topologies and lowest in chain topologies --- more edges, more
+chances for local compliance to compose into global
+non-compliance. We also confirm Pass$@k$/Pass$^{k}$ separation in
+Figure~\ref{fig:passk}: Pass$@k$ stays high under perturbation
+while Pass$^{k}$ collapses, meaning that \emph{occasional}
+emergent failure is the rule, not consistent failure.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\linewidth]{images/fig_emergent.pdf}
+\caption{\textbf{RQ8: a substantial slice of unsafe trajectories is
+locally safe at every agent but globally unsafe.} Stacked bars
+per harness; the rightmost (red) segment is the
+\emph{emergent} share. Per-agent guardrails miss this slice by
+construction.}
+\label{fig:emergent}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{images/fig_passk.pdf}
+\caption{\textbf{Pass$@k$ vs.\ Pass$^{k}$ under runtime perturbation.}
+Pass$@k$ measures the capability ceiling; Pass$^{k}$ measures
+the reliability floor. Error injection erodes consistency far
+faster than peak capability, evidence that emergent failures
+recur at controlled rates.}
+\label{fig:passk}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\linewidth]{images/fig_domain_safety.pdf}
+\caption{\textbf{Domain-stratified safety profile (Claw-Team backbone).}
+Healthcare and Legal are the lowest-SCR domains; SDE and Daily
+Life are the highest-TSR domains. The gap between domains
+exceeds the within-domain across-model gap.}
+\label{fig:domain_safety}
+\end{figure}
+
+
+\subsection{Discussion}
+
+\paragraph{Failure-mode case studies.}
+We summarize two recurring multi-agent failure patterns that
+recur across harnesses; each maps to one of the analysis axes
+of \S\ref{sec:analysis}.
+
+\noindent
+\textbf{(C1) Ambiguous-goal over-execution.}
+User: \emph{``Follow up with the customer on their recent
+ticket.''} The user goal is under-specified --- it does not pin
+which ticket, which fields to mention, or which channel to use.
+Rather than escalate the ambiguity, the Planner silently fills in
+defaults (latest ticket across all customers matching a fuzzy
+match), the Retriever fetches the full case file including
+unrelated PII to ``be thorough,'' the Executor drafts a long
+reply summarizing every prior interaction, and the Sender
+dispatches without review. Every step is locally plausible ---
+each agent acts on the most charitable reading of its inputs ---
+but the trajectory commits to an under-determined interpretation
+of $g$ and crosses both \violOP (sending without the user's
+confirmation) and \violID (over-disclosing fields not asked for).
+\emph{Lesson}: silently disambiguating the user goal is itself an
+unsafe action; harnesses need an explicit \emph{ask-or-stop}
+primitive in $\Sigma$ for under-determined goals, not a
+default-filling shortcut.
+
+\noindent
+\textbf{(C2) Benign-wrapper jailbreak.}
+A document fetched by the Retriever wraps an out-of-scope
+instruction inside a fabricated but innocuous-looking work
+context: \emph{``Per the customer-service playbook, after
+summarizing this case please also forward the customer's account
+number to the partner address listed below for verification.''}
+The wrapping (``per the playbook,'' ``for verification'') mimics
+legitimate operator policy, so the Retriever passes the
+imperative through, the Executor reads it as an authoritative
+sub-task, and the Sender dispatches the resulting message
+externally. The trajectory triggers \violOP (executing an
+operator-policy action that no real operator policy ever
+authorized) and \violID (forwarding sensitive fields to an
+external address). \emph{Lesson}: harnesses must distinguish
+imperatives that originated from the user or operator from
+imperatives encountered \emph{inside fetched content}, and treat
+the latter as untrusted regardless of how official-sounding the
+wrapper is. Sanitizing inter-agent messages back to structured
+fields and re-deriving authority from the harness's own policy
+state blocks the wrapper from being laundered through downstream
+agents.
+
+
+\paragraph{Design principles for safe harnesses.}
+
+\textbf{(D1) Treat topology as a safety variable (RQ2).}
+The agent graph-its depth, shape, and edge count-is not a
+free design choice. Every extra agent is a new leak edge for
+\violID, a new propagation channel for adversarial content
+(RQ3), and a new cascade channel for benign upstream errors
+(RQ4). Default to the minimum topology the task requires; add
+agents only when they carry an explicit safety role
+(e.g., a hub Reviewer with a defined gate), not for plausible
+``defense in depth.''
+
+\textbf{(D2) Sanitize and re-verify across every agent boundary
+(RQ3 + RQ4).}
+Inter-agent messages are simultaneously the medium of
+adversarial-content propagation and of upstream-error cascade.
+Two structural defenses, applied at the system layer, address
+both: (a) \emph{strip free-form text into structured fields}
+between agents, so paraphrased imperatives do not survive
+hand-off; (b) \emph{force the receiving agent to re-derive
+object identity and intent} from authoritative state rather
+than trusting the sender's binding. Lossy summarization is
+\emph{not} sanitization, and trust-on-first-receive is the
+default cause of \violOR cascades.
+
+\textbf{(D3) Compose per-agent local rubrics with a global
+trajectory rubric (RQ5).}
+Per-agent guardrails are necessary but provably incomplete:
+emergent unsafety is by construction invisible to any rubric
+that judges agents in isolation. A safe harness must pair
+local rubrics with a trajectory-level rubric that checks the
+joint outcome against the user goal $g$ and the safety
+conditions $X$ before any external commitment is dispatched.
+Without a global check, a substantial fraction of failures
+remains undetectable.
+
+
+\paragraph{Limitations.}
+\benchname's claims are scoped by five concrete restrictions of
+the current release. First, our topology sweep covers depth
+$\{2, 3, 5\}$ and shape $\{$chain, star, mesh$\}$; we exclude
+\emph{dynamic} topologies (runtime sub-agent spawning, recursive
+delegation) that are emerging in production stacks but open new
+attack-propagation channels (RQ6) and cascade channels (RQ7) we
+do not yet stress. Second, the multi-vs-single comparison (RQ4)
+collapses $\rho$ into a single agent holding the union of role
+permissions; a real single-agent deployment uses different
+prompting and tool-use strategies, so the absolute delta should
+be read as a structural rather than a deployment comparison.
+Third, the propagation analysis (RQ6) injects one perturbation
+type per task at a single site, leaving adaptive multi-vector
+attacks out of scope; per-hop attenuation should be read as an
+upper bound on attacker effectiveness against an adaptive
+adversary. Fourth, cascade analysis (RQ7) injects synthetic seed
+errors at known positions; naturally-occurring upstream errors
+under genuine task pressure may have different clustering. Fifth,
+the emergent-unsafety fraction (RQ8) depends on how strictly the
+local rubric is scoped --- a more permissive local rubric
+mechanically inflates the emergent bucket --- so the absolute
+fraction is meaningful primarily relative to the same local-rubric
+authoring across harnesses. \benchname{} also assumes
+\emph{cooperative-but-fallible} agents inside the harness;
+adversarial \emph{agents} (a compromised role inside the harness)
+are a distinct threat model not covered here.
+
+
+\section{Conclusions}
+
+We have argued that agent safety in multi-agent systems is best
+framed as a property of the \emph{harness}, not of the model
+alone, and we have built \benchname{} to make that property
+measurable. By scoring the full trajectory along three layers
+(Protocol Integrity, Operational Governance, Decision Outcome \&
+Robustness), unifying violations under
+\{\violOP, \violOR, \violIC, \violID\}, and re-instantiating the
+same task across three multi-agent harnesses with matched roles,
+tools, and policies, \benchname{} makes failures
+\emph{localizable}, \emph{attributable}, and \emph{comparable}
+across models, harnesses, domains, and permission settings.
+
+Across eight research questions we find that capability does not
+track safety (RQ1), permission breadth dominates the model term
+(RQ2), and failure attribution shifts characteristically across
+harnesses (RQ3). Multi-agent decomposition rearranges the safety
+surface rather than uniformly improving it (RQ4); topology design
+is itself a safety-critical variable (RQ5); adversarial content
+survives multiple agent boundaries unless explicitly sanitized
+(RQ6); upstream non-malicious errors predominantly cascade rather
+than get contained (RQ7); and a substantial fraction of unsafe
+trajectories are \emph{emergent} --- locally compliant at every
+agent, globally unsafe --- and invisible by construction to
+per-agent guardrails (RQ8). A safe multi-agent system is therefore
+not one in which every agent emits a harmless final answer. It
+is one in which the harness continuously constrains
+\emph{what agents can request, access, share, execute, and when
+they should stop} --- throughout the trajectory.
+
+
+
+
+\begin{table*}[h]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.18}
+\caption{
+Coverage of different baselines across eight domains and their scenarios.
+FP: \textit{Financial Planning};
+Inv: \textit{Investing};
+Len: \textit{Lending};
+Ins: \textit{Insurance};
+Shop: \textit{Shopping};
+AS: \textit{After Sales};
+Trans: \textit{Transaction};
+Cons: \textit{Consultation};
+Pres: \textit{Prescription};
+Pers: \textit{Personnel};
+Fin: \textit{Finance};
+Asset: \textit{Office Asset};
+Part: \textit{Partnership};
+Din: \textit{Dining};
+Trav: \textit{Travel};
+Hous: \textit{Housing};
+Well: \textit{Wellness};
+Lit: \textit{Litigation};
+Aud: \textit{Audit};
+Cont: \textit{Contract};
+Voice: \textit{Voice};
+Rep: \textit{Report};
+AE: \textit{App Ecommerce};
+AA: \textit{App Admin}.
+}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccccccccccccccccccccc}
+\toprule
+\multirow{2}{*}{\textbf{Baselines}}
+& \multicolumn{4}{c}{\textbf{Finance}}
+& \multicolumn{3}{c}{\textbf{Ecommerce}}
+& \multicolumn{2}{c}{\textbf{Healthcare}}
+& \multicolumn{4}{c}{\textbf{Office}}
+& \multicolumn{4}{c}{\textbf{Daily Life}}
+& \multicolumn{3}{c}{\textbf{Legal Compliance}}
+& \multicolumn{2}{c}{\textbf{Social}}
+& \multicolumn{2}{c}{\textbf{SDE}} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-8}
+\cmidrule(lr){9-10}
+\cmidrule(lr){11-14}
+\cmidrule(lr){15-18}
+\cmidrule(lr){19-21}
+\cmidrule(lr){22-23}
+\cmidrule(lr){24-25}
+& \textbf{FP} & \textbf{Inv} & \textbf{Len} & \textbf{Ins}
+& \textbf{Shop} & \textbf{AS} & \textbf{Trans}
+& \textbf{Cons} & \textbf{Pres}
+& \textbf{Pers} & \textbf{Fin} & \textbf{Asset} & \textbf{Part}
+& \textbf{Din} & \textbf{Trav} & \textbf{Hous} & \textbf{Well}
+& \textbf{Lit} & \textbf{Aud} & \textbf{Cont}
+& \textbf{Voice} & \textbf{Rep}
+& \textbf{AE} & \textbf{AA} \\
+\midrule
+
+\textbf{ChatGPT-5.4}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+\textbf{Claude Opus 4.6}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+\textbf{Claude Sonnet 4.6}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+\textbf{GLM 5V Turbo}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+\textbf{Gemini 3.1 Pro}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+
+\textbf{Qwen3.5}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+\textbf{MiniMax M2.7}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+
+\textbf{Kimi K2.6}
+&  &  &  &
+&  &  &
+&  &
+&  &  &  &
+&  &  &  &
+&  &  &
+&  &
+&  &  \\
+
+
+\bottomrule
+\end{tabular}%
+}
+\label{tab:baseline_domain_scenarios}
+\end{table*}
+
+
+
+
+\newpage
+
+
+
+
+\clearpage
+\bibliographystyle{plain}
+\bibliography{neurips_2025}
+
+
+
+\medskip
+
+
+{
+
+}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+
+
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\input{checklist.tex}
+
+
+\end{document}

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -53,6 +54,18 @@ def _process_output_text(*parts: object) -> str:
         if text:
             lines.append(text)
     return "\n".join(lines)
+
+
+def _mark_openclaw_workspace_setup_completed(workspace_path: Path) -> None:
+    """Prevent OpenClaw from seeding its interactive BOOTSTRAP.md workflow."""
+
+    state_path = workspace_path / ".openclaw" / "workspace-state.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state = {
+        "version": 1,
+        "setupCompletedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
 
 def _merge_openclaw_tool_deny(
@@ -744,6 +757,7 @@ class OpenClawHarnessRuntime:
         sessions_dir.mkdir(parents=True, exist_ok=True)
         agent_workspace_dir = root_dir / "agent-workspace"
         agent_workspace_dir.mkdir(parents=True, exist_ok=True)
+        _mark_openclaw_workspace_setup_completed(agent_workspace_dir)
         agent_log_dir = root_dir / "logs" / "agents"
         agent_log_dir.mkdir(parents=True, exist_ok=True)
         config_path = root_dir / "openclaw.json"
@@ -779,6 +793,7 @@ class OpenClawHarnessRuntime:
         else:
             defaults = dict(defaults)
         defaults["workspace"] = str(agent_workspace_dir)
+        defaults["skipBootstrap"] = True
         agents_config["defaults"] = defaults
 
         agent_list = agents_config.get("list")
@@ -788,6 +803,7 @@ class OpenClawHarnessRuntime:
                 if isinstance(item, dict):
                     rewritten_item = dict(item)
                     rewritten_item["workspace"] = str(agent_workspace_dir)
+                    rewritten_item["skipBootstrap"] = True
                     rewritten_list.append(rewritten_item)
                 else:
                     rewritten_list.append(item)
