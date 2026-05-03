@@ -1,0 +1,115 @@
+version: 1
+scope:
+  domains:
+    - ecommerce
+    - social_interaction
+description: >
+  Canonical role merge map derived from required tools in task YAMLs and
+  tool semantics in masp_bench/tools/*.yaml. This map is non-destructive:
+  keep original role names in tasks/traces, and use canonical_role only for
+  analysis/reporting.
+
+canonical_roles:
+  coordinator:
+    intent: "Hub/coordinator; no required tools; delegates and synthesizes."
+    typical_required_tools: []
+
+  intake_triage:
+    intent: "Initial intake, routing, and issue triage."
+    typical_required_tools:
+      - query_case_records
+      - route_customer_case
+      - read_public_target
+
+  identity_profile:
+    intent: "Identity verification and customer/profile grounding."
+    typical_required_tools:
+      - authenticate_customer
+      - get_customer_profile
+      - get_engagement_profile
+
+  research_verification:
+    intent: "Evidence retrieval, claim verification, and factual analysis."
+    typical_required_tools:
+      - query_case_records
+      - get_order_details
+      - search_knowledge_articles
+      - collect_evidence_bundle
+      - verify_public_claims
+      - compare_story_claims
+      - query_public_records
+      - inspect_media_evidence
+
+  policy_risk:
+    intent: "Policy, compliance, trust/safety, and risk review."
+    typical_required_tools:
+      - search_knowledge_articles
+      - update_knowledge_article
+      - review_engagement_risk
+      - review_publication_risk
+
+  financial_approval:
+    intent: "Financial decisions: refunds, credits, quote/revenue approvals."
+    typical_required_tools:
+      - calculate_order_adjustment
+      - issue_refund_or_store_credit
+      - approve_quote
+      - review_quote
+      - read_sales_activity
+      - analyze_case_trends
+
+  content_operations:
+    intent: "Draft and execute bounded customer/public artifacts and resolutions."
+    typical_required_tools:
+      - draft_public_artifact
+      - publish_story
+      - modify_pending_order
+      - request_post_delivery_resolution
+
+  external_comms_execution:
+    intent: "External stakeholder communication and irreversible public actions."
+    typical_required_tools:
+      - request_subject_comment
+      - message_stakeholder
+      - execute_public_action
+
+role_to_canonical:
+  # ecommerce
+  commerce_ops_manager: coordinator
+  case_router: intake_triage
+  order_specialist: intake_triage
+  identity_verifier: identity_profile
+  case_analyst: research_verification
+  knowledge_specialist: research_verification
+  knowledge_compliance_specialist: policy_risk
+  payment_specialist: financial_approval
+  payments_refunds_specialist: financial_approval
+  refund_specialist: financial_approval
+  revenue_specialist: financial_approval
+  revenue_approval_specialist: financial_approval
+  crm_sales_analyst: financial_approval
+  order_resolution_specialist: content_operations
+
+  # social_interaction
+  engagement_coordinator: coordinator
+  public_engagement_lead: coordinator
+  assignment_editor: intake_triage
+  research_verification_specialist: research_verification
+  fact_checker: research_verification
+  visual_forensics_reporter: research_verification
+  audience_research_editor: research_verification
+  trust_safety_reviewer: policy_risk
+  ad_policy_analyst: policy_risk
+  standards_editor: policy_risk
+  community_operations_specialist: content_operations
+  publication_editor: content_operations
+  stakeholder_response_coordinator: external_comms_execution
+  reporter: external_comms_execution
+
+summary:
+  ecommerce:
+    original_roles: 14
+    merged_roles: 7
+  social_interaction:
+    original_roles: 14
+    merged_roles: 6

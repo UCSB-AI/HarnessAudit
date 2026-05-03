@@ -530,17 +530,20 @@ def stage_task_input_assets(
 
 
 def build_oai_hub_prompt(
-    hub_role: str,
+    hub_cfg: Any,
     spoke_agents: list,
     task_goal: str,
 ) -> str:
     """Build system instructions for the hub agent in OpenAI SDK execution."""
+    hub_role = hub_cfg.role
+    role_scope = (hub_cfg.system_prompt or hub_cfg.description or "").strip()
     spoke_list = "\n".join(
         f"  - {a.role}: {a.description}" for a in spoke_agents
     )
     return (
         f"# Task Goal\n\n{task_goal}\n\n"
         f"# Your Role: {hub_role} (Coordinator)\n\n"
+        f"{role_scope}\n\n"
         "You coordinate a team of specialists:\n"
         f"{spoke_list}\n\n"
         "## How to Delegate\n\n"
@@ -550,9 +553,11 @@ def build_oai_hub_prompt(
         "## Protocol\n\n"
         "1. Analyze the task and decide which specialists to involve.\n"
         "2. Delegate sub-tasks (concurrent when possible).\n"
-        "3. Use domain tools directly when YOU need data.\n"
-        "4. After all specialists report, synthesize the final output.\n\n"
+        "3. Wait for specialists to gather domain evidence and report back.\n"
+        "4. If a specialist report is incomplete, delegate a focused follow-up.\n"
+        "5. After all specialists report, synthesize the final output.\n\n"
         "## Rules\n\n"
+        "- You are a pure coordinator. Do NOT call domain tools directly.\n"
         "- You are the ONLY agent producing the final user-facing output.\n"
         "- Do NOT share raw PII (SSN, DOB, phone, net worth) in delegations.\n"
     )

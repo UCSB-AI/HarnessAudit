@@ -11,6 +11,7 @@ serialisation overhead.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
@@ -40,6 +41,9 @@ class MASPContext:
     spoke_agents: dict[str, Any] = field(default_factory=dict)
     """role → Agent mapping, used by delegate_to_agent tool."""
 
+    run_config: Any = None
+    """OpenAI Agents SDK RunConfig shared with nested specialist runs."""
+
     depth: int = 0
     """Recursion guard: bumped on each nested Runner.run inside delegate_to_agent."""
 
@@ -66,8 +70,12 @@ class OAIAdapter(MASFrameworkAdapter):
         initial_input: str | list[dict[str, Any]],
     ) -> RunOutcome:
         try:
-            from agents import Agent, ModelSettings, Runner
+            from agents import Agent, ModelSettings, Runner, RunConfig
             from agents.tracing import set_tracing_disabled
+            try:
+                from agents import OpenAIProvider
+            except ImportError:
+                from agents.models.openai_provider import OpenAIProvider
         except ImportError as exc:
             raise RuntimeError(
                 "OpenAI Agents SDK not installed.  pip install openai-agents"
@@ -88,7 +96,15 @@ class OAIAdapter(MASFrameworkAdapter):
 
             # 2. Resolve model string
             model = self._resolve_model(ctx.model)
-            settings = ModelSettings(parallel_tool_calls=True)
+            try:
+                settings = ModelSettings(parallel_tool_calls=True)
+            except TypeError:
+                settings = ModelSettings()
+            run_config = self._build_run_config(
+                model,
+                RunConfig=RunConfig,
+                OpenAIProvider=OpenAIProvider,
+            )
 
             # 3. Create spoke agents (ALL domain tools, NO delegate tool)
             spoke_agents: dict[str, Agent[MASPContext]] = {}
@@ -106,7 +122,7 @@ class OAIAdapter(MASFrameworkAdapter):
             delegate_tool = build_delegate_tool(max_spoke_turns=10)
             hub = Agent[MASPContext](
                 name=hub_role,
-                instructions=build_oai_hub_prompt(hub_role, spoke_cfgs, ctx.task.goal),
+                instructions=build_oai_hub_prompt(ctx.task.agents[0], spoke_cfgs, ctx.task.goal),
                 tools=[*domain_tools, delegate_tool],
                 model=model,
                 model_settings=settings,
@@ -119,6 +135,7 @@ class OAIAdapter(MASFrameworkAdapter):
                 workspace=ctx.workspace,
                 agent_role=hub_role,
                 spoke_agents=spoke_agents,
+                run_config=run_config,
             )
 
             # 6. Run (with timeout guard)
@@ -131,6 +148,7 @@ class OAIAdapter(MASFrameworkAdapter):
                     input_text or ctx.task.goal,
                     context=masp_ctx,
                     max_turns=ctx.max_turns,
+                    run_config=run_config,
                 ),
                 timeout=self._agent_timeout,
             )
@@ -175,3 +193,20 @@ class OAIAdapter(MASFrameworkAdapter):
             return f"litellm/gemini/{model}"
         return model
 
+    @staticmethod
+    def _build_run_config(
+        model: str,
+        *,
+        RunConfig: Any,
+        OpenAIProvider: Any,
+    ) -> Any:
+        """Create a RunConfig that respects OpenAI-compatible relay settings."""
+        if model.startswith("litellm/"):
+            return RunConfig(model=model)
+
+        api_key = os.environ.get("OPENAI_API_KEY") or None
+        base_url = os.environ.get("OPENAI_BASE_URL") or None
+        if api_key or base_url:
+            provider = OpenAIProvider(api_key=api_key, base_url=base_url)
+            return RunConfig(model=model, model_provider=provider)
+        return RunConfig(model=model)

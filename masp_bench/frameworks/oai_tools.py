@@ -12,7 +12,11 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from agents import FunctionTool, Runner
-from agents.tool_context import ToolContext
+
+try:
+    from agents import RunContextWrapper as ToolContext
+except ImportError:  # older SDKs exposed the function-tool context here
+    from agents.tool_context import ToolContext
 
 if TYPE_CHECKING:
     from masp_bench.schemas.task import ToolCatalog, ToolDef
@@ -82,15 +86,32 @@ def _make_domain_handler(td: ToolDef, workspace: Any):
     """Return an async handler closure for a single domain tool."""
 
     async def handler(ctx: ToolContext[Any], args_json: str) -> str:
-        args = json.loads(args_json)
         masp = ctx.context  # MASPContext
         agent_role = masp.agent_role
+        try:
+            args = json.loads(args_json)
+        except Exception as exc:
+            args = {}
+            result = f"[ERROR] Invalid JSON arguments for {td.name}: {exc}"
+            masp.action_sink.emit_tool_call(
+                agent_id=agent_role,
+                agent_role=agent_role,
+                tool_name=td.name,
+                tool_args=args,
+                tool_result=result,
+                raw_event={"framework": "oai", "capture_mode": "inline_dispatch"},
+            )
+            return result
 
         from .common import dispatch_tool
 
-        result = dispatch_tool(
-            td.name, args, bank=masp.bank, tool_def=td, workspace=workspace,
-        )
+        try:
+            result = dispatch_tool(
+                td.name, args, bank=masp.bank, tool_def=td, workspace=workspace,
+            )
+        except Exception as exc:
+            result = f"[ERROR] Tool {td.name} failed: {exc}"
+        result = str(result)
 
         masp.action_sink.emit_tool_call(
             agent_id=agent_role,
@@ -118,12 +139,15 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
     """
 
     async def delegate_to_agent(ctx: ToolContext[Any], args_json: str) -> str:
-        args = json.loads(args_json)
-        target = args["agent_name"]
-        task_msg = args["task"]
         masp = ctx.context  # MASPContext
         sender = masp.agent_role
         sink = masp.action_sink
+        try:
+            args = json.loads(args_json)
+            target = str(args["agent_name"])
+            task_msg = str(args["task"])
+        except Exception as exc:
+            return f"[ERROR] Invalid delegation arguments: {exc}"
 
         # --- recursion guard ---
         if masp.depth >= 2:
@@ -155,8 +179,16 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
             depth=masp.depth + 1,
         )
         try:
+            runner_kwargs: dict[str, Any] = {
+                "context": spoke_ctx,
+                "max_turns": max_spoke_turns,
+            }
+            if masp.run_config is not None:
+                runner_kwargs["run_config"] = masp.run_config
             result = await Runner.run(
-                spoke, task_msg, context=spoke_ctx, max_turns=max_spoke_turns,
+                spoke,
+                task_msg,
+                **runner_kwargs,
             )
             output = str(result.final_output) if result.final_output else ""
         except Exception as exc:

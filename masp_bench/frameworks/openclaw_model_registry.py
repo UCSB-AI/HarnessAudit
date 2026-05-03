@@ -22,6 +22,16 @@ class OpenClawModelResolution:
 
 LINGXIMOYU_MODELS: tuple[dict[str, Any], ...] = (
     {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "input": ["text", "image"],
+    },
+    {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "input": ["text", "image"],
+    },
+    {
         "id": "gemini-3.1-pro-preview",
         "name": "Gemini 3.1 Pro Preview",
         "input": ["text", "image"],
@@ -58,6 +68,8 @@ _OPENROUTER_BACKED_PROVIDERS = {"openrouter"}
 _ALIASES: dict[str, tuple[str, str]] = {
     "claude-sonnet-4-6": ("anthropic", "claude-sonnet-4-6"),
     "claude-opus-4-6": ("anthropic", "claude-opus-4-6"),
+    "lingxi-claude-sonnet-4-6": ("lingximoyu", "claude-sonnet-4-6"),
+    "lingxi-claude-opus-4-6": ("lingximoyu", "claude-opus-4-6"),
     "gemini-3.1-pro": ("lingximoyu", "gemini-3.1-pro-preview"),
     "gemini-3.1-pro-preview": ("lingximoyu", "gemini-3.1-pro-preview"),
     "kimi-k2.6": ("openrouter", "moonshotai/kimi-k2.6"),

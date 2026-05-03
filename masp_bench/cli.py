@@ -57,6 +57,17 @@ def _artifact_scoped_dir(base_dir: Path, harness: str, model: str) -> Path:
     return base_dir / harness / model_dir
 
 
+def _effective_harness(args: argparse.Namespace) -> str:
+    """Return the artifact/run harness label implied by the CLI args."""
+    if args.harness:
+        return args.harness
+    if args.framework == "oai":
+        return "oai"
+    if args.framework == "adk":
+        return "adk"
+    return "claude"
+
+
 def _artifact_prefix(task_id: str, perturbation: PerturbationConfig | None) -> str:
     if perturbation is None:
         return task_id
@@ -145,6 +156,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     pkg_root = Path(__file__).resolve().parent        # masp_bench/
     repo_root = pkg_root.parent                       # MASP_Bench/
     task_path = resolve_task_path(args.task, project_root=pkg_root, cwd=Path.cwd())
+    harness = _effective_harness(args)
     for repeat_index in range(args.repeat):
         if args.repeat > 1:
             print(f"=== Repeat {repeat_index + 1}/{args.repeat} ===")
@@ -167,15 +179,15 @@ def cmd_run(args: argparse.Namespace) -> None:
             print(f"  perturbation: {perturbation.variant_id} ({perturbation.attack_type})")
         print()
 
-        trace_dir = _artifact_scoped_dir(Path(args.trace_dir), args.harness, args.model)
+        trace_dir = _artifact_scoped_dir(Path(args.trace_dir), harness, args.model)
         output_dir = (
-            _artifact_scoped_dir(Path(args.output), args.harness, args.model)
+            _artifact_scoped_dir(Path(args.output), harness, args.model)
             if args.output else None
         )
         run_id = next_run_id(
             model=args.model,
             framework_slug=framework_run_id_slug(args.framework),
-            harness_slug=args.harness,
+            harness_slug=harness,
         )
         artifact_prefix = _artifact_prefix(task.task_id, perturbation)
         trace_path = trace_dir / f"{artifact_prefix}_{run_id}.jsonl"
@@ -193,11 +205,11 @@ def cmd_run(args: argparse.Namespace) -> None:
 
         print(
             f"Running (framework={args.framework}, "
-            f"harness={args.harness}, model={args.model})..."
+            f"harness={harness}, model={args.model})..."
         )
         runner = BenchmarkRunner(
             task, catalog, model=args.model, framework=args.framework,
-            harness=args.harness, trace_writer=writer,
+            harness=harness, trace_writer=writer,
             max_turns=args.max_turns,
             workspace_manager=workspace_manager,
             agent_timeout=getattr(args, "agent_timeout", 300),
@@ -369,7 +381,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 ) = canonicalize_clawteam_artifacts(
                     trace_path=trace_path,
                     run_id=trace.run_id,
-                    harness=args.harness,
+                    harness=harness,
                     agent_roles=[a.role for a in task.agents],
                     results_dir=output_dir,
                     task_id=task.task_id,
@@ -468,14 +480,17 @@ def main() -> None:
     run_p.add_argument(
         "--framework",
         default="clawteam",
-        choices=["clawteam", "oai"],
+        choices=["clawteam", "oai", "adk"],
         help="MAS framework adapter (default: clawteam)",
     )
     run_p.add_argument(
         "--harness",
-        default="claude",
-        choices=["claude", "codex", "openclaw"],
-        help="Agent harness for ClawTeam adapter (default: claude)",
+        default=None,
+        choices=["claude", "codex", "openclaw", "oai", "adk"],
+        help=(
+            "Agent harness/artifact label. Defaults to claude for clawteam "
+            "and to the framework name for --framework oai/adk."
+        ),
     )
     run_p.add_argument("--agent-timeout", type=int, default=300,
                        help="Max seconds to wait for all agents to exit (default: 300)")

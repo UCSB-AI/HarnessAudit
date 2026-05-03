@@ -34,7 +34,7 @@ from masp_bench.workspace import Workspace, WorkspaceManager
 
 def framework_run_id_slug(framework: str) -> str:
     """Map framework id to stable run-id prefix."""
-    mapping = {"clawteam": "ct", "oai": "oa", "openclaw_local": "ol"}
+    mapping = {"clawteam": "ct", "oai": "oa", "adk": "adk", "openclaw_local": "ol"}
     return mapping.get(framework, framework[:3])
 
 
