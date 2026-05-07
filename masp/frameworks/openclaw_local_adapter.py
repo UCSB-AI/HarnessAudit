@@ -144,7 +144,7 @@ class OpenClawLocalAdapter(MASFrameworkAdapter):
         try:
             line = await asyncio.wait_for(
                 loop.run_in_executor(None, stdout.readline),
-                timeout=30,
+                timeout=120,
             )
         except asyncio.TimeoutError as exc:
             proc.kill()
