@@ -96,7 +96,7 @@ class ADKAdapter(MASFrameworkAdapter):
             from google.adk import Agent
         except ImportError as exc:
             raise RuntimeError(
-                "Google ADK not installed. Install /home/cliu322/adk-python first."
+                "Google ADK not installed. Install the Google ADK package first."
             ) from exc
 
         from .adk_openai_model import ADKOpenAIModel

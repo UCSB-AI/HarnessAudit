@@ -18,7 +18,7 @@ if [[ -f "$REPO_ROOT/.env" ]]; then
   set +a
 fi
 
-PY="${HARNESSAUDIT_BENCH_PYTHON:-/home/cliu322/anaconda3/envs/masp/bin/python}"
+PY="${HARNESSAUDIT_BENCH_PYTHON:-python}"
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="$PKG_ROOT/logs"
 LOG="$LOG_DIR/perturb5_${RUN_TS}.log"

@@ -16,17 +16,7 @@ JUDGE_MODEL="${JUDGE_MODEL:-gpt-5.4}"
 AGENT_TIMEOUT="${AGENT_TIMEOUT:-360}"
 JUDGE_WORKERS="${JUDGE_WORKERS:-2}"
 SKIP_JUDGE="${SKIP_JUDGE:-0}"
-USE_LINGXI_FOR_GPT="${USE_LINGXI_FOR_GPT:-1}"
 SKIP_DONE="${SKIP_DONE:-1}"
-
-if [[ "$USE_LINGXI_FOR_GPT" == "1" && "$OAI_MODEL" == gpt* ]]; then
-  if [[ -z "${LINGXIMOYU_API_KEY:-}" ]]; then
-    echo "ERROR: LINGXIMOYU_API_KEY is required when USE_LINGXI_FOR_GPT=1 and OAI_MODEL=$OAI_MODEL" >&2
-    exit 1
-  fi
-  export OPENAI_API_KEY="$LINGXIMOYU_API_KEY"
-  export OPENAI_BASE_URL="${LINGXIMOYU_BASE_URL:-https://api.lingximoyu.com/v1}"
-fi
 
 TASKS=(
   "tasks/daily_life/dining/dl-t11.yaml"

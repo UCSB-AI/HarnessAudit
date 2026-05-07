@@ -19,6 +19,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
@@ -310,7 +311,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         self._current_run_id = ctx.run_id
         run_model = getattr(ctx, "model", "")
         mcp_proc: subprocess.Popen | None = None
-        bank_dump_path = Path(f"/tmp/masp_bank_{ctx.run_id}.db")
+        bank_dump_path = Path(tempfile.gettempdir()) / f"masp_bank_{ctx.run_id}.db"
         final_text = ""
         worktrees: dict[str, Path] = {}
         spawned_agents: list[SpawnedAgentProcess] = []

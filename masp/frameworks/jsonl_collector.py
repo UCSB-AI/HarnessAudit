@@ -48,8 +48,8 @@ def _encode_project_path(worktree_path: Path) -> str:
 
     Claude Code replaces ``/``, ``.``, and ``_`` with ``-``::
 
-        /home/chengzhi.ucsb/.clawteam/workspaces/team/concierge_lead
-        → -home-chengzhi-ucsb--clawteam-workspaces-team-concierge-lead
+        /workspace/team/concierge_lead
+        → -workspace-team-concierge-lead
     """
     return "-" + (
         str(worktree_path)

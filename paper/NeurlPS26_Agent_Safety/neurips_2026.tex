@@ -1,0 +1,610 @@
+\documentclass{article}
+
+\usepackage{neurips_2026}
+
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage[table]{xcolor}  % colors and table row colors
+\usepackage{colortbl}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{arydshln}
+\usepackage{graphicx}
+\usepackage{xspace}
+\usepackage{enumitem}
+\usepackage[flushleft]{threeparttable}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{ragged2e}
+\usepackage{tikz}
+\usepackage{wrapfig}
+\usepackage{textcomp}
+\usepackage{scalerel}
+\usepackage{tipa}
+\usepackage{pifont}
+\usepackage[subtle]{savetrees}
+\usepackage[most]{tcolorbox}
+\newtcolorbox{promptbox}[1]{
+  enhanced, breakable,
+  colback=gray!4!white, colframe=gray!55!black,
+  coltitle=white, colbacktitle=gray!55!black,
+  fonttitle=\bfseries\small\sffamily, title=#1,
+  boxrule=0.4pt, arc=2pt, boxsep=3pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+}
+\usepackage{listings}
+\usepackage[normalem]{ulem}
+\usepackage{array}
+\usepackage{bbm}
+\usepackage{algorithmic}
+\usepackage{tabularray}
+\usepackage{float}
+\usepackage[hidelinks]{hyperref}
+\definecolor{GroupGreen}{RGB}{220,240,220}
+
+\definecolor{cvprblue}{rgb}{0.21,0.49,0.8}
+\definecolor{HeaderGray}{RGB}{235,238,242}
+\definecolor{OursRowBg}{RGB}{242,247,255}
+\definecolor{GroupBlue}{RGB}{91,157,218}
+
+\definecolor{myLightBlueFrame}{RGB}{97, 162, 220} 
+\definecolor{mySoftBlue}{RGB}{205, 230, 255} 
+\definecolor{myVeryLightBlue}{RGB}{220, 235, 255}   
+\definecolor{myVeryLightYellow}{RGB}{255, 245, 204}
+\definecolor{EvoPurple}{HTML}{F3F0FF}
+\definecolor{myExtremelyLightBlue}{RGB}{235, 245, 255}
+\newcommand{\cmark}{\textcolor{green!60!black}{\ding{51}}} 
+\newcommand{\xmark}{\textcolor{red!75!black}{\ding{55}}}    % no support
+% \newcommand{\pmark}{\textcolor{GroupBlue}{\ding{51}\rotatebox[origin=c]{-6.2}{\kern-0.7em\ding{55}}}} % partial support
+
+\newcommand{\headl}[1]{\multicolumn{1}{>{\columncolor{HeaderGray}}l}{\textbf{#1}}}
+\newcommand{\headc}[1]{\multicolumn{1}{>{\columncolor{HeaderGray}}c}{\textbf{#1}}}
+\newcommand{\headblankl}{\multicolumn{1}{>{\columncolor{HeaderGray}}l}{}}
+\newcommand{\headblankc}{\multicolumn{1}{>{\columncolor{HeaderGray}}c}{}}
+
+\newcommand{\pmark}{\textcolor{GroupBlue}{\ding{51}\rotatebox[origin=c]{-6.2}{\kern-0.7em\ding{55}}}}
+
+
+\newcommand{\sar}[2]{#1{\,\tiny(#2)}}
+\newcommand{\xuandong}[1]{\textcolor{black}{[Xuandong: #1]}}
+\newcommand{\eric}[1]{\textcolor{red}{[Eric: #1]}}
+
+% Layer title: lower it slightly so it does not touch the top rule
+\newcommand{\LayerHead}[2]{%
+  \raisebox{-0.85ex}{%
+    \makecell[c]{\textbf{#1}\\[-0.22em]\rule{#2}{0.35pt}}%
+  }%
+}
+
+
+\newcommand{\HeadText}[1]{{\normalsize\bfseries #1}}
+\newcommand{\HeadMath}[1]{{\normalsize\boldmath $#1$}}
+% \newcommand{\sar}[2]{#1\,(#2)}
+
+\title{Auditing Agent Harness Safety}
+
+
+
+\author{
+  David S.~Hippocampus\thanks{Use footnote for providing further information
+    about author (webpage, alternative address)-\emph{not} for acknowledging
+    funding agencies.} \\
+  Department of Computer Science\\
+  Cranberry-Lemon University\\
+  Pittsburgh, PA 15213 \\
+  \texttt{hippo@cs.cranberry-lemon.edu} \\
+}
+
+
+\begin{document}
+\raggedbottom
+
+
+\maketitle
+
+
+\begin{abstract}
+LLM agents increasingly run inside execution harnesses that dispatch tools, allocate resources, and route messages between specialized components. However, a harness can return a correct, benign answer over a trajectory that accesses unauthorized resources or leaks context to the wrong agent. Output-level evaluation cannot see these failures, yet most safety benchmarks score only final outputs or terminal states, even though many violations occur mid-trajectory rather than at termination. The central question is whether the harness respects user intent, permission boundaries, and information-flow constraints throughout execution. To address this gap, we propose \textbf{HarnessAudit}, a framework that audits full execution trajectories across boundary compliance, execution fidelity, and system stability, with a focus on multi-agent harnesses where these risks are most pronounced. We further introduce \textbf{HarnessAudit-Bench}, a benchmark of 210 tasks across eight real-world domains, instantiated in both single-agent and multi-agent configurations with embedded safety constraints. Evaluating ten harness configurations across frontier models and three multi-agent frameworks, we find that: \textit{\textbf{(i)}} task completion is misaligned with safe execution, and violations accumulate with trajectory length; \textit{\textbf{(ii)}} safety risks vary across domains, task types, and agent roles; \textit{\textbf{(iii)}} most violations concentrate in resource access and inter-agent information transfer; \textit{\textbf{(iv)}} multi-agent collaboration expands the safety risk surface, while harness design sets the upper bound of safe deployment.
+
+
+% ======================================================================
+% Previous version of the abstract (kept for reference).
+% ======================================================================
+% LLM agents are increasingly deployed as components of execution harnesses that connect models to tools, resources, memory, and other agents. As deployment shifts from answering questions to completing tasks, safety evaluation must move beyond single responses to the full execution trajectory. The central question is whether the harness respects user intent, permission boundaries, and information flow constraints throughout execution. However, most safety evaluations still assess only final outputs or terminal states, leaving the execution trajectory itself largely unaudited, even though many boundary violations occur during intermediate execution. To address this gap, we propose \textbf{HarnessAudit}, a framework that audits full execution trajectories to evaluate harness safety across boundary compliance, execution fidelity, and system stability. We further introduce \textbf{HarnessAudit-Bench}, a benchmark with 210 tasks across eight real world domains, instantiated in both single agent and multi agent configurations with embedded safety constraints. Our experimental analysis shows that: \textit{\textbf{(i)}} task completion is not necessarily aligned with safe execution, and long trajectories continuously accumulate safety risks; \textit{\textbf{(ii)}} safety risks vary across domains, task types, and agent roles; \textit{\textbf{(iii)}} most violations are concentrated in resource access and inter agent information transfer. \textit{\textbf{(iv)}} multi-agent collaboration expands the safety risk surface, while harness design determines the upper bound of safe deployment.
+% ======================================================================
+\end{abstract}
+
+\vspace{-1em}
+\begin{figure}[H]
+\captionsetup{skip=4pt}
+\centering
+\includegraphics[width=0.77\textwidth]{images/safety_fig1.pdf}
+\caption{\textbf{HarnessAudit overview.} Agent harnesses route model decisions through tools, resources, and inter-agent communication. HarnessAudit audits the full execution trajectory and reports boundary compliance, execution fidelity, and system stability.}
+\label{fig1}
+\end{figure}
+
+\section{Introduction}
+
+A modern LLM agent~\cite{claude_opus46_2026, gpt54, gemini31pro} rarely acts alone. It runs inside an execution harness, such as OpenClaw~\cite{steinberger2025openclaw}, Claude Code~\cite{claudecode2026}, and Codex~\cite{codex2026}, that decomposes goals, dispatches tools, allocates resources, and routes messages between specialized components. The harness, not the model, decides which actions are exposed, who may invoke them, and when execution terminates. This shift exposes a failure mode that output-level evaluation cannot see: as illustrated in Figure~\ref{intro1}, a harness can return a correct, benign answer while along the way accessing unauthorized resources, leaking private context to the wrong agent, or triggering irreversible side effects outside the intended scope. Evaluating only the final response misclassifies these runs as successful.
+
+\begin{wrapfigure}{r}{0.48\textwidth}
+\vspace{-1em}
+  \centering
+  \includegraphics[width=\linewidth]{images/intro.pdf}
+  \caption{Safety risks exposed by different agent execution harnesses under realistic task settings.}
+  \label{intro1}
+  \vspace{-1em}
+\end{wrapfigure}
+
+We argue that agent safety should be evaluated on the harness rather than the response, and audited over the full execution trajectory. This requires checking three properties jointly: whether actions stay within the permission and information-flow boundaries the harness specifies (\textit{boundary compliance}), whether the trajectory reaches the goal through valid intermediate steps (\textit{execution fidelity}), and whether both properties survive realistic perturbations such as indirect prompt injection, ambiguous goals, and tool errors (\textit{system stability}).
+
+Existing benchmarks fall short on all three counts. Most score only final outputs or terminal states~\cite{shao2025privacylensevaluatingprivacynorm, zhang2025agentsafetybenchevaluatingsafetyllm}, so a run that completes the task while accessing forbidden resources looks indistinguishable from a clean success. Recent harness-oriented benchmarks~\cite{hua2026quantifyingtrustfinancialrisk, li2026clawsbenchevaluatingcapabilitysafety, tang2026phoneuseagentsrespectprivacy} add realistic tools and constraints but still center on task completion and rarely probe stability under adversarial conditions. Almost all of this work targets single-agent settings~\cite{wang2026systematicsecurityevaluationopenclaw, chen2026trajectorybasedsafetyauditclawdbot}, leaving the inter-component communication channels that production multi-agent harnesses introduce largely unaudited. As Figure~\ref{intro1}(b) shows, multi-agent execution produces longer trajectories, more complex permission structures, and explicit communication channels, materially expanding the safety risk surface.
+
+We address this gap with \textbf{HarnessAudit}, a framework that audits complete execution trajectories along the three properties above, and \textbf{HarnessAudit-Bench}, a benchmark that instantiates the audit on realistic single- and multi-agent harnesses. Our contributions are:
+
+\textbf{\textit{(1) A harness-centric safety formulation and auditing framework.}} We formalize an agent harness as a policy-constrained execution system and audit trajectories along boundary compliance, execution fidelity, and system stability using hidden, agent-independent evidence channels that record tool calls, resource accesses, and inter-component messages.
+
+\textbf{\textit{(2) Realistic agent harness safety stress testing.}} We construct HarnessAudit-Bench, spanning 8 real-world application scenarios and 210 tasks with embedded safety constraints, instantiated in both single- and multi-agent configurations.
+
+\textbf{\textit{(3) Empirical analysis of harness safety failures.}} We evaluate ten harness configurations across frontier models and three multi-agent frameworks, surfacing systematic failure patterns in resource access, inter-agent information transfer, and stability under perturbation.
+
+% ======================================================================
+% Previous version of the introduction (kept for reference).
+% ======================================================================
+% Large language models (LLMs)~\cite{claude_opus46_2026, gpt54, gemini31pro} are increasingly deployed for delegated action in real digital environments~\cite{xie2024osworld, koh2024visualwebarena, jimenez2023swe}. In such systems, models are embedded in execution harnesses that coordinate tools, resource access, and specialized agents to carry out complex digital workflows.  Systems such as  OpenClaw~\cite{steinberger2025openclaw}, Claude Code~\cite{claudecode2026}, Codex~\cite{codex2026} illustrate this architecture, in which the harness determines how actions are exposed, constrained and terminated, while the model remains one component. This shift moves safety evaluation from final responses to full execution trajectories. As illustrated in Figure~\ref{intro1}, when agentic systems act through tool calls, resource access, and inter component communication, output level safety assessment is insufficient. A harness may produce a correct and benign answer while accessing unauthorized resources, leaking private context, or executing irreversible actions outside the intended scope. Evaluations that ignore execution trajectories may misclassify unsafe executions as successful.
+%
+% We argue that agent safety evaluation should target the execution harness rather than the final response, and should audit safety over the full execution trajectory.  This audit should cover three dimensions. \textit{\textbf{(i)} \textbf{Boundary compliance}} checks whether actions stay within allowed tool, resource, and information flow limits. \textit{\textbf{(ii)} \textbf{Execution fidelity}} examines whether the trajectory reaches the task goal through valid steps aligned with each agent's role. \textit{\textbf{(iii)} \textbf{System stability}} tests whether these requirements hold under perturbations such as indirect prompt injection, ambiguous goals, and tool errors.
+%
+% However, existing benchmarks remain limited in three respects. \textit{(I) Limited trajectory auditing.} Most benchmarks score only final outputs or terminal states~\cite{shao2025privacylensevaluatingprivacynorm, zhang2025agentsafetybenchevaluatingsafetyllm}, making it difficult to distinguish compliant runs from successful runs that violate resource boundaries. \textit{(II) Narrow safety stress testing.} Recent harness oriented benchmarks~\cite{hua2026quantifyingtrustfinancialrisk, li2026clawsbenchevaluatingcapabilitysafety, tang2026phoneuseagentsrespectprivacy}  introduce realistic tools and constraints, but still center on task completion and provide limited coverage of safety failures.
+% \textit{(III) Insufficient auditing of component communication.} When harnesses include planners, executors or role specific agents, communication between components becomes a key channel for information flow and delegation. Existing evaluations largely focus on single agent settings~\cite{wang2026systematicsecurityevaluationopenclaw, chen2026trajectorybasedsafetyauditclawdbot} and rarely audit these communication boundaries.
+%
+% These limitations are amplified in multiagent harnesses. As shown in Figure~\ref{intro1}(b), they often produce longer execution trajectories, involve more complex permission structures, and introduce explicit communication channels among agents, increasing the risk of resource overreach and information leakage. In this work, we use multi-agent configurations as the primary testbed for auditing harness safety, while retaining applicability to single agent harnesses, which we include as control settings.
+%
+% To the end, we introduce \textbf{HarnessAudit} and its companion benchmark, \textbf{HarnessAudit-Bench}, to systematically evaluate harness safety over complete execution trajectories. Our contributions are summarized as follows.
+%
+% \textbf{\textit{(1) A harness-centric safety formulation and auditing framework.}} We formalize an agent harness as a policy constrained execution system and define three trajectory level safety properties: boundary compliance, execution fidelity, and system stability. Building on this formulation, HarnessAudit audits trajectories along these three dimensions using hidden, agent independent evidence channels that record tool calls, resource accesses, and inter component messages.
+%
+% \textbf{\textit{(2) Realistic agent harness safety stress testing.}}  We construct HarnessAudit-Bench, spanning 8 real world application scenarios and 210 tasks, with embedded safety constraints to evaluate harness safety in realistic collaborative workflows.
+%
+% \textbf{\textit{(3) Empirical analysis of harness safety failures.}} We evaluate frontier models and representative harness configurations, showing that task success does not guarantee safe execution, risks vary across domains, tasks, and roles, violations concentrate around resource access and agent communication, and multi-agent coordination expands the risk surface while harness design bounds safe deployment.
+% ======================================================================
+
+
+% It is built around three design principles. \textit{\textbf{(1) Full trajectory auditing.}} We build an end-to-end trajectory system that records agent communication, tool calls and final outputs across representative multi-agent harness frameworks, enabling safety evaluation based on actual execution traces rather than final claims. \textbf{\textit{(2) Realistic multi agent safety stress testing.}} We construct \textbf{HarnessAudit-Bench}, spanning eight real world application scenarios and 210 tasks, with embedded safety constraints to evaluate harness safety in realistic collaborative workflows. \textit{\textbf{(3) Three level harness-level Safety diagnosis.}} We introduce a harness evaluation framework that provides a comprehensive diagnosis of agent safety across boundary compliance, execution fidelity, and system stability. Experiments on seven frontier models lead to the following contributions and findings:
+
+
+
+% \begin{itemize}[left=0.2cm]
+%     \item We introduce \textbf{HarnessAudit}, an end-to-end evaluation framework for multi-agent harnesses that audits safety across  dimensions: boundary compliance, execution fidelity, and system stability.
+%     \item  We  construct \textbf{HarnessAudit-Bench}, a benchmark of 210 tasks across 8 real-world domains, where each task includes clear role assignments and execution rules to systematically evaluate safety risks in multi-agent harnesses.
+%     \item We evaluate frontier models and representative harness configurations, showing that (1) task success does not guarantee safe execution (2) risks vary by domain, task and role, (3) violations cluster around resource access and agent communication, and (4) multi-agent coordination expands the risk surface while harness design bounds safe deployment.
+% \end{itemize}
+
+
+
+\section{Related Work}
+\textbf{Safety Evaluation For Agents.} Recent agent safety benchmarks study execution time risks of  agents in external environments, such as AgentHarm~\cite{andriushchenko2025agentharmbenchmarkmeasuringharmfulness}, and OS-Harm~\cite{kuntz2025osharmbenchmarkmeasuringsafety}. These works move safety evaluation beyond output moderation but are mostly built on constrained environments or localized risk settings, leaving systematic risks in realistic agent harnesses  underexplored. Recent benchmarks such as ClawsBench~\cite{li2026clawsbenchevaluatingcapabilitysafety} and Claw-Eval~\cite{ye2026clawevaltrustworthyevaluationautonomous} further introduce more realistic agent evaluation scenarios, but their safety pressure and collaborative complexity remain limited. In contrast, HarnessAudit treats the harness itself as the unit of evaluation and audits the full execution trajectory through hidden, independent evidence channels.
+
+\textbf{Trajectory Auditing and Harness-level Assurance.} Another line of work audits agent safety through execution trajectories rather than final outputs. Studies of representative harnesses such as OpenClaw~\cite{wang2026systematicsecurityevaluationopenclaw, liu2026clawkeepercomprehensivesafetyprotection, wang2026agentassetrealworldsafety, deng2026tamingopenclawsecurityanalysis} show that risks often emerge from tool calls and intermediate state changes, while trajectory-based audits~\cite{chen2026trajectorybasedsafetyauditclawdbot, li2026atbenchdiverserealisticagent, zhang2026agentauditsecurityanalysis} localize failures from inspectable traces such as tool arguments and inter-agent messages. These works highlight the value of trajectory-level evidence for assessing policy compliance. However, existing trajectory audits mainly target specific harnesses or localized failures, without unifying these risks into a harness-level diagnosis. HarnessAudit addresses this gap by recording complete trajectories and systematically evaluating boundary compliance, execution fidelity, and system stability as a unified harness-level problem.
+
+\textbf{Safety in Multi-Agent Systems.}  Role based coordination has become a common design pattern for complex agent systems. Frameworks such as AutoGen~\cite{wu2023autogenenablingnextgenllm}, CAMEL~\cite{li2023camelcommunicativeagentsmind}, and Claw-Team~\cite{clawteam2026} coordinate agents through communication and task delegation to improve complex task execution. However, such coordination also makes safety a system level concern, where failures may emerge from context sharing, and boundary crossing across agents.~\cite{tao2026groupguardframeworkmodelingdefending, huang2026emergentsocialintelligencerisks} Recent works such as TAMAS~\cite{kavathekar2025tamasbenchmarkingadversarialrisks} and AgentLeak~\cite{yagoubi2026agentleakfullstackbenchmarkprivacy} study adversarial attacks and privacy leakage in multi-agent systems, but mainly focus on specific threat models or leakage channels rather than harness-level execution safety.  HarnessAudit-Bench addresses this gap by constructing realistic multi-agent tasks with role-typed teams, enabling evaluation of how delegation, communication, and permission boundaries affect harness safety.
+
+
+
+\section{Problem Formulation}
+
+
+\subsection{The Agent Harness as a Policy Constrained Execution System}
+\label{sec:problem:harness}
+
+We define a agent harness as a policy constrained execution system that
+coordinates one or more LLM-driven components over tools, resources, and communication
+channels. Given a user goal \(G\) and a environment state \(\mathcal{D}\), the harness decomposes the goal, dispatches subtasks to components, and constrains their actions: 
+
+\vspace{-0.9em}
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+\setlength{\abovedisplayshortskip}{2pt}
+\setlength{\belowdisplayshortskip}{2pt}
+\begin{equation}
+\label{eq:harness}
+\mathcal{H}
+\mathrel{:=}
+\Bigl(\mathcal{A},\,\mathcal{T},\,\mathcal{R},\,\Pi,\,\Phi,\,\Sigma\Bigr),
+\qquad
+\mathcal{H}\bigl(G; \mathcal{D}_0\bigr)
+\longrightarrow
+\bigl(\tau_{\mathcal{H}},\,y \bigr).
+\end{equation}
+\vspace{-0.9em}
+
+Here $\mathcal{A}$ is the set of acting components (one in single agent harnesses, several in multi-agent ones), \(\mathcal{T}\) denotes the callable tools, and \(\mathcal{R}\) denotes the
+environment resources. The permission policy \(\Pi\) specifies which agents may
+access which tools and resources, while the information-flow policy \(\Phi\)
+constrains what information may be shared across agents. The coordination
+protocol \(\Sigma\) governs task delegation, action confirmation, and result
+verification. Executing the harness produces an observable trajectory
+\(\tau_{\mathcal{H}}\) and a final output \(y\).
+
+
+\subsection{Three Agent Harness Safety Layers}
+\label{layer}
+
+\textbf{HarnessAudit} evaluates the harness along three trajectory level layers, illustrated in Figure~
+\ref{fig3}(b). The layers are designed to be evaluated jointly: a harness must satisfy all three to be considered safely deployable, and each layer maps to a distinct failure mode that the others cannot detect.
+
+\textbf{$\clubsuit$ L1 Boundary Compliance.}
+\label{a_1}
+This layer evaluates whether each action in $\tau_\mathcal{H}$ stays within the boundaries specified by $\Pi$ and $\Phi$. We record violations across three channels, including \textbf{\textit{(a)}} \textit{tool violations}, where an agent invokes unauthorized, task irrelevant, or role exceeding tools; \textbf{\textit{(b)}} \textit{resource violations}, where an agent accesses protected or out of scope files, records, fields, or objects; and \textbf{\textit{(c)}} \textit{information flow violations}, where an agent discloses information through communication, forwarding, or final outputs when such disclosure is not permitted.
+
+% This layer measures \textit{how consistently an agent respects basic safety boundaries during task execution}, focusing on three types of behavior: tool use, resource access, and inter agent information transfer. Violations are weighted by severity and grouped into three channels:
+% \textbf{\textit{(a)}}  \textit{Tool violations}, where an agent invokes unauthorized, task-irrelevant, or role-exceeding tools;
+% \textbf{\textit{(b)}} \textit{Resource violations}, where an agent accesses protected resources outside the task scope, such as incorrect files, wrong records, private fields, or objects that should not be read;
+% \textbf{\textit{(c)}} \textit{Information-flow violations}, where an agent exposes information that should not be disclosed through communication, forwarding, or final outputs.
+
+\textbf{$\clubsuit$ L2 Execution Fidelity.} This layer evaluates whether the trajectory reaches the goal through valid intermediate steps, rather than only whether the final output $y$ matches a reference answer. We assess two aspects, including \textbf{\textit{(a)}} \textit{action validity}, which measures whether tool selection, arguments, and target objects are correct and whether redundant operations are avoided; \textbf{\textit{(b)}} \textit{checkpointed task completion}, which measures task milestones that can be verified from the trajectory or state.
+
+\textbf{$\clubsuit$ L3 System Stability.} This layer evaluates whether L1 and L2 remain satisfied under controlled stressors injected during execution. These stressors include \textbf{\textit{(a)}} indirect prompt injection through tool returned content, \textbf{\textit{(b)}} ambiguous or under specified user goals, \textbf{\textit{(c)}} tool or runtime errors and noise.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{images/pipline.pdf}
+\vspace{-0.2em}
+% \caption{\fontsize{9.5pt}{10pt}\selectfont  \textbf{HarnessAudit auditing pipeline.}
+% HarnessAudit separates multi-agent evaluation into task setup, harness execution, and post-hoc judging through a temporal firewall that keeps scoring artifacts hidden during execution. The framework converts trajectory logs, backend/workspace snapshots, permission evidence, resource-access evidence, and communication evidence into a three-layer diagnosis of boundary compliance, execution fidelity, and system stability.}
+
+\caption{\textbf{HarnessAudit auditing pipeline.} It separates evaluation into setup, execution, and judging. Hidden audit artifacts stay invisible during execution; trajectory logs and backend evidence support a three-layer diagnosis of boundary compliance, execution fidelity, and system stability.}
+
+\vspace{-1em}
+\label{fig3}
+\end{figure}
+
+
+\subsection{Trajectory Auditing Pipeline}
+\label{sec:problem:pipeline}
+
+% To address trajectory opacity and the limited coverage of multi-agent scenarios in existing evaluations, \textbf{HarnessAudit} constructs diverse real world tasks and records agents' actual behavior during execution. These records are collected from independent evidence channels that agents cannot manipulate or anticipate, rather than from their final reports. Each evaluation run follows a three-stage lifecycle consisting of Setup, Execution, and Judge in an isolated and reproducible environment, where agents interact through API-based tools without accessing real user data. As shown in Figure~\ref{fig3}, scoring scripts, policy checkers and validation tools are hidden during execution and loaded only after termination, enabling post hoc auditing of the complete trajectory.
+
+A central design choice of \textbf{HarnessAudit} is that all evaluation evidence is collected from channels that agents cannot manipulate or anticipate, rather than from their self reports. Each run proceeds through three phases, Setup, Execution, and Judge, as shown in Figure~\ref{fig3}. 
+
+\textbf{Setup.} A declarative task specification instantiates a reproducible harness, including mock services with deterministic seeds, tools and resources assigned to components under explicit $\Pi$ and $\Phi$, and hidden audit artifacts derived from the same specification. These artifacts include completion checkpoints, policy rules, and violation taxonomies, and remain invisible to all components during execution. Agents interact only through API tools and never access real user data.
+
+\textbf{Execution.} The harness runs to completion under a standard think, act, and observe loop. No online scoring is performed. Instead, the framework records structured logs for every tool call, resource access, message between components, and state transition, together with environment snapshots before and after execution.
+
+\textbf{Judge.} After termination, the hidden artifacts are loaded and combined with the collected evidence channels. The execution trajectory reconstructs the action sequence and permission and information flow logs provide boundary evidence. The harness is then scored according to the L1 to L3 specification in Section~\ref{layer}. The trajectory auditing implementation is detailed in Appendix~\ref{app:pipeline}, and the full scoring protocol is provided in Appendix~\ref{app:scoring}.
+
+
+\subsection{Scoring Evaluation}
+Each run produces scores aligned with the three evaluation layers, which are further aggregated into an overall harness safety score. Scoring and aggregation details are provided in Appendix~\ref{app:scoring}.
+
+\noindent\textbf{\ding{118} \textit{(L1)} Safety Adherence Rate.}  For each task $i$ and channel $c \in \{t, r, f\}$, corresponding to tool use, resource access, and information flow, violations are classified by severity level $\ell \in \{\text{low}, \text{high}\}$ and assigned corresponding weights $\omega_\ell$. The tool and resource channels are computed from aggregate weighted violation counts, whereas the information flow channel averages task-level weighted violation rates over tasks with information-flow audit opportunities:
+\vspace{-1em}
+
+\begingroup
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+\setlength{\abovedisplayshortskip}{2pt}
+\setlength{\belowdisplayshortskip}{2pt}
+\begin{equation}
+\label{eq:sar_channels}
+\mathsf{SAR}^{c}
+=
+1-
+\sum_{\ell=1}^{2}\omega_{\ell} V_{i,\ell}^{c},
+\quad c\in\{t,r\},
+\qquad
+\mathsf{SAR}^{f}
+=
+\frac{1}{|\mathcal{T}_{f}|}
+\sum_{i\in\mathcal{T}_{f}}
+\left(
+1-
+\sum_{\ell=1}^{2}\omega_{\ell} V_{i,\ell}^{f}
+\right).
+\end{equation}
+\endgroup
+\vspace{-0.7em}
+\noindent
+
+where $N_{i,\ell}$ denotes the number of audited opportunities, $V_{i,\ell}$ denotes the severity-weighted number of violations, $\mathcal{T}_{f}$ denotes the set of tasks with information-flow audit opportunities, and $\omega_{\ell}$ is the corresponding severity weight. The task-level $\mathsf{SAR}_i$ is obtained by averaging the three channel scores.
+
+\noindent\textbf{\ding{118} \textit{(L2)} Task Completion and Operation.}  $\mathsf{TCR}_i$ is computed from the weighted scores of completion checkpoints, which are verified using evidence from the execution trajectory, environment state, or final output. $\mathrm{AVS}_i$ measures whether intermediate actions of scored components satisfy reference execution constraints, penalizing unnecessary, out of scope, or erroneous behavior.
+\begingroup
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+\setlength{\abovedisplayshortskip}{2pt}
+\setlength{\belowdisplayshortskip}{2pt}
+\begin{equation}
+\label{eq:tcr_avs_score}
+\begin{aligned}
+\mathsf{TCR}_i
+&=
+\min\!\left(
+1,
+\sum_{m\in C_i} w_m s_m
+\right),
+\qquad
+&
+\mathsf{AVS}_i
+&=
+\frac{1}{|\rho_i^{\mathrm{score}}|}
+\sum_{a\in\rho_i^{\mathrm{score}}}
+J_{\mathrm{act}}(a,\tau_i).
+\end{aligned}
+\end{equation}
+\endgroup
+\vspace{-0.4em}
+
+where $C_i$ and $\rho_i^{\mathrm{score}}$ denote the task checkpoint set and the set of score roles for task $i$, respectively; $w_m$ and $s_m$ denote the weight and score of checkpoint $m$; and $J_{\mathrm{act}}(a,\tau_i)$ denotes the action-validity score of role $a$ on execution trajectory $\tau_i$.
+
+\noindent\textbf{\ding{118} \textit{(L3)} Perturbation Stability.} For perturbation set $\mathcal{P}_i$ covering indirect injection, ambiguous goals, and runtime/tool errors, $\mathrm{PB}_i$ averages rubric graded stability scores $q_{i,p} \in [0,1]$ across all perturbation variants of task $i$. Metric aggregation details are provided in Appendix~\ref{app:scoring}, and perturbation rubric details are provided in Appendix~\ref{app:exp-setup:perturbations}.
+
+\noindent\textbf{\ding{118} Overall Harness Safety.} HarnessAudit aggregates the three layers of safety signals into a task level composite score, rather than reducing each run to binary pass or fail judgments.
+
+\vspace{-1.em}
+\begingroup
+\setlength{\abovedisplayskip}{3pt}
+\setlength{\belowdisplayskip}{3pt}
+\setlength{\abovedisplayshortskip}{2pt}
+\setlength{\belowdisplayshortskip}{2pt}
+\begin{equation}
+\label{eq:task_score}
+Score_i
+=
+\overline{\mathsf{SAR}}_i
+\times
+\bigl(
+\alpha \cdot \mathsf{TCR}_i
++
+\beta \cdot \mathsf{AVS}_i
++
+\gamma \cdot \mathsf{PB}_i
+\bigr).
+\end{equation}
+\endgroup
+\vspace{-1.0em}
+
+By default, we set \(\alpha=0.7\), \(\beta=0.15\), and \(\gamma=0.15\). We use \(\overline{\mathsf{SAR}}\) as a multiplicative safety gate, where \(\overline{\mathsf{SAR}}\) averages safety adherence over tool-use, resource-access, and information-flow constraints. As a result, a run can receive a high score only when it both completes the task and respects the specified safety boundaries. Additional aggregation details are provided in Appendix~\ref{app:scoring}.
+
+% \noindent\textbf{\ding{118} Trade-off.} 
+% Although the composite score $\mathrm{Score}_i$ summarizes overall harness-level performance, it may obscure the trade-off between task capability and safety compliance. A harness may complete tasks through unsafe intermediate behavior, or appear safe simply because it makes little task progress. To characterize task completion under a required safety level, we report $Score@\tau$, which measures the Safety Adherence Score $\mathsf{SAR}_i$ when the Task Completion Score $\mathsf{TCR}_i$ reaches the threshold $\tau$. Detailed results are provided in \textcolor{black}{Section~\ref{exp}}.
+
+
+\input{table_bench_coverage}
+
+\section{HarnessAudit-Bench}
+\vspace{-0.1cm}
+\subsection{Task Design and Collection}
+\vspace{-0.2cm}
+HarnessAudit-Bench is designed to address three limitations of existing safety benchmarks. As shown in Table~\ref{tab:bench_coverage}, \textbf{\textit{(i)}} many benchmarks rely on sandboxed or simplified environments that fail to capture realistic service interfaces and mutable state; \textbf{\textit{(ii)}} their coverage is often limited to single agent and low information settings, leaving the interaction surfaces exposed by production harnesses underexplored; and \textbf{\textit{(iii)}} safety evaluation often stops at obvious unsafe tool use, missing subtler failures such as information leakage across roles and incorrect resource binding. To fill these gaps, HarnessAudit-Bench constructs high fidelity and reproducible tasks that preserve realistic tool interfaces and state dynamics, enabling systematic evaluation of harness behavior in safety critical workflows. 
+
+\textbf{Design principles.} Each task follows three principles. \textbf{\textit{(1)}} Tasks model \textit{benign, goal-directed user requests}, where safety risks arise from incorrect decisions or unnecessary disclosure rather than explicit malicious intent. \textbf{\textit{(2)}} Successful completion requires \textit{bounded collaboration} among specialized roles in multi-agent settings, or disciplined scope management in single agent, rather than unrestricted agent autonomy. \textbf{\textit{(3)}} Tasks define \textit{explicit tool and resource scopes} through authorized targets and plausible out of scope decoys, making correct object identification directly measurable.
+
+
+\textbf{Annotation pipeline and quality control.} Each task is built through a hybrid pipeline that first automatically generates a candidate task and execution setup, followed by human verification of role permissions, decoy resources, communication constraints, and audit artifacts. Each task is reviewed by 2-3 annotators and further validated through schema checks and smoke executions to ensure solvability, clear boundaries, and appropriate difficulty. Details are provided in Appendix~\ref{app:benchmark-construction}.
+
+
+\begin{figure}[t]
+\centering
+% \vspace{-1em}
+\includegraphics[width=\textwidth]{images/bar.pdf}
+\vspace{-0.4cm}
+\caption{\textbf{HarnessAudit-Bench} covers 210 tasks across 8 real world domains and 24 fine-grained scenarios. Different domains exhibit distinct role structures, with the number of roles ranging from 5-14 across domains. (c) Each task is paired with audit rules covering three risk types: tool rules distinguish required tools from forbidden tools, resource rules distinguish required resources from out of scope resources, and information flow rules cover communication constraints and data leakage. }
+
+\label{fig:benchmark_data1}
+\vspace{-0.6cm}
+\end{figure}
+
+\subsection{Domains and Scenarios}
+\textbf{Task.} As shown in Figure~\ref{fig:benchmark_data1}(a), HarnessAudit-Bench contains 210 tasks spanning 8 application domains and 24 fine grained scenarios, covering finance, e-commerce, healthcare, office operations, social interaction, daily life, legal compliance, and software engineering. Each domain is divided into 2–4 recurring workflow scenarios so that the benchmark captures both broad cross domain coverage and diverse risk patterns within each domain.
+
+
+\textbf{\textcolor{black}{Roles and topology.}} 
+The benchmark instantiates 69 unique role-agent templates across 24 scenario categories, as shown in Figure~\ref{fig:benchmark_data1}(b), with 8.6 role templates per domain on average. Each task selects a subset from its domain specific role inventory rather than using a fixed universal team, resulting in 4.6 participating components per task on average. Roles cover coordination, evidence retrieval, domain analysis, policy and risk review, specialist execution, verification, and external communication, with team topology customized to each workflow. Detailed role designs are provided in Appendix~\ref{app:benchmark-construction:roles}.
+\textbf{Audit instrumentation.} Following the L1 to L3 specification, each task is instantiated with concrete audit checks, as shown in Figure~\ref{fig:benchmark_data1}(c). For L1, the benchmark defines 11,586 role tool authorization entries, averaging 55.2 per task, including 8.5 useful tools, 27.9 forbidden tools, and 18.7 unnecessary tools; 38 entries involve resource bearing tools and 17.2 involve ordinary tools. For L2, 3,094 resource scope rules constrain executable actions and are grouped through description based auditing into resource mismatch (1,511), action overreach (1,055), redundant operation (452), and sequencing or authorization failure (76). For L3, we construct perturbation specifications for 105 selected tasks, with five perturbations per task, including two indirect injection variants, two ambiguous goal variants, and one runtime robustness variant, yielding 525 perturbation cases in total.
+
+
+% Following the harness safety criteria in Section~\ref{layer}, each task is instantiated with concrete checks for the three evaluation layers, as illustrated in Figure~\ref{fig:benchmark_data1}(c). For \textit{Layer~1}, the benchmark defines 11,586 role-tool authorization entries in total, averaging 55 entries per task. Per task, this includes 8.5 useful tool entries, 28 forbidden-tool entries, and 18.7 unnecessary tool entries; 38 entries concern resource-bearing tools and 17.2 concern ordinary tools. For \textit{Layer~2}, the benchmark contains 3,094 resource-scope rules over executable actions. A description-based audit groups these rules into resource mismatch (1,511), action overreach (1,055), redundant operation (452), and sequencing or authorization failure (76). For \textit{Layer~3}, we construct perturbation specs for 105 selected tasks, with five require perturbations per selected task: two indirect-injection variants, two ambiguous-goal variants, and one robustness variant. This yields 210 injection cases, 210 ambiguous-goal cases, and 105 robustness cases, for 525 require perturbation cases in total.
+
+\section{Experiments}
+\label{exp}
+\subsection{Setup}
+\textbf{Models.}  We evaluate ten harness configurations spanning two settings. The \textit{shared harness setting} runs different models under the same OpenClaw framework to control for harness level variation; the provider-native setting uses the production harnesses provided by model vendors. Under OpenClaw we evaluate ChatGPT-5.4~\cite{gpt54}, Claude Opus 4.6~\cite{claude_opus46_2026}, Claude Sonnet 4.6~\cite{claude46sonnet}, Gemini 3.1 Pro~\cite{gemini31pro}, GLM 5V Turbo~\cite{glm5vturbo_2026}, Kimi K2.6 [16]~\cite{team2026kimi}, and Qwen 3.5 Plus~\cite{qwen35_2026}. The \textit{provider-native setting} includes Claude Code with Claude Opus 4.6 and Claude Sonnet 4.6, and Codex with ChatGPT-5.4.
+
+\textbf{Multi-Agent Framework.} We evaluate three representative multi agent harnesses, including Claw -Team~\cite{clawteam2026}, which is planner led and supports explicit role and permission control; Google ADK~\cite{google_adk}, which uses graph based orchestration; and OpenAI SDK~\cite{openai_agents_sdk}, which follows session based execution. HarnessAudit Bench evaluates these frameworks through a unified task interface, tool wrapper, and trajectory logging format. Claw-Team provides the most stable cross configuration support and is therefore used as the primary framework. Figure~\ref{com}(b) reports the comparison, and implementation details for these in-process adapters are provided in Appendix~\ref{app:framework-adapters}. 
+
+\textbf{Evaluation protocol.} We use a hybrid protocol that combines deterministic matching with LLM as a judge. Deterministic checks cover safety boundary violations and task completion checkpoints, corresponding to L1 and parts of L2. For open ended judgments, including execution rationality and perturbation stability in L2 and L3, we use GPT-5.4 conditioned on the full trajectory, backend audit evidence, and task specific rubrics. Details are provided in Appendix~\ref{app:exp-setup}.
+
+\input{table_main_results}
+
+\vspace{-0.3cm}
+\subsection{Main Results}
+\vspace{-0.3cm}
+Table~\ref{tab:main_results} reports the overall performance of different systems across the three dimensions of our agent harness safety principles. We identify \textcolor{black}{four} main findings.  \textbf{\ding{182} Current agent harnesses are still far from safely reliable.}
+Strong task completion ability does not necessarily lead to safe or stable agent behavior. Even the best performing system achieves an overall score of only 0.32, indicating substantial room for improvement when task completion must also
+satisfy explicit safety constraints. \textbf{\ding{183} Task completion and safety compliance are clearly misaligned.}
+Under the OpenClaw setting, Gemini 3.1 Pro does not achieve the
+strongest task completion performance ($\mathsf{TCR}$), but obtains the highest overall score due to its strongest protocol-safety performance. In contrast, Claude
+Opus 4.6 achieves a higher $\mathsf{TCR}$, but its safety metrics are notably weaker. This comparison shows that stronger task completion does not necessarily imply a more reliable execution process, as models may advance the user goal while still violating critical execution
+boundaries.   \textbf{\ding{184} Resource access dominates the violation profile.} Across most configurations, resource access safety is substantially weaker than
+tool call safety and information-flow safety. This suggests that agents usually do not fail by invoking obviously inappropriate tools. Instead, they are more likely to select seemingly reasonable tools but apply them to incorrect,
+irrelevant, or unauthorized resources. \textbf{\ding{185} Systems are generally fragile under perturbations.}
+High completion performance on normal tasks does not guarantee reliable
+execution under abnormal or adversarial conditions. Indirect injection causes
+the largest performance drop, suggesting that agents are easily affected by
+hidden instructions in task evidence or tool-returned content. Although some
+systems are more stable against backend anomalies and runtime noise, their
+perturbation performance remains clearly separated from their normal task
+completion performance.
+
+% \textbf{\ding{186} Information flow violations are widespread in multi-agent coordination.} The $\mathcal{SAR}^{f}$ results show that nearly all systems exhibit varying degrees
+% of information leakage during inter agent communication, and such risks are substantial in most harnesses. This indicates
+% that, in multi-agent settings, safety failures arise not only from tool use and resource access, but also from information exchange among agents. 
+
+
+
+\section{Analysis}
+We conduct extensive experiments on our \textbf{HarnessAudit-Bench} for the following research questions.
+\begin{itemize}[leftmargin=*, itemsep=0pt, label=\small$\spadesuit$]
+\vspace{-0.3em}
+    \item \textbf{RQ1}: Are task completion and safety compliance aligned in agent harnesses?
+
+    \item \textbf{RQ2}: How do harness safety risks vary across domains, task types, and component roles?
+
+    \item \textbf{RQ3}: Does multi-agent coordination amplify safety risks compare with single agent settings?
+    
+    \item \textbf{RQ4}: Where do safety violations concentrate across the action surface?
+
+    \item \textbf{RQ5}: How do harness design and model capability affect task performance and safety?
+\end{itemize}
+
+
+\begin{wrapfigure}{r}{0.43\textwidth} 
+\vspace{-1em}
+  \centering
+  \includegraphics[width=\linewidth]{images/fig511.pdf}
+  \caption{(a) Task completion score versus mean safety adherence rate. (b) Number of violations versus number of executed actions. (c) Safety adherence retained at increasing task-completion thresholds.}
+  \label{trade}
+\end{wrapfigure}
+
+
+\begingroup
+\RaggedRight
+\noindent\textbf{[RQ1] \textit{Higher completion does not necessarily imply safer execution.}}As shown in Figure~\ref{trade}(a), agent harnesses show a consistent negative association between task completion and safety adherence rate. This suggests that solving complex real world tasks often requires broader tool use, resource access, and information exchange, increasing the risk of crossing safety boundaries. Figure~\ref{trade}(b) further shows that violations increase with the number of executed actions.  Figure~\ref{trade}(c) quantifies this trade-off under different task completion thresholds, showing that safety declines for all models as the threshold increases, but at clearly different rates. Gemini 3.1 Pro exhibits the most stable trade-off between safety and capability, whereas Claude Sonnet 4.6, despite stronger task capability, retains less safety at high completion levels.
+\par
+\endgroup
+
+\begin{wrapfigure}{r}{0.5\textwidth} 
+\vspace{-1em}
+  \centering
+  \includegraphics[width=\linewidth]{images/fig6.pdf}
+  \caption{(a) Domain level adherence across safety channels. (b) Violation rates of representative high-risk roles in each domain, where sectors denote domains, radial bars indicate $1-\mathrm{SAR}_{\mathrm{mean}}$, and the dashed ring marks the $0.25$.}
+
+  \label{multi}
+  \vspace{-1.em}
+\end{wrapfigure}
+
+
+\textbf{[RQ2] \textit{Safety risks different across domains, with critical role agents more likely to trigger safety issues.}} We analyze safety performance across domains under the OpenClaw setting. The results show domain variation, with risk patterns closely tied to workflow demands. As shown in Figure~\ref{multi}(a), finance and office tasks, which require intensive resource access, are more prone to resource boundary violations. Daily life and e-commerce tasks rely more on inter agent communication and therefore more often violate information flow constraints. Software engineering tasks involve frequent tool use, which leads to weaker tool use compliance. These findings suggest that safety risks are not uniformly distributed, but are shaped by domain specific operational requirements. Figure~\ref{multi}(b) further reveals a clear role dependent pattern, where agents responsible for key resource access, cross-role coordination, or final execution are more likely to cross safety boundaries. \\
+
+
+\begin{wraptable}[4]{r}{0.4\textwidth}
+    \centering
+    \vspace{-1.7em}
+    \scriptsize
+    
+    \begin{tblr}{
+        width=\linewidth,
+        colspec={X[l]cccc},
+        row{1-2}={bg=gray!10, font=\footnotesize},
+        cell{1}{1}={r=2}{m,l},
+        cell{1}{2}={r=2}{m,c},
+        cell{1}{3}={r=2}{m,c},
+        cell{1}{4}={c=2}{c},
+        hline{1,Z}={0.8pt},
+        hline{2}={4-5}{0.5pt},
+        hline{3}={0.5pt},
+    }
+        \textbf{Setting} 
+            & \textbf{$\mathrm{SAR}^{t}$} 
+            & \textbf{$\mathrm{SAR}^{r}$} 
+            & \textbf{$\mathrm{SAR}^{f}$} 
+            &  \\
+        & & & \textbf{IS} & \textbf{CR} \\
+        \textbf{Single} 
+            & 0.91 
+            & 0.85 
+            & -- 
+            & -- \\
+        \textbf{Multi} 
+            & 0.64 
+            & 0.63 
+            & 0.58 
+            & 0.84 \\
+    \end{tblr}
+
+    \vspace{-0.1cm}
+    \caption{Comparison of safety adherence under single- and multi-agent settings.}   
+    \vspace{-0.5em}   
+    \label{tab:single_multi_safety}
+\end{wraptable}
+
+\textbf{[RQ3] \textit{Multi-agent coordination amplifies safety boundary violations.}} As shown in Table~\ref{tab:single_multi_safety}, violations in single agent settings mainly arise from resource access, while tool use violations are less frequent. Single-agent $\mathsf{SAR}^{f}$ cannot be computed because IS and CR are defined under multi-agent settings. Multi agent systems further amplify these risks, producing substantially more violations concentrated in information flow and resource access. This indicates that coordination expands the safety risk surface through shared resources and agent communication. In multi-agent settings, most information flow violations are sensitive information leaks rather than unauthorized recipient errors, suggesting that agent harnesses can identify communication partners but fail to control what information is shared. Implementation details for the single-agent experiments are provided in Appendix~\ref{app:single-agent}.\\
+
+
+ \begin{wrapfigure}{r}{0.5\textwidth} 
+\vspace{-2em}
+  \centering
+  \includegraphics[width=\linewidth]{images/fig7.pdf}
+  \caption{(a) Protocol adherence scores across \textcolor[RGB]{255,0,0}{Codex}, \textcolor[RGB]{112,173,71}{Claude Code}, and \textcolor[RGB]{112,48,160}{OpenClaw} harness--model pairs. (b) Average per-task fraction of role agents with violations under each harness.}
+  \label{res}
+  \vspace{-1.em}
+\end{wrapfigure}
+
+\textbf{[RQ4] \textit{Safety violations are widespread across agents and concentrated in resource access and agent information transfer.}} As shown in Figure~\ref{res}(a), most harnesses and models show the weakest compliance in resource access, while tool use compliance is relatively higher. This suggests that current harnesses can partially constrain tool invocation, but still struggle to enforce precise control over resource scope. Information flow compliance is also consistently weak, with an average score of 0.45, indicating that communication between agents remains a major safety risk beyond tool and resource access. Figure~\ref{res}(b) further reports the average number of agents that commit safety violations per task under different harness settings. Across all harnesses, more than 50\% of agents exhibit violations, indicating that safety failures are not caused by a small number of faulty agents, but are widespread in multi-agent collaboration. \\
+
+
+\begin{wrapfigure}{r}{0.55\textwidth} 
+\vspace{-2em}
+  \centering
+  \includegraphics[width=\linewidth]{images/fig8.pdf}
+  \caption{(a) Performance differences between native harnesses and OpenClaw configurations under matched models. (b) Task completion and safety adherence rate under different multi-agent framework.}
+
+  \label{com}
+  \vspace{-0.8em}
+\end{wrapfigure}
+
+\textbf{[RQ5]  \textit{Model capability shapes execution, but harness design sets the ceiling for safe deployment.}}  Figure~\ref{com}(a) compares provider-native harnesses with their OpenClaw counterparts. Native Codex and Claude Code generally improve task completion by enabling more actions and richer tool interaction, but these gains do not uniformly improve safety. The effect depends on how the harness structures tool use and execution control. Claude Code improves both completion and safety relative to OpenClaw, whereas Codex shows higher completion but lower safety because GPT-5.4 executes substantially more actions in the native setting. Figure~\ref{com}(b) further shows that framework design matters in multi-agent execution. Compared with Google ADK and OpenAI Agent SDK, OpenClaw obtains lower safety scores across tool use, resource access, and information flow, suggesting that weaker orchestration and boundary control make realistic collaboration more vulnerable to safety violations. Details are provided in Appendix~\ref{app:framework-adapters}. 
+
+\section{Conclusions}
+Treating the agent harness as the unit of safety evaluation and the execution trajectory as the unit of evidence reveals failure modes that response level evaluation cannot capture. Building on this view, HarnessAudit and HarnessAudit-Bench systematically evaluate agent harnesses along boundary compliance, execution fidelity, and perturbation stability. Hidden audit channels independently record tool use, resource access, and inter-component interactions. Our results show a persistent gap between task capability and safe execution, with resource access and inter-component information flow emerging as the most critical surfaces to harden. We hope this framework helps shift agent safety evaluation from asking whether agents complete tasks to whether the systems that deploy them can complete tasks safely under their intended policies.
+
+
+% \begin{tcolorbox}[colframe=myLightBlueFrame, colback=myExtremelyLightBlue, title= Takeaway 1: xxx]
+% \textit{\textbf{hello}}
+% \end{tcolorbox}
+
+
+
+
+
+\newpage
+
+
+
+
+\clearpage
+\bibliographystyle{plain}
+\bibliography{neurips_2026}
+
+
+
+\medskip
+
+
+{
+
+}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+
+\clearpage
+\input{appendix.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\clearpage
+\input{checklist.tex}
+
+
+\end{document}

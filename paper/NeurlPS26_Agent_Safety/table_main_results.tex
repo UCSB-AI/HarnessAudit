@@ -1,0 +1,725 @@
+% % % % Main results table — sar_final.py
+% % % % Primary: NO-REPEAT PURE PENALTY (series 2)
+% % % % Secondary in parens: RECALL / SAR (series 1)
+
+
+% % % \definecolor{HeaderGray}{gray}{0.9}
+% % % \definecolor{GroupGreen}{HTML}{E8F5E9}
+% % % \definecolor{mySoftBlue}{HTML}{E3F2FD}
+
+
+% % % \setlength{\aboverulesep}{0pt}
+% % % \setlength{\belowrulesep}{0pt}
+% % % \renewcommand{\arraystretch}{1.2} 
+
+
+
+% % % % \begin{table*}[t]
+% % % % \centering
+% % % % \small
+% % % % \setlength{\tabcolsep}{3.8pt}
+% % % % \setlength{\extrarowheight}{1.5pt}
+
+% % % % \caption{Main results across three evaluation layers. \textbf{Layer 1} (Protocol Safety) reports per-channel safety adherence rates: $\mathrm{SAR}^{t}$ (tool), $\mathrm{SAR}^{r}$ (resource-bearing tool), $\mathrm{SAR}^{f}$ (information flow). Each cell shows the severity-weighted no-repeat safety score, with the recall-based score in parentheses. \textbf{Layer 2} reports OGR (Operational Governance Rate) and TCR (Task Completion Rate). \textbf{Layer 3} reports perturbation stability scores: indirect injection (\textbf{Inj}), ambiguous goal (\textbf{Amb}), and robustness test (\textbf{Rob}) where perturbation runs are available. \textbf{SCR} is the safe completion score defined in Section~3.4. Higher is better for all metrics.}
+% % % % \label{tab:main_results}
+
+% % % % \resizebox{\textwidth}{!}{%
+% % % % \begin{tabular}{c ccc cc ccc c} 
+% % % % \toprule
+% % % % \rowcolor{mySoftBlue}
+% % % % & \multicolumn{3}{c}{\textbf{Layer 1 - Protocol Safety}}
+% % % % & \multicolumn{2}{c}{\textbf{Layer 2 - Operational}}
+% % % % & \multicolumn{3}{c}{\textbf{Layer 3 - Stability}}
+% % % % & \\
+% % % % \cmidrule(lr){2-4}\cmidrule(lr){5-6}\cmidrule(lr){7-9}
+% % % % \rowcolor{mySoftBlue}
+% % % % \multirow{-2}{*}{\textbf{Model}} 
+% % % % & $\mathbf{SAR}^{t}$
+% % % % & $\mathbf{SAR}^{r}$
+% % % % & $\mathbf{SAR}^{f}$
+% % % % & $\mathbf{AVS}$
+% % % % & $\mathbf{TCR}$
+% % % % & $\mathbf{Inj.}$
+% % % % & $\mathbf{Amb.}$
+% % % % & $\mathbf{Rob.}$
+% % % % & $\mathbf{Overall}$\\
+% % % % \midrule
+
+% % % % %% ────────────── OpenClaw Group ──────────────
+% % % % \multicolumn{10}{l}{\cellcolor{GroupGreen}\textit{\textbf{OpenClaw}}} \\
+% % % % ChatGPT-5.4       & \sar{0.71}{0.64} & \sar{0.53}{0.63} & \sar{0.66}{0.75} & 0.49 & 0.37 & 0.18 & 0.35 & \textbf{0.67} & 0.29 \\
+% % % % Claude Opus 4.6   & \sar{0.52}{0.68} & \sar{0.25}{0.50} & \sar{0.56}{0.62} & 0.51 & 0.52 & --- & --- & --- & --- \\
+% % % % Claude Sonnet 4.6 & \sar{0.56}{0.63} & \sar{0.29}{0.50} & \sar{0.62}{0.72} & 0.49 & 0.43 & 0.19 & 0.28 & 0.40 & 0.22 \\
+% % % % Gemini 3.1 Pro    & \sar{\textbf{0.93}}{0.80} & \sar{\textbf{0.82}}{0.79} & \sar{0.75}{0.71} & \textbf{0.53} & 0.28 & \textbf{0.22} & \textbf{0.38} & 0.65 & \textbf{0.37} \\
+% % % % GLM 5V Turbo      & \sar{0.73}{0.65} & \sar{0.48}{0.55} & \sar{0.70}{0.76} & 0.47 & 0.37 & 0.19 & 0.30 & 0.42 & 0.29 \\
+% % % % Kimi K2.6         & \sar{0.81}{0.67} & \sar{0.63}{0.57} & \sar{\textbf{0.80}}{0.72} & 0.49 & 0.27 & 0.20 & 0.37 & 0.62 & 0.23 \\
+% % % % Qwen 3.5 Plus     & \sar{0.74}{0.67} & \sar{0.43}{0.50} & \sar{0.66}{0.75} & 0.50 & 0.38 & 0.17 & 0.35 & 0.43 & 0.31 \\
+% % % % \midrule
+
+% % % % %% ────────────── Claude Code Group ──────────────
+% % % % \multicolumn{10}{l}{\cellcolor{mySoftBlue}\textit{\textbf{Claude Code}}} \\
+% % % % Claude Opus 4.6   & \sar{0.56}{0.73} & \sar{0.28}{0.61} & \sar{0.62}{0.75} & 0.51 & \textbf{0.59} & --- & --- & --- & --- \\
+% % % % Claude Sonnet 4.6 & \sar{0.73}{0.82} & \sar{0.40}{0.64} & \sar{0.62}{0.76} & 0.51 & 0.55 & --- & --- & --- & --- \\
+% % % % \midrule
+
+% % % % %% ────────────── Codex Group ──────────────
+% % % % \multicolumn{10}{l}{\cellcolor{myVeryLightYellow}\textit{\textbf{Codex}}} \\
+% % % % ChatGPT-5.4       & \sar{0.49}{0.64} & \sar{0.21}{0.56} & \sar{0.54}{0.68} & 0.48 & 0.52 & --- & --- & --- & --- \\
+% % % % \bottomrule
+% % % % \end{tabular}%
+% % % % }
+% % % % \end{table*}
+
+
+
+
+% % % \begin{table*}[t]
+% % % \centering
+% % % \scriptsize
+% % % \setlength{\tabcolsep}{1.4pt}      % 列间距，越小越紧凑
+% % % \setlength{\extrarowheight}{1.0pt} % 行高微调
+
+% % % \caption{Main results across three evaluation layers.
+% % % \textbf{Layer 1} (Boundary Compliance) reports per-channel safety adherence rates:
+% % % $\mathrm{SAR}^{t}$ (tool), $\mathrm{SAR}^{r}$ (resource-bearing tool),
+% % % $\mathrm{SAR}^{f}$ (information flow), and the layer-level average score.
+% % % \textbf{Layer 2} (Execution Fidelity) reports AVS, TCR, and the layer-level overall score.
+% % % \textbf{Layer 3} (System Stability) reports perturbation stability scores:
+% % % indirect injection (\textbf{Inj}), ambiguous goal (\textbf{Amb}), robustness test
+% % % (\textbf{Rob}), and the layer-level average score.
+% % % \textbf{Overall} reports system-level safe-completion scores at different
+% % % safety thresholds: $\mathrm{S@60}$, $\mathrm{S@70}$, and $\mathrm{S@80}$
+% % % correspond to $\tau=0.60,0.70,0.80$.
+% % % Higher is better for all metrics.}
+% % % \label{tab:main_results}
+
+% % % \resizebox{\textwidth}{!}{%
+% % % \begin{tabular}{@{}c cccc ccc cccc ccc@{}}
+% % % \toprule
+% % % \rowcolor{gray!10}
+% % % & \multicolumn{4}{c}{\textbf{L1 Boundary Compliance}}
+% % % & \multicolumn{3}{c}{\textbf{L2 Execution Fidelity}}
+% % % & \multicolumn{4}{c}{\textbf{L3 System Stability}}
+% % % & \multicolumn{3}{c}{\textbf{Overall}} \\
+% % % \cmidrule(lr){2-5}
+% % % \cmidrule(lr){6-8}
+% % % \cmidrule(lr){9-12}
+% % % \cmidrule(lr){13-15}
+% % % \rowcolor{gray!10}
+% % % \multirow{-2}{*}{\textbf{Model}}
+% % % & $\mathrm{SAR}^{t}$
+% % % & $\mathrm{SAR}^{r}$
+% % % & $\mathrm{SAR}^{f}$
+% % % & \textbf{Avg.}
+% % % & AVS
+% % % & TCR
+% % % & \textbf{Avg.}
+% % % & Inj.
+% % % & Amb.
+% % % & Rob.
+% % % & Avg.
+% % % & S@60
+% % % & S@70
+% % % & S@80 \\
+% % % \midrule
+
+% % % %% ────────────── OpenClaw Group ──────────────
+% % % \multicolumn{15}{l}{\cellcolor{GroupGreen}\textit{\textbf{OpenClaw}}} \\
+% % % ChatGPT-5.4
+% % % & \sar{0.71}{0.64} & \sar{0.53}{0.63} & \sar{0.66}{0.75} & 0.63
+% % % & 0.49 & 0.37 & {}
+% % % & 0.18 & 0.35 & \textbf{0.67} & 0.33
+% % % & 0.30 & 0.21 & 0.12 \\
+
+% % % Claude Opus 4.6
+% % % & \sar{0.52}{0.68} & \sar{0.25}{0.50} & \sar{0.56}{0.62} & 0.44
+% % % & 0.51 & 0.52 & {}
+% % % & 0.17 & 0.22 & 0.30 & 0.23
+% % % & 0.19 & 0.12 & 0.05 \\
+
+% % % Claude Sonnet 4.6
+% % % & \sar{0.56}{0.63} & \sar{0.29}{0.50} & \sar{0.62}{0.72} & 0.49
+% % % & 0.49 & 0.43 & {}
+% % % & 0.19 & 0.28 & 0.40 & 0.26
+% % % & 0.19 & 0.11 & 0.07 \\
+
+% % % Gemini 3.1 Pro
+% % % & \sar{\textbf{0.93}}{0.80} & \sar{\textbf{0.82}}{0.79} & \sar{0.75}{0.71} & \textbf{0.83}
+% % % & \textbf{0.53} & 0.28 & {}
+% % % & \textbf{0.22} & \textbf{0.38} & 0.65 & 0.34
+% % % & 0.28 & \textbf{0.27} & \textbf{0.23} \\
+
+% % % GLM 5V Turbo
+% % % & \sar{0.73}{0.65} & \sar{0.48}{0.55} & \sar{0.70}{0.76} & 0.64
+% % % & 0.47 & 0.37 & {}
+% % % & 0.19 & 0.30 & 0.42 & 0.28
+% % % & 0.29 & 0.18 & 0.08 \\
+
+% % % Kimi K2.6
+% % % & \sar{0.81}{0.67} & \sar{0.63}{0.57} & \sar{\textbf{0.80}}{0.72} & 0.75
+% % % & 0.49 & 0.27 & {}
+% % % & 0.20 & 0.37 & 0.62 & \textbf{0.36}
+% % % & 0.23 & 0.18 & 0.13 \\
+
+% % % Qwen 3.5 Plus
+% % % & \sar{0.74}{0.67} & \sar{0.43}{0.50} & \sar{0.66}{0.75} & 0.61
+% % % & 0.50 & 0.38 & {}
+% % % & 0.17 & 0.35 & 0.43 & 0.28
+% % % & 0.25 & 0.15 & 0.08 \\
+% % % \midrule
+
+% % % %% ────────────── Claude Code Group ──────────────
+% % % \multicolumn{15}{l}{\cellcolor{EvoPurple}\textit{\textbf{Claude Code}}} \\
+% % % Claude Opus 4.6
+% % % & \sar{0.56}{0.73} & \sar{0.28}{0.61} & \sar{0.62}{0.75} & 0.49
+% % % & 0.51 & \textbf{0.59} & {}
+% % % & 0.20 & 0.26 & 0.38 & 0.26
+% % % & 0.30 & 0.16 & 0.09 \\
+
+% % % Claude Sonnet 4.6
+% % % & \sar{0.73}{0.82} & \sar{0.40}{0.64} & \sar{0.62}{0.76} & 0.58
+% % % & 0.51 & 0.55 & {}
+% % % & 0.22 & 0.33 & 0.47 & 0.30
+% % % & \textbf{0.38} & 0.25 & 0.16 \\
+% % % \midrule
+
+% % % %% ────────────── Codex Group ──────────────
+% % % \multicolumn{15}{l}{\cellcolor{myVeryLightYellow}\textit{\textbf{Codex}}} \\
+% % % ChatGPT-5.4
+% % % & \sar{0.49}{0.64} & \sar{0.21}{0.56} & \sar{0.54}{0.68} & 0.41
+% % % & 0.48 & 0.52 & {}
+% % % & 0.15 & 0.24 & 0.23 & 0.19
+% % % & 0.20 & 0.09 & 0.05 \\
+% % % \bottomrule
+% % % \end{tabular}%
+% % % }
+% % % \end{table*}
+
+
+% % \begin{table*}[t]
+% % \centering
+% % \scriptsize
+% % \setlength{\tabcolsep}{1.4pt}
+% % \setlength{\extrarowheight}{1.0pt}
+% % \renewcommand{\arraystretch}{1.08}
+
+% % \caption{Main results across three evaluation layers.
+% % \textbf{Layer 1} (Boundary Compliance) reports per-channel safety adherence rates:
+% % $\mathrm{SAR}^{t}$ (tool), $\mathrm{SAR}^{r}$ (resource-bearing tool),
+% % $\mathrm{SAR}^{f}$ (information flow), and the layer-level average score.
+% % \textbf{Layer 2} (Execution Fidelity) reports AVS, TCR, and the layer-level overall score.
+% % \textbf{Layer 3} (System Stability) reports perturbation stability scores:
+% % indirect injection (\textbf{Inj}), ambiguous goal (\textbf{Amb}), robustness test
+% % (\textbf{Rob}), and the layer-level average score.
+% % \textbf{Overall} reports system-level safe-completion scores at different
+% % safety thresholds: $\mathrm{S@60}$, $\mathrm{S@70}$, and $\mathrm{S@80}$
+% % correspond to $\tau=0.60,0.70,0.80$.
+% % \textbf{SCR} reports the overall safe-completion rate.
+% % Higher is better for all metrics.}
+% % \label{tab:main_results}
+
+% % \resizebox{\textwidth}{!}{%
+% % \begin{tabular}{@{}c cccc ccc cccc ccc c@{}}
+% % \toprule
+
+% % \cellcolor{gray!10}\multirow{2}{*}{\textbf{Model}}
+% % & \multicolumn{4}{>{\columncolor{gray!10}}c}{\textbf{L1 Boundary Compliance}}
+% % & \multicolumn{3}{>{\columncolor{gray!10}}c}{\textbf{L2 Execution Fidelity}}
+% % & \multicolumn{4}{>{\columncolor{gray!10}}c}{\textbf{L3 System Stability}}
+% % & \multicolumn{3}{>{\columncolor{gray!10}}c}{\textbf{Overall}}
+% % & \cellcolor{gray!10}\multirow{2}{*}{\textbf{SCR}} \\
+% % \cmidrule(lr){2-5}
+% % \cmidrule(lr){6-8}
+% % \cmidrule(lr){9-12}
+% % \cmidrule(lr){13-15}
+
+% % & \cellcolor{gray!10}$\mathrm{SAR}^{t}$
+% % & \cellcolor{gray!10}$\mathrm{SAR}^{r}$
+% % & \cellcolor{gray!10}$\mathrm{SAR}^{f}$
+% % & \cellcolor{gray!10}\textbf{Avg.}
+% % & \cellcolor{gray!10}AVS
+% % & \cellcolor{gray!10}TCR
+% % & \cellcolor{gray!10}\textbf{Avg.}
+% % & \cellcolor{gray!10}Inj.
+% % & \cellcolor{gray!10}Amb.
+% % & \cellcolor{gray!10}Rob.
+% % & \cellcolor{gray!10}Avg.
+% % & \cellcolor{gray!10}S@60
+% % & \cellcolor{gray!10}S@70
+% % & \cellcolor{gray!10}S@80
+% % & \\
+% % \midrule
+
+% % %% ────────────── OpenClaw Group ──────────────
+% % \multicolumn{16}{>{\columncolor{GroupGreen}}l}{\textit{\textbf{OpenClaw}}} \\
+% % ChatGPT-5.4
+% % & \sar{0.71}{0.64} & \sar{0.53}{0.63} & \sar{0.66}{0.75} & 0.63
+% % & 0.49 & 0.37 & {}
+% % & 0.18 & 0.35 & \textbf{0.67} & 0.33
+% % & 0.30 & 0.21 & 0.12
+% % & -- \\
+
+% % Claude Opus 4.6
+% % & \sar{0.52}{0.68} & \sar{0.25}{0.50} & \sar{0.56}{0.62} & 0.44
+% % & 0.51 & 0.52 & {}
+% % & 0.17 & 0.22 & 0.30 & 0.23
+% % & 0.19 & 0.12 & 0.05
+% % & -- \\
+
+% % Claude Sonnet 4.6
+% % & \sar{0.56}{0.63} & \sar{0.29}{0.50} & \sar{0.62}{0.72} & 0.49
+% % & 0.49 & 0.43 & {}
+% % & 0.19 & 0.28 & 0.40 & 0.26
+% % & 0.19 & 0.11 & 0.07
+% % & -- \\
+
+% % Gemini 3.1 Pro
+% % & \sar{\textbf{0.93}}{0.80} & \sar{\textbf{0.82}}{0.79} & \sar{0.75}{0.71} & \textbf{0.83}
+% % & \textbf{0.53} & 0.28 & {}
+% % & \textbf{0.22} & \textbf{0.38} & 0.65 & 0.34
+% % & 0.28 & \textbf{0.27} & \textbf{0.23}
+% % & -- \\
+
+% % GLM 5V Turbo
+% % & \sar{0.73}{0.65} & \sar{0.48}{0.55} & \sar{0.70}{0.76} & 0.64
+% % & 0.47 & 0.37 & {}
+% % & 0.19 & 0.30 & 0.42 & 0.28
+% % & 0.29 & 0.18 & 0.08
+% % & -- \\
+
+% % Kimi K2.6
+% % & \sar{0.81}{0.67} & \sar{0.63}{0.57} & \sar{\textbf{0.80}}{0.72} & 0.75
+% % & 0.49 & 0.27 & {}
+% % & 0.20 & 0.37 & 0.62 & \textbf{0.36}
+% % & 0.23 & 0.18 & 0.13
+% % & -- \\
+
+% % Qwen 3.5 Plus
+% % & \sar{0.74}{0.67} & \sar{0.43}{0.50} & \sar{0.66}{0.75} & 0.61
+% % & 0.50 & 0.38 & {}
+% % & 0.17 & 0.35 & 0.43 & 0.28
+% % & 0.25 & 0.15 & 0.08
+% % & -- \\
+% % \midrule
+
+% % %% ────────────── Claude Code Group ──────────────
+% % \multicolumn{16}{>{\columncolor{EvoPurple}}l}{\textit{\textbf{Claude Code}}} \\
+% % Claude Opus 4.6
+% % & \sar{0.56}{0.73} & \sar{0.28}{0.61} & \sar{0.62}{0.75} & 0.49
+% % & 0.51 & \textbf{0.59} & {}
+% % & 0.20 & 0.26 & 0.38 & 0.26
+% % & 0.30 & 0.16 & 0.09
+% % & -- \\
+
+% % Claude Sonnet 4.6
+% % & \sar{0.73}{0.82} & \sar{0.40}{0.64} & \sar{0.62}{0.76} & 0.58
+% % & 0.51 & 0.55 & {}
+% % & 0.22 & 0.33 & 0.47 & 0.30
+% % & \textbf{0.38} & 0.25 & 0.16
+% % & -- \\
+% % \midrule
+
+% % %% ────────────── Codex Group ──────────────
+% % \multicolumn{16}{>{\columncolor{myVeryLightYellow}}l}{\textit{\textbf{Codex}}} \\
+% % ChatGPT-5.4
+% % & \sar{0.49}{0.64} & \sar{0.21}{0.56} & \sar{0.54}{0.68} & 0.41
+% % & 0.48 & 0.52 & {}
+% % & 0.15 & 0.24 & 0.23 & 0.19
+% % & 0.20 & 0.09 & 0.05
+% % & -- \\
+% % \bottomrule
+% % \end{tabular}%
+% % }
+% % \end{table*}
+
+
+
+% \begin{table*}[t]
+% \centering
+% \scriptsize
+% \setlength{\tabcolsep}{1.4pt}
+% \setlength{\extrarowheight}{1.0pt}
+% \renewcommand{\arraystretch}{1.08}
+
+% \caption{Main results across three evaluation layers.
+% \textbf{Layer 1} (Boundary Compliance) reports per-channel safety adherence rates:
+% $\mathrm{SAR}^{t}$ (tool), $\mathrm{SAR}^{r}$ (resource-bearing tool),
+% $\mathrm{SAR}^{f}$ (information flow), and the layer-level average score.
+% \textbf{Layer 2} (Execution Fidelity) reports AVS, TCR, and the layer-level overall score.
+% \textbf{Layer 3} (System Stability) reports perturbation stability scores:
+% indirect injection (\textbf{Inj}), ambiguous goal (\textbf{Amb}), robustness test
+% (\textbf{Rob}), and the layer-level average score.
+% \textbf{Overall} reports system-level safe-completion scores at different
+% safety thresholds: $\mathrm{S@60}$, $\mathrm{S@70}$, and $\mathrm{S@80}$
+% correspond to $\tau=0.60,0.70,0.80$.
+% \textbf{SCR} reports the overall safe-completion rate.
+% Higher is better for all metrics.}
+% \label{tab:main_results}
+
+% \resizebox{\textwidth}{!}{%
+% \begin{tabular}{@{}c cccc ccc cccc ccc c@{}}
+
+% \specialrule{\heavyrulewidth}{0pt}{0pt}
+
+% \rowcolor{gray!10}
+% & \multicolumn{4}{c}{\textbf{L1 Boundary Compliance}}
+% & \multicolumn{3}{c}{\textbf{L2 Execution Fidelity}}
+% & \multicolumn{4}{c}{\textbf{L3 System Stability}}
+% & \multicolumn{3}{c}{\textbf{Trade-off}}
+% & \\[-0.15em]
+
+% \rowcolor{gray!10}
+% \multirow[c]{-2}{*}{\textbf{Model}}
+% & $\mathrm{SAR}^{t}$
+% & $\mathrm{SAR}^{r}$
+% & $\mathrm{SAR}^{f}$
+% & \textbf{Avg.}
+% & AVS
+% & TCR
+% & \textbf{Avg.}
+% & Inj.
+% & Amb.
+% & Rob.
+% & \textbf{Avg.}
+% & S@60
+% & S@70
+% & S@80
+% & \multirow[c]{-2}{*}{\textbf{Overall}} \\
+
+% \specialrule{\lightrulewidth}{0pt}{0pt}
+
+% %% ────────────── OpenClaw Group ──────────────
+% \rowcolor{GroupGreen}
+% \multicolumn{16}{l}{\textit{\textbf{OpenClaw}}} \\
+
+% ChatGPT-5.4
+% & \sar{0.71}{0.64} & \sar{0.53}{0.63} & \sar{0.66}{0.75} & 0.63
+% & 0.49 & 0.37 & {}
+% & 0.18 & 0.35 & \textbf{0.67} & 0.33
+% & 0.30 & 0.21 & 0.12
+% & -- \\
+
+% Claude Opus 4.6
+% & \sar{0.52}{0.68} & \sar{0.25}{0.50} & \sar{0.56}{0.62} & 0.44
+% & 0.51 & 0.52 & {}
+% & 0.17 & 0.22 & 0.30 & 0.23
+% & 0.19 & 0.12 & 0.05
+% & -- \\
+
+% Claude Sonnet 4.6
+% & \sar{0.56}{0.63} & \sar{0.29}{0.50} & \sar{0.62}{0.72} & 0.49
+% & 0.49 & 0.43 & {}
+% & 0.19 & 0.28 & 0.40 & 0.26
+% & 0.19 & 0.11 & 0.07
+% & -- \\
+
+% Gemini 3.1 Pro
+% & \sar{\textbf{0.93}}{0.80} & \sar{\textbf{0.82}}{0.79} & \sar{0.75}{0.71} & \textbf{0.83}
+% & \textbf{0.53} & 0.28 & {}
+% & \textbf{0.22} & \textbf{0.38} & 0.65 & 0.34
+% & 0.28 & \textbf{0.27} & \textbf{0.23}
+% & -- \\
+
+% GLM 5V Turbo
+% & \sar{0.73}{0.65} & \sar{0.48}{0.55} & \sar{0.70}{0.76} & 0.64
+% & 0.47 & 0.37 & {}
+% & 0.19 & 0.30 & 0.42 & 0.28
+% & 0.29 & 0.18 & 0.08
+% & -- \\
+
+% Kimi K2.6
+% & \sar{0.81}{0.67} & \sar{0.63}{0.57} & \sar{\textbf{0.80}}{0.72} & 0.75
+% & 0.49 & 0.27 & {}
+% & 0.20 & 0.37 & 0.62 & \textbf{0.36}
+% & 0.23 & 0.18 & 0.13
+% & -- \\
+
+% Qwen 3.5 Plus
+% & \sar{0.74}{0.67} & \sar{0.43}{0.50} & \sar{0.66}{0.75} & 0.61
+% & 0.50 & 0.38 & {}
+% & 0.17 & 0.35 & 0.43 & 0.28
+% & 0.25 & 0.15 & 0.08
+% & -- \\
+
+% \midrule
+
+% %% ────────────── Claude Code Group ──────────────
+% \rowcolor{EvoPurple}
+% \multicolumn{16}{l}{\textit{\textbf{Claude Code}}} \\
+
+% Claude Opus 4.6
+% & \sar{0.56}{0.73} & \sar{0.28}{0.61} & \sar{0.62}{0.75} & 0.49
+% & 0.51 & \textbf{0.59} & {}
+% & 0.20 & 0.26 & 0.38 & 0.26
+% & 0.30 & 0.16 & 0.09
+% & -- \\
+
+% Claude Sonnet 4.6
+% & \sar{0.73}{0.82} & \sar{0.40}{0.64} & \sar{0.62}{0.76} & 0.58
+% & 0.51 & 0.55 & {}
+% & 0.22 & 0.33 & 0.47 & 0.30
+% & \textbf{0.38} & 0.25 & 0.16
+% & -- \\
+
+% \midrule
+
+% %% ────────────── Codex Group ──────────────
+% \rowcolor{myVeryLightYellow}
+% \multicolumn{16}{l}{\textit{\textbf{Codex}}} \\
+
+% ChatGPT-5.4
+% & \sar{0.49}{0.64} & \sar{0.21}{0.56} & \sar{0.54}{0.68} & 0.41
+% & 0.48 & 0.52 & {}
+% & 0.15 & 0.24 & 0.23 & 0.19
+% & 0.20 & 0.09 & 0.05
+% & -- \\
+
+% \bottomrule
+% \end{tabular}%
+% }
+% \end{table*}
+
+
+\begin{table*}[t]
+    \centering
+    \scriptsize
+    \setlength{\tabcolsep}{1.8pt}
+    \setlength{\extrarowheight}{1.0pt}
+    \renewcommand{\arraystretch}{1.10}
+    
+    % visible vertical separator for body rows
+    \newcommand{\vsep}{\rule[-0.30ex]{0.35pt}{2.2ex}}
+    
+    % invisible separator for header rows
+    \newcommand{\headgap}{\rule[-0.30ex]{0pt}{2.2ex}}
+    
+    \caption{ 
+    \textbf{L1} reports per channel safety adherence rates:
+    $\mathrm{SAR}^{t}$ (tool), $\mathrm{SAR}^{r}$ (resource),
+    $\mathrm{SAR}^{f}$ (information flow).
+    \textbf{L2} reports  $\mathrm{AVS}$, $\mathrm{TCR}$.
+    \textbf{L3} reports perturbation stability scores:
+    indirect injection (Inj.), ambiguous goal (Amb.), robustness test
+    (Rob).
+    \textbf{Trade-off} reports the safety retained under different task completion thresholds, measuring how much safety adherence rates a harness preserves when achieving at least $\tau$ task completion. $\mathrm{S@T20}$, $\mathrm{S@T40}$, and $\mathrm{S@T60}$ correspond to $\tau=0.20,0.40,0.60$, respectively.
+    \textbf{Overall} reports the harness safety score defined in
+    Eq.~\ref{eq:task_score}.
+    Higher is better for all metrics.}
+    \scriptsize
+    \label{tab:main_results}
+    
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{@{}l c cccc c ccc c cccc c ccc c c@{}}
+    \hline
+    
+    % ---------- Header row 1: no vertical separators ----------
+    \rowcolor{gray!10}
+    \multicolumn{1}{@{}c}{\rule[-0.5ex]{0pt}{3.2ex}}
+    & 
+    & \multicolumn{4}{c}{\textbf{L1 Boundary Compliance}}
+    &
+    & \multicolumn{3}{c}{\textbf{L2 Execution Fidelity}}
+    &
+    & \multicolumn{4}{c}{\textbf{L3 System Stability}}
+    &
+    & \multicolumn{3}{c}{\textbf{Trade-off}}
+    &
+    & \multicolumn{1}{c@{}}{} \\[-0.15em]
+    
+    % ---------- Header row 2: still no visible vertical separators ----------
+    \rowcolor{gray!10}
+    \multirow[c]{-2}{*}{\cellcolor{gray!10}\textbf{Model}}
+    & \headgap
+    & $\mathrm{SAR}^{t}$
+    & $\mathrm{SAR}^{r}$
+    & $\mathrm{SAR}^{f}$
+    & \textbf{$\mathrm{Avg.}$}
+    & \headgap
+    & $\mathrm{AVS}$
+    & $\mathrm{TCR}$
+    & \textbf{$\mathrm{Avg.}$}
+    & \headgap
+    & $\mathrm{Inj.}$
+    & $\mathrm{Amb.}$
+    & $\mathrm{Rob.}$
+    & \textbf{$\mathrm{Avg.}$}
+    & \headgap
+    & $\mathrm{S@T20}$
+    & $\mathrm{S@T40}$
+    & $\mathrm{S@T60}$
+    & \headgap
+    & \multirow[c]{-2}{*}{\cellcolor{gray!10}\textbf{Overall}} \\
+    
+    \hline
+    
+    %% ────────────── OpenClaw Group ──────────────
+    \rowcolor{GroupGreen}
+    \textit{\textbf{OpenClaw}}
+    & \vsep
+    & \multicolumn{4}{c}{}
+    & \vsep
+    & \multicolumn{3}{c}{}
+    & \vsep
+    & \multicolumn{4}{c}{}
+    & \vsep
+    & \multicolumn{3}{c}{}
+    & \vsep
+    & \\
+    
+    ChatGPT-5.4
+    & \vsep
+    & 0.61 & 0.43 & 0.51 & 0.52
+    & \vsep
+    & 0.49 & 0.51 & 0.50
+    & \vsep
+    & 0.18 & 0.35 & \textbf{0.67} & 0.33
+    & \vsep
+    & 0.62 & 0.48 & 0.31
+    & \vsep
+    & 0.25 \\
+    
+    Claude Opus 4.6
+    & \vsep
+    & 0.38 & 0.16 & 0.35 & 0.30
+    & \vsep
+    & 0.51 & 0.69 & 0.60
+    & \vsep
+    & 0.17 & 0.22 & 0.30 & 0.23
+    & \vsep
+    & 0.53 & 0.41 & 0.34
+    & \vsep
+    & 0.18 \\
+    
+    Claude Sonnet 4.6
+    & \vsep
+    & 0.47 & 0.22 & 0.46 & 0.38
+    & \vsep
+    & 0.49 & 0.57 & 0.53
+    & \vsep
+    & 0.19 & 0.28 & 0.40 & 0.26
+    & \vsep
+    & 0.53 & 0.39 & 0.25
+    & \vsep
+    & 0.19 \\
+    
+    Gemini 3.1 Pro
+    & \vsep
+    & \textbf{0.74} & \textbf{0.57} & 0.66 & \textbf{0.66}
+    & \vsep
+    & \textbf{0.53} & 0.50 & 0.52
+    & \vsep
+    & \textbf{0.22} & \textbf{0.38} & 0.65 & 0.34
+    & \vsep
+    & \textbf{0.70} & 0.40 & 0.17
+    & \vsep
+    & \textbf{0.32} \\
+    
+    GLM 5V Turbo
+    & \vsep
+    & 0.63 & 0.34 & 0.55 & 0.51
+    & \vsep
+    & 0.47 & 0.46 & 0.47
+    & \vsep
+    & 0.19 & 0.30 & 0.42 & 0.28
+    & \vsep
+    & 0.54 & 0.40 & 0.21
+    & \vsep
+    & 0.22 \\
+    
+    Kimi K2.6
+    & \vsep
+    & 0.73 & 0.51 & \textbf{0.70} & 0.65
+    & \vsep
+    & 0.49 & 0.43 & 0.46
+    & \vsep
+    & 0.20 & 0.37 & 0.62 & \textbf{0.36}
+    & \vsep
+    & 0.57 & 0.29 & 0.13
+    & \vsep
+    & 0.28 \\
+    
+    Qwen 3.5 Plus
+    & \vsep
+    & 0.66 & 0.32 & 0.48 & 0.49
+    & \vsep
+    & 0.50 & 0.49 & 0.50
+    & \vsep
+    & 0.17 & 0.35 & 0.43 & 0.28
+    & \vsep
+    & 0.56 & 0.38 & 0.19
+    & \vsep
+    & 0.23 \\
+    
+    \hline
+    
+    %% ────────────── Claude Code Group ──────────────
+    \rowcolor{EvoPurple}
+    \textit{\textbf{Claude Code}}
+    & \vsep
+    & \multicolumn{4}{c}{}
+    & \vsep
+    & \multicolumn{3}{c}{}
+    & \vsep
+    & \multicolumn{4}{c}{}
+    & \vsep
+    & \multicolumn{3}{c}{}
+    & \vsep
+    & \\
+    
+    Claude Opus 4.6
+    & \vsep
+    & 0.47 & 0.20 & 0.45 & 0.37
+    & \vsep
+    & 0.51 & \textbf{0.71} & \textbf{0.61}
+    & \vsep
+    & 0.20 & 0.26 & 0.38 & 0.26
+    & \vsep
+    & 0.58 & 0.53 & \textbf{0.44}
+    & \vsep
+    & 0.23 \\
+    
+    Claude Sonnet 4.6
+    & \vsep
+    & 0.65 & 0.31 & 0.46 & 0.47
+    & \vsep
+    & 0.51 & 0.66 & 0.59
+    & \vsep
+    & 0.22 & 0.33 & 0.47 & 0.30
+    & \vsep
+    & 0.65 & \textbf{0.59} & \textbf{0.44}
+    & \vsep
+    & 0.27 \\
+    
+    \hline
+    
+    %% ────────────── Codex Group ──────────────
+    \rowcolor{myVeryLightYellow}
+    \textit{\textbf{Codex}}
+    & \vsep
+    & \multicolumn{4}{c}{}
+    & \vsep
+    & \multicolumn{3}{c}{}
+    & \vsep
+    & \multicolumn{4}{c}{}
+    & \vsep
+    & \multicolumn{3}{c}{}
+    & \vsep
+    & \\
+    
+    ChatGPT-5.4
+    & \vsep
+    & 0.38 & 0.12 & 0.35 & 0.28
+    & \vsep
+    & 0.48 & 0.69 & 0.59
+    & \vsep
+    & 0.15 & 0.24 & 0.23 & 0.19
+    & \vsep
+    & 0.50 & 0.45 & 0.35
+    & \vsep
+    & 0.16 \\
+    
+    \hline
+    \end{tabular}%
+    }
+    \vspace{-0.5cm}
+    \end{table*}

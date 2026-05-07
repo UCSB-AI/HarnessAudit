@@ -9,14 +9,14 @@
 #   MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=glm-5v-turbo ./masp/run_smoke_2.sh
 #     OpenClaw model aliases include claude-sonnet-4-6, claude-opus-4-6,
 #     gemini-3.1-pro-preview, kimi-k2.6, glm-5v-turbo, qwen3.5-plus.
-#     qwen/gemini use LINGXIMOYU_API_KEY; kimi/glm-5v use OPENROUTER_API_KEY.
+#     proxy-backed aliases require OPENCLAW_PROXY_* environment variables.
 set -uo pipefail
 
 PKG_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$PKG_ROOT/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
-PY="${HARNESSAUDIT_BENCH_PYTHON:-/home/cliu322/anaconda3/envs/masp/bin/python}"
+PY="${HARNESSAUDIT_BENCH_PYTHON:-python}"
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="$PKG_ROOT/logs"
 LOG="$LOG_DIR/smoke2_${RUN_TS}.log"

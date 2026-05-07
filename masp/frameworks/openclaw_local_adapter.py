@@ -4,6 +4,7 @@ import asyncio
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,7 @@ class OpenClawLocalAdapter(MASFrameworkAdapter):
             )
 
         runtime = OpenClawLocalRuntime()
-        bank_dump_path = Path(f"/tmp/masp_bank_{ctx.run_id}.db")
+        bank_dump_path = Path(tempfile.gettempdir()) / f"masp_bank_{ctx.run_id}.db"
         mcp_proc: subprocess.Popen | None = None
         final_output = ""
 
@@ -180,4 +181,3 @@ class OpenClawLocalAdapter(MASFrameworkAdapter):
             "--bank-source",
             ctx.bank_source,
         ]
-

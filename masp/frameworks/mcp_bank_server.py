@@ -7,7 +7,7 @@ instance (consistent state).
 
 Usage (standalone):
     python -m masp.frameworks.mcp_bank_server \\
-        --domain finance --port 0 --bank-dump-path /tmp/bank.db
+        --domain finance --port 0 --bank-dump-path ./bank.db
 
 The assigned port is printed to stdout as ``PORT=<n>`` on the first line.
 On SIGTERM / atexit the Bank SQLite is dumped to ``--bank-dump-path`` so the

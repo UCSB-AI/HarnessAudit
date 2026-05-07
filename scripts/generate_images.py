@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Generate image assets for multimodal tasks using Gemini (via suxi.ai).
+"""Generate image assets for multimodal tasks using an OpenAI-compatible API.
 
-Wraps run_banana.py's generation logic. Reads asset specs from task YAMLs
-and stage_5_assets.json to get generation prompts.
+Reads asset specs from task YAMLs and stage_5_assets.json to get generation
+prompts.
 
 Usage:
     python scripts/generate_images.py                      # All domains
     python scripts/generate_images.py --domain finance      # Single domain
     python scripts/generate_images.py --task fin-t13        # Single task
     python scripts/generate_images.py --dry-run             # List without generating
-    python scripts/generate_images.py --model gemini-2.5-flash-image  # Different model
+    python scripts/generate_images.py --model image-generation-model  # Different model
 
-Requires: SUXI_API_KEY environment variable (or BANANA_API_KEY).
+Requires IMAGE_API_KEY and IMAGE_API_BASE_URL unless --dry-run is used.
 """
 
 from __future__ import annotations
@@ -30,15 +30,20 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TASKS_ROOT = PROJECT_ROOT / "masp" / "tasks"
 
-BASE_URL = "https://new.suxi.ai/v1"
-DEFAULT_MODEL = "gemini-3-pro-image-preview"
+DEFAULT_MODEL = "image-generation-model"
 RETRY_COUNT = 3
 RETRY_DELAY = 5
 
 
-def _call_gemini(prompt: str, model: str, api_key: str, timeout: int = 300) -> dict:
-    """Call Gemini image generation API."""
-    url = f"{BASE_URL}/chat/completions"
+def _call_image_api(
+    prompt: str,
+    model: str,
+    api_key: str,
+    base_url: str,
+    timeout: int = 300,
+) -> dict:
+    """Call an OpenAI-compatible image-generation endpoint."""
+    url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -54,7 +59,7 @@ def _call_gemini(prompt: str, model: str, api_key: str, timeout: int = 300) -> d
 
 
 def _extract_image_data(data: dict) -> bytes | None:
-    """Extract first image from Gemini response as bytes."""
+    """Extract first image from an API response as bytes."""
     for choice in data.get("choices", []):
         if not isinstance(choice, dict):
             continue
@@ -96,13 +101,14 @@ def generate_image(
     out_path: Path,
     model: str,
     api_key: str,
+    base_url: str,
 ) -> bool:
     """Generate an image and save to out_path. Returns True on success."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     for attempt in range(1, RETRY_COUNT + 1):
         try:
-            data = _call_gemini(prompt, model, api_key)
+            data = _call_image_api(prompt, model, api_key, base_url)
             img_bytes = _extract_image_data(data)
             if img_bytes:
                 out_path.write_bytes(img_bytes)
@@ -199,14 +205,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate image assets for HarnessAudit-Bench")
     parser.add_argument("--domain", help="Only process this domain")
     parser.add_argument("--task", help="Only process this task ID")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Gemini model (default: {DEFAULT_MODEL})")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Model name (default: {DEFAULT_MODEL})")
     parser.add_argument("--dry-run", action="store_true", help="List images without generating")
     parser.add_argument("--delay", type=float, default=2.0, help="Delay between API calls (seconds)")
     args = parser.parse_args()
 
-    api_key = os.getenv("SUXI_API_KEY") or os.getenv("BANANA_API_KEY")
-    if not api_key and not args.dry_run:
-        print("ERROR: Set SUXI_API_KEY or BANANA_API_KEY environment variable")
+    api_key = os.getenv("IMAGE_API_KEY")
+    base_url = os.getenv("IMAGE_API_BASE_URL", "").strip()
+    if (not api_key or not base_url) and not args.dry_run:
+        print("ERROR: Set IMAGE_API_KEY and IMAGE_API_BASE_URL environment variables")
         sys.exit(1)
 
     assets = find_image_assets()
@@ -247,7 +254,7 @@ def main() -> None:
 
         print(f"  [{i}/{total}] {tid}: {fname}")
 
-        ok = generate_image(prompt, out, args.model, api_key)
+        ok = generate_image(prompt, out, args.model, api_key, base_url)
         if ok:
             size_kb = out.stat().st_size / 1024
             generated += 1

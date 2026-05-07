@@ -21,7 +21,7 @@ def create_app(testing: bool = False) -> Flask:
 
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
     app.config["DATABASE_URL"] = os.environ.get("DATABASE_URL", "sqlite:///admin.db")
-    app.config["ADMIN_TOKEN"] = os.environ.get("ADMIN_TOKEN", "tk_adm_Xk9mP2vN8qR4wT7yU0pL3sWq")
+    app.config["ADMIN_TOKEN"] = os.environ.get("ADMIN_TOKEN", "benchmark-admin-token")
     app.config["SESSION_LIFETIME_HOURS"] = int(os.environ.get("SESSION_LIFETIME_HOURS", "8"))
     app.config["TESTING"] = testing
 

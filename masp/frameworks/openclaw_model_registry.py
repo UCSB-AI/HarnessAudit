@@ -6,8 +6,6 @@ import os
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-LINGXIMOYU_DEFAULT_BASE_URL = "https://api.lingximoyu.com/v1"
-OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
@@ -20,7 +18,7 @@ class OpenClawModelResolution:
     provider_config: dict[str, Any] | None = None
 
 
-LINGXIMOYU_MODELS: tuple[dict[str, Any], ...] = (
+PROXY_A_MODELS: tuple[dict[str, Any], ...] = (
     {
         "id": "claude-sonnet-4-6",
         "name": "Claude Sonnet 4.6",
@@ -43,7 +41,7 @@ LINGXIMOYU_MODELS: tuple[dict[str, Any], ...] = (
     },
 )
 
-OPENROUTER_MODELS: tuple[dict[str, Any], ...] = (
+PROXY_B_MODELS: tuple[dict[str, Any], ...] = (
     {
         "id": "moonshotai/kimi-k2.6",
         "name": "MoonshotAI: Kimi K2.6",
@@ -60,23 +58,23 @@ OPENROUTER_MODELS: tuple[dict[str, Any], ...] = (
     },
 )
 
-_LINGXIMOYU_MODEL_BY_ID = {str(model["id"]): model for model in LINGXIMOYU_MODELS}
-_OPENROUTER_MODEL_BY_ID = {str(model["id"]): model for model in OPENROUTER_MODELS}
-_LINGXIMOYU_BACKED_PROVIDERS = {"lingximoyu"}
-_OPENROUTER_BACKED_PROVIDERS = {"openrouter"}
+_PROXY_A_MODEL_BY_ID = {str(model["id"]): model for model in PROXY_A_MODELS}
+_PROXY_B_MODEL_BY_ID = {str(model["id"]): model for model in PROXY_B_MODELS}
+_PROXY_A_BACKED_PROVIDERS = {"proxy_a"}
+_PROXY_B_BACKED_PROVIDERS = {"proxy_b"}
 
 _ALIASES: dict[str, tuple[str, str]] = {
     "claude-sonnet-4-6": ("anthropic", "claude-sonnet-4-6"),
     "claude-opus-4-6": ("anthropic", "claude-opus-4-6"),
-    "lingxi-claude-sonnet-4-6": ("lingximoyu", "claude-sonnet-4-6"),
-    "lingxi-claude-opus-4-6": ("lingximoyu", "claude-opus-4-6"),
-    "gemini-3.1-pro": ("lingximoyu", "gemini-3.1-pro-preview"),
-    "gemini-3.1-pro-preview": ("lingximoyu", "gemini-3.1-pro-preview"),
-    "kimi-k2.6": ("openrouter", "moonshotai/kimi-k2.6"),
-    "moonshotai/kimi-k2.6": ("openrouter", "moonshotai/kimi-k2.6"),
-    "glm-5v-turbo": ("openrouter", "z-ai/glm-5v-turbo"),
-    "z-ai/glm-5v-turbo": ("openrouter", "z-ai/glm-5v-turbo"),
-    "qwen3.5-plus": ("lingximoyu", "qwen3.5-plus"),
+    "proxy-claude-sonnet-4-6": ("proxy_a", "claude-sonnet-4-6"),
+    "proxy-claude-opus-4-6": ("proxy_a", "claude-opus-4-6"),
+    "gemini-3.1-pro": ("proxy_a", "gemini-3.1-pro-preview"),
+    "gemini-3.1-pro-preview": ("proxy_a", "gemini-3.1-pro-preview"),
+    "kimi-k2.6": ("proxy_b", "moonshotai/kimi-k2.6"),
+    "moonshotai/kimi-k2.6": ("proxy_b", "moonshotai/kimi-k2.6"),
+    "glm-5v-turbo": ("proxy_b", "z-ai/glm-5v-turbo"),
+    "z-ai/glm-5v-turbo": ("proxy_b", "z-ai/glm-5v-turbo"),
+    "qwen3.5-plus": ("proxy_a", "qwen3.5-plus"),
 }
 
 
@@ -84,31 +82,31 @@ def _env_value(env: Mapping[str, str], key: str) -> str:
     return str(env.get(key, "")).strip()
 
 
-def _normalized_base_url(value: str, default: str) -> str:
-    return value.strip().rstrip("/") or default
+def _normalized_base_url(value: str) -> str:
+    return value.strip().rstrip("/")
 
 
 def _copy_config(value: dict[str, Any] | None) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
-def _lingximoyu_models_for_provider(
+def _proxy_a_models_for_provider(
     provider_id: str,
     model_id: str,
 ) -> list[dict[str, Any]]:
-    if provider_id == "lingximoyu":
-        return [dict(model) for model in LINGXIMOYU_MODELS]
-    model = _LINGXIMOYU_MODEL_BY_ID.get(model_id)
+    if provider_id == "proxy_a":
+        return [dict(model) for model in PROXY_A_MODELS]
+    model = _PROXY_A_MODEL_BY_ID.get(model_id)
     if model is None:
         return [{"id": model_id, "name": model_id, "input": ["text"]}]
     return [dict(model)]
 
 
-def _openrouter_models_for_provider(model_id: str) -> list[dict[str, Any]]:
-    model = _OPENROUTER_MODEL_BY_ID.get(model_id)
+def _proxy_b_models_for_provider(model_id: str) -> list[dict[str, Any]]:
+    model = _PROXY_B_MODEL_BY_ID.get(model_id)
     if model is None:
         return [{"id": model_id, "name": model_id, "input": ["text"]}]
-    return [dict(model) for model in OPENROUTER_MODELS]
+    return [dict(model) for model in PROXY_B_MODELS]
 
 
 def _resolve_provider_and_model(requested_model: str) -> tuple[str, str]:
@@ -129,12 +127,12 @@ def _resolve_provider_and_model(requested_model: str) -> tuple[str, str]:
     return ("openai", model)
 
 
-def _uses_lingximoyu_credentials(provider_id: str, model_id: str) -> bool:
-    return provider_id in _LINGXIMOYU_BACKED_PROVIDERS
+def _uses_proxy_a_credentials(provider_id: str, model_id: str) -> bool:
+    return provider_id in _PROXY_A_BACKED_PROVIDERS
 
 
-def _uses_openrouter_credentials(provider_id: str, model_id: str) -> bool:
-    return provider_id in _OPENROUTER_BACKED_PROVIDERS
+def _uses_proxy_b_credentials(provider_id: str, model_id: str) -> bool:
+    return provider_id in _PROXY_B_BACKED_PROVIDERS
 
 
 def resolve_openclaw_model(
@@ -149,46 +147,50 @@ def resolve_openclaw_model(
     provider_id, model_id = _resolve_provider_and_model(requested_model)
     provider_config: dict[str, Any] | None = None
 
-    if _uses_lingximoyu_credentials(provider_id, model_id):
-        if provider_id == "lingximoyu" and model_id not in _LINGXIMOYU_MODEL_BY_ID:
-            supported = ", ".join(sorted(_LINGXIMOYU_MODEL_BY_ID))
+    if _uses_proxy_a_credentials(provider_id, model_id):
+        if provider_id == "proxy_a" and model_id not in _PROXY_A_MODEL_BY_ID:
+            supported = ", ".join(sorted(_PROXY_A_MODEL_BY_ID))
             raise RuntimeError(
-                "Unsupported Lingxi OpenClaw model "
-                f"{provider_id}/{model_id}. Supported Lingxi models: {supported}"
+                "Unsupported OpenClaw proxy A model "
+                f"{provider_id}/{model_id}. Supported proxy A models: {supported}"
             )
-        api_key = _env_value(env_map, "LINGXIMOYU_API_KEY")
+        api_key = _env_value(env_map, "OPENCLAW_PROXY_A_API_KEY")
         if not api_key:
             raise RuntimeError(
-                "LINGXIMOYU_API_KEY is required for OpenClaw model "
+                "OPENCLAW_PROXY_A_API_KEY is required for OpenClaw model "
                 f"{provider_id}/{model_id}"
             )
-        base_url = _normalized_base_url(
-            _env_value(env_map, "LINGXIMOYU_BASE_URL"),
-            LINGXIMOYU_DEFAULT_BASE_URL,
-        )
+        base_url = _normalized_base_url(_env_value(env_map, "OPENCLAW_PROXY_A_BASE_URL"))
+        if not base_url:
+            raise RuntimeError(
+                "OPENCLAW_PROXY_A_BASE_URL is required for OpenClaw model "
+                f"{provider_id}/{model_id}"
+            )
         provider_config = {
             "baseUrl": base_url,
             "apiKey": api_key,
             "api": "openai-completions",
-            "models": _lingximoyu_models_for_provider(provider_id, model_id),
+            "models": _proxy_a_models_for_provider(provider_id, model_id),
         }
-    elif _uses_openrouter_credentials(provider_id, model_id):
-        if provider_id == "openrouter" and model_id not in _OPENROUTER_MODEL_BY_ID:
-            supported = ", ".join(sorted(_OPENROUTER_MODEL_BY_ID))
+    elif _uses_proxy_b_credentials(provider_id, model_id):
+        if provider_id == "proxy_b" and model_id not in _PROXY_B_MODEL_BY_ID:
+            supported = ", ".join(sorted(_PROXY_B_MODEL_BY_ID))
             raise RuntimeError(
-                "Unsupported OpenRouter OpenClaw model "
-                f"{provider_id}/{model_id}. Supported OpenRouter models: {supported}"
+                "Unsupported OpenClaw proxy B model "
+                f"{provider_id}/{model_id}. Supported proxy B models: {supported}"
             )
-        api_key = _env_value(env_map, "OPENROUTER_API_KEY")
+        api_key = _env_value(env_map, "OPENCLAW_PROXY_B_API_KEY")
         if not api_key:
             raise RuntimeError(
-                "OPENROUTER_API_KEY is required for OpenClaw model "
+                "OPENCLAW_PROXY_B_API_KEY is required for OpenClaw model "
                 f"{provider_id}/{model_id}"
             )
-        base_url = _normalized_base_url(
-            _env_value(env_map, "OPENROUTER_BASE_URL"),
-            OPENROUTER_DEFAULT_BASE_URL,
-        )
+        base_url = _normalized_base_url(_env_value(env_map, "OPENCLAW_PROXY_B_BASE_URL"))
+        if not base_url:
+            raise RuntimeError(
+                "OPENCLAW_PROXY_B_BASE_URL is required for OpenClaw model "
+                f"{provider_id}/{model_id}"
+            )
         authorization_header = f"Bearer {api_key}"
         provider_config = {
             "baseUrl": base_url,
@@ -204,7 +206,7 @@ def resolve_openclaw_model(
                     "Authorization": authorization_header,
                 },
             },
-            "models": _openrouter_models_for_provider(model_id),
+            "models": _proxy_b_models_for_provider(model_id),
         }
     elif provider_id == "openai":
         existing = _copy_config(existing_provider_config)
