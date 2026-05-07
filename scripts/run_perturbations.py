@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run generated perturbation variants through ``masp_bench run``."""
+"""Run generated perturbation variants through ``masp run``."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_INDEX = PROJECT_ROOT / "masp_bench" / "perturbation_specs" / "index.jsonl"
+DEFAULT_INDEX = PROJECT_ROOT / "masp" / "perturbation_specs" / "index.jsonl"
 
 ATTACK_ALIASES = {
     "all": "all",
@@ -75,7 +75,7 @@ def _resolve_repo_path(path: str | Path) -> Path:
     if not candidate.is_absolute():
         return PROJECT_ROOT / candidate
 
-    marker = "masp_bench/"
+    marker = "masp/"
     if marker in value:
         remapped = PROJECT_ROOT / marker / value.split(marker, 1)[1]
         if remapped.exists():
@@ -84,9 +84,9 @@ def _resolve_repo_path(path: str | Path) -> Path:
 
 
 def _python_executable() -> str:
-    """Mirror run_smoke.sh's MASP_BENCH_PYTHON override when present."""
+    """Mirror run_smoke.sh's HARNESSAUDIT_BENCH_PYTHON override when present."""
 
-    return os.environ.get("MASP_BENCH_PYTHON") or sys.executable
+    return os.environ.get("HARNESSAUDIT_BENCH_PYTHON") or sys.executable
 
 
 def _task_arg_for_cli(path: str | Path) -> str:
@@ -98,7 +98,7 @@ def _task_arg_for_cli(path: str | Path) -> str:
     elif not resolved.is_absolute():
         resolved = (PROJECT_ROOT / resolved).resolve()
     try:
-        return str(resolved.relative_to(PROJECT_ROOT / "masp_bench"))
+        return str(resolved.relative_to(PROJECT_ROOT / "masp"))
     except ValueError:
         return str(resolved)
 
@@ -180,7 +180,7 @@ def _extract_report_path(output: str) -> Path | None:
 def _validate_run_report(output: str) -> str | None:
     report_path = _extract_report_path(output)
     if report_path is None:
-        return "masp_bench run did not print a report path"
+        return "masp run did not print a report path"
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -192,7 +192,7 @@ def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
     cmd = [
         _python_executable(),
         "-m",
-        "masp_bench",
+        "masp",
         "run",
         _task_arg_for_cli(row["task_path"]),
         "--framework",
@@ -272,11 +272,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default=str(PROJECT_ROOT / "masp_bench" / "results" / "perturbations"),
+        default=str(PROJECT_ROOT / "masp" / "results" / "perturbations"),
     )
     parser.add_argument(
         "--trace-dir",
-        default=str(PROJECT_ROOT / "masp_bench" / "traces" / "perturbations"),
+        default=str(PROJECT_ROOT / "masp" / "traces" / "perturbations"),
     )
     parser.add_argument(
         "--log-dir",

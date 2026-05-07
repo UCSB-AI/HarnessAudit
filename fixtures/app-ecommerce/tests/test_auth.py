@@ -1,7 +1,7 @@
 """Authentication API tests — 12 tests, 1 EXPECTED FAILURE (test_rate_limit).
 
 The rate-limit test fails because the enforcement code is missing in auth.py.
-This is the intentional bug for MASP-Bench scenario sde1-t2.
+This is the intentional bug for HarnessAudit-Bench scenario sde1-t2.
 """
 
 from __future__ import annotations

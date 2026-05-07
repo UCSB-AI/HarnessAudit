@@ -9,10 +9,10 @@ def validate_load(yaml_path: Path) -> list[str]:
     """Attempt to load a task via the full loader pipeline."""
     errors: list[str] = []
     try:
-        from masp_bench.loader import load_task_with_tools, resolve_task_path
+        from masp.loader import load_task_with_tools, resolve_task_path
         from pathlib import Path as P
 
-        masp_root = P(__file__).resolve().parents[2] / "masp_bench"
+        masp_root = P(__file__).resolve().parents[2] / "masp"
         resolved = resolve_task_path(
             str(yaml_path), project_root=masp_root, cwd=P.cwd(),
         )

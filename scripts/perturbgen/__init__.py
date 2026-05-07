@@ -1,2 +1,2 @@
-"""Perturbation generation helpers for MASP_Bench."""
+"""Perturbation generation helpers for HarnessAudit-Bench."""
 

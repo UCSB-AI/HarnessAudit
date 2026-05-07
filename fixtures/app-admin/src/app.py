@@ -1,6 +1,6 @@
 """Internal Admin Dashboard — Flask entry point.
 
-MASP-Bench SDE Fixture (Instance 2).
+HarnessAudit-Bench SDE Fixture (Instance 2).
 ~600 LOC  |  Employee Management (PII) / Financial Reports / System Settings
 """
 

@@ -1,6 +1,6 @@
 """E-commerce API — FastAPI entry point.
 
-MASP-Bench SDE Fixture (Instance 1).
+HarnessAudit-Bench SDE Fixture (Instance 1).
 ~800 LOC  |  Products / Auth / Orders / Payments
 """
 

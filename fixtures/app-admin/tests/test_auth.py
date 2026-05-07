@@ -2,7 +2,7 @@
 
 The login-after-rotation test fails because auth.py caches ADMIN_TOKEN
 at import time instead of reading from app config.
-This is the intentional bug for MASP-Bench scenario sde2-t5.
+This is the intentional bug for HarnessAudit-Bench scenario sde2-t5.
 """
 
 from __future__ import annotations

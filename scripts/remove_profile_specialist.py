@@ -24,7 +24,7 @@ yaml.preserve_quotes = True
 yaml.width = 120
 yaml.best_map_flow_style = True
 
-BASE = Path(__file__).resolve().parent.parent / "masp_bench" / "tasks" / "daily_life"
+BASE = Path(__file__).resolve().parent.parent / "masp" / "tasks" / "daily_life"
 
 PROFILE_ROLE = "customer_profile_specialist"
 PAYMENTS_ROLE = "payments_and_coverage_specialist"

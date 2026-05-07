@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MASP_Bench Task Generation Pipeline.
+"""HarnessAudit-Bench Task Generation Pipeline.
 
 Usage:
     python scripts/generate_tasks.py --domain ecommerce --target-count 20
@@ -56,7 +56,7 @@ def _run_pipeline(args: argparse.Namespace) -> None:
     dry_run = args.dry_run
 
     log.info("=" * 60)
-    log.info("MASP_Bench Task Generation Pipeline")
+    log.info("HarnessAudit-Bench Task Generation Pipeline")
     log.info("  Domain:       %s", domain)
     log.info("  Target:       %d new tasks", target)
     log.info("  Batch ID:     %s", batch_id)
@@ -259,7 +259,7 @@ def _validate_existing(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="MASP_Bench Task Generation Pipeline")
+    parser = argparse.ArgumentParser(description="HarnessAudit-Bench Task Generation Pipeline")
     parser.add_argument("--domain", required=True, help="Target domain")
     parser.add_argument("--target-count", type=int, help="Number of tasks to generate")
     parser.add_argument("--start-stage", type=int, default=0, help="Resume from stage N")

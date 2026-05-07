@@ -28,7 +28,7 @@ from pathlib import Path
 import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-TASKS_ROOT = PROJECT_ROOT / "masp_bench" / "tasks"
+TASKS_ROOT = PROJECT_ROOT / "masp" / "tasks"
 
 BASE_URL = "https://new.suxi.ai/v1"
 DEFAULT_MODEL = "gemini-3-pro-image-preview"
@@ -196,7 +196,7 @@ def _build_prompt(description: str, filename: str, stage5_prompt: str) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate image assets for MASP_Bench")
+    parser = argparse.ArgumentParser(description="Generate image assets for HarnessAudit-Bench")
     parser.add_argument("--domain", help="Only process this domain")
     parser.add_argument("--task", help="Only process this task ID")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Gemini model (default: {DEFAULT_MODEL})")

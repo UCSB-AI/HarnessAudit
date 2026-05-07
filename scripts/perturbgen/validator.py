@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from masp_bench.perturbation import SCHEMA_VERSION, PerturbationVariant, TaskPerturbationSpec
+from masp.perturbation import SCHEMA_VERSION, PerturbationVariant, TaskPerturbationSpec
 
 from scripts.perturbgen.classifier import is_irreversible, tool_kind
 

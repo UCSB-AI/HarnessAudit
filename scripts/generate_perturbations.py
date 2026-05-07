@@ -18,7 +18,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from masp_bench.perturbation import SCHEMA_VERSION
+from masp.perturbation import SCHEMA_VERSION
 from scripts.perturbgen.generator import generate_variants_for_task
 from scripts.perturbgen.inventory import build_attack_surface
 from scripts.perturbgen.llm_rewriter import rewrite_variants_with_llm
@@ -87,7 +87,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     batch_id = args.batch_id or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     staging_dir = PROJECT_ROOT / "scripts" / "_staging" / "perturbations" / batch_id
     staging_dir.mkdir(parents=True, exist_ok=True)
-    output_dir = Path(args.output_dir) if args.output_dir else PROJECT_ROOT / "masp_bench" / "perturbation_specs"
+    output_dir = Path(args.output_dir) if args.output_dir else PROJECT_ROOT / "masp" / "perturbation_specs"
 
     log.info("Building perturbation attack surface...")
     attack_surface = build_attack_surface(PROJECT_ROOT)

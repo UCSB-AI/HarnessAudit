@@ -1,4 +1,4 @@
-"""Load existing MASP_Bench inventory for a domain.
+"""Load existing HarnessAudit-Bench inventory for a domain.
 
 Provides the complete context needed by generation stages:
 - Existing tasks (goals, agents, tool sets, categories)
@@ -241,7 +241,7 @@ def _load_bank_schema(
 
 def _load_recognizer_classes(domain: str) -> list[str]:
     """Get registered data_class names for a domain from the recognizer."""
-    from masp_bench import recognizer
+    from masp import recognizer
     domain_patterns = recognizer._REGISTRY.get(domain, {})
     return list(domain_patterns.keys())
 

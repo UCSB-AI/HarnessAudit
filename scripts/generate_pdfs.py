@@ -36,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-TASKS_ROOT = PROJECT_ROOT / "masp_bench" / "tasks"
+TASKS_ROOT = PROJECT_ROOT / "masp" / "tasks"
 
 DOMAIN_DIRS = {
     "daily_life": "daily_life",
@@ -407,7 +407,7 @@ def load_stage5_facts(domain: str) -> dict[str, dict[str, dict]]:
 # =========================================================================
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate PDF assets for MASP_Bench")
+    parser = argparse.ArgumentParser(description="Generate PDF assets for HarnessAudit-Bench")
     parser.add_argument("--domain", help="Only process this domain")
     parser.add_argument("--task", help="Only process this task ID")
     parser.add_argument("--dry-run", action="store_true", help="List PDFs without generating")

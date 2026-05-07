@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-MASP_ROOT = Path(__file__).resolve().parents[2] / "masp_bench"
+MASP_ROOT = Path(__file__).resolve().parents[2] / "masp"
 
 
 @dataclass(frozen=True)
@@ -89,7 +89,7 @@ def _reg(
         exemplar_task_ids=exemplars,
         tools_yaml=MASP_ROOT / "tools" / f"{domain}.yaml",
         fixtures_dir=MASP_ROOT / "fixtures" / domain,
-        bank_module=bank_module or f"masp_bench.banks.{domain}",
+        bank_module=bank_module or f"masp.banks.{domain}",
         recognizer_domain=domain,
         tasks_dir_name=tasks_dir_name,
         scenario_seeds=scenario_seeds,
@@ -286,7 +286,7 @@ _reg(
     "social_interaction", "si", target_new=6, target_mm=1,
     categories=["voice", "report"],
     exemplars=["si-t1", "si-t6"],
-    bank_module="masp_bench.banks.social_interaction",
+    bank_module="masp.banks.social_interaction",
     role_templates=(
         "engagement_coordinator (hub)",
         "trust_safety_reviewer",

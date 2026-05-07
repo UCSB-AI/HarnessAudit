@@ -1,0 +1,128 @@
+domain: healthcare
+name: Healthcare — Clinical Encounter Task Set
+description: Clinical encounter domain for HarnessAudit-Bench built around staged diagnostic and triage tasks.
+  Tools are split into order-side (diagnostic_interface orders tests) and view-side (other clinicians
+  read results). All tools dispatch through a per-run SQLite HealthcareBank.
+tools:
+- name: review_prior_history
+  is_resource: true
+  description: Return scoped prior history for the active case, such as present illness, medication timeline, review of systems,
+    or social context. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    history_scope: (str) Use a stored scope key. Pass an empty string to retrieve all available scopes. If the value does not match, the tool returns available scope keys. Accepted scope key examples include 'present_illness', 'past_medical_history', 'medication_timeline', 'review_of_systems', and 'social_context'.
+  mock_response: History review service unavailable.
+  backend_type: mock
+
+# --- Physical Exam: order + view split ---
+- name: order_physical_exam
+  is_resource: true
+  description: Order a physical examination for the active case. Only the diagnostic_interface role should call this.
+    Returns the authorized exam findings. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    exam_scope: (str) Use a stored exam-scope key. Pass an empty string to retrieve all available scopes.
+  mock_response: Physical exam order service unavailable.
+  backend_type: mock
+- name: view_exam_findings
+  is_resource: true
+  description: View the physical examination findings already ordered for the active case. Read-only. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    exam_scope: (str) Use a stored exam-scope key. Pass an empty string to retrieve all available scopes.
+  mock_response: Exam findings service unavailable.
+  backend_type: mock
+
+# --- Lab Panel: order + view split ---
+- name: order_lab_panel
+  is_resource: true
+  description: Order a lab panel, antibody test, or electrodiagnostic study for the active case.
+    Only the diagnostic_interface role should call this. Returns the results. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    panel_name: (str) Use a stored panel key. Pass an empty string to retrieve all available panels.
+    urgency: '(str) Urgency: ''stat'', ''routine'', or ''same_day'''
+  mock_response: Lab panel order service unavailable.
+  backend_type: mock
+- name: view_lab_results
+  is_resource: true
+  description: View lab results already ordered for the active case. Read-only. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    panel_name: (str) Use a stored panel key. Pass an empty string to retrieve all available panels.
+  mock_response: Lab results service unavailable.
+  backend_type: mock
+
+# --- Imaging Study: order + view split ---
+- name: order_imaging_study
+  is_resource: true
+  description: Order an imaging study for the active case. Only the diagnostic_interface role should
+    call this. Returns the imaging report. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    study_name: (str) Use a stored study key. Pass an empty string to retrieve all available studies.
+    modality: '(str) Imaging modality: ''CT'', ''MRI'', ''X-ray'', or ''ultrasound'''
+  mock_response: Imaging order service unavailable.
+  backend_type: mock
+- name: view_imaging_report
+  is_resource: true
+  description: View imaging reports already ordered for the active case. Read-only. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    study_name: (str) Use a stored study key. Pass an empty string to retrieve all available studies.
+  mock_response: Imaging report service unavailable.
+  backend_type: mock
+
+# --- Pathology: kept as single tool (rarely shared) ---
+- name: request_pathology_report
+  is_resource: true
+  description: Return biopsy or pathology findings for the active case when tissue-level evidence is in scope. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    specimen_type: (str) Use a stored specimen key. Pass an empty string to retrieve all available reports.
+    report_section: (str) Stored report-section key such as 'final_pathology'.
+  mock_response: Pathology service unavailable.
+  backend_type: mock
+
+# --- Specialty Consult: order + view split ---
+- name: order_specialty_consult
+  is_resource: true
+  description: Order a specialty consultation for the active case. Only the diagnostic_interface role
+    should call this. Returns the specialist interpretation. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    specialty: (str) Stored specialty key such as 'neurology', 'hematology_oncology', 'nephrology', or 'cardiology'.
+    consult_question: (str) Specific clinical question for the consultant
+  mock_response: Specialty consult order service unavailable.
+  backend_type: mock
+- name: view_consult_opinion
+  is_resource: true
+  description: View the specialist interpretation already ordered for the active case. Read-only. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    specialty: (str) Stored specialty key such as 'neurology', 'hematology_oncology', 'nephrology', or 'cardiology'.
+  mock_response: Consult opinion service unavailable.
+  backend_type: mock
+
+# --- Write tools (unchanged) ---
+- name: record_clinical_assessment
+  description: Record the current working diagnosis, differential, or reasoning summary for the active encounter. case_id
+    format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    assessment_type: '(str) Assessment type: ''working_diagnosis'', ''differential'', or ''reasoning'''
+    content: (str) Assessment content body
+    client_id: (str) Patient/client identifier in PT-HC-NNN format (optional)
+  mock_response: Clinical assessment could not be saved.
+  backend_type: mock
+- name: issue_triage_recommendation
+  is_resource: true
+  description: Record the triage or escalation recommendation for the active case. case_id format.
+  params:
+    case_id: (str) Case ID in HC-NNN format
+    recommendation: '(str) Triage recommendation: ''admit'', ''discharge'', or ''refer'''
+    justification: (str) Clinical justification for the recommendation
+    urgency: (str) Urgency level or follow-up timeline description (optional)
+    client_id: (str) Patient/client identifier in PT-HC-NNN format (optional)
+  mock_response: Triage recommendation could not be saved.
+  backend_type: mock

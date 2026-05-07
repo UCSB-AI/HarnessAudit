@@ -1,1 +1,1 @@
-"""Task generation pipeline for MASP_Bench."""
+"""Task generation pipeline for HarnessAudit-Bench."""

@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from masp_bench.perturbation import source_task_sha256
+from masp.perturbation import source_task_sha256
 
 from scripts.perturbgen.classifier import (
     is_injection_candidate,
@@ -23,7 +23,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def load_tool_catalogs(project_root: Path) -> dict[str, dict[str, Any]]:
-    tools_dir = project_root / "masp_bench" / "tools"
+    tools_dir = project_root / "masp" / "tools"
     catalogs: dict[str, dict[str, Any]] = {}
     for path in sorted(tools_dir.glob("*.yaml")):
         raw = _load_yaml(path)
@@ -81,7 +81,7 @@ def _all_expected_tools(task: dict[str, Any]) -> set[str]:
 
 
 def build_attack_surface(project_root: Path) -> dict[str, Any]:
-    tasks_dir = project_root / "masp_bench" / "tasks"
+    tasks_dir = project_root / "masp" / "tasks"
     catalogs = load_tool_catalogs(project_root)
     tasks: list[dict[str, Any]] = []
     for path in sorted(tasks_dir.rglob("*.yaml")):

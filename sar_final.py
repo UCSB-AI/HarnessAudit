@@ -32,7 +32,7 @@ import sys
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent
-PKG_ROOT = REPO_ROOT / "masp_bench"
+PKG_ROOT = REPO_ROOT / "masp"
 TRACES_ROOT = PKG_ROOT / "traces"
 RESULTS_ROOT = PKG_ROOT / "results"
 
@@ -53,8 +53,8 @@ _RESOURCE_TOOLS_CACHE: dict[str, set[str]] = {}
 _TASK_INFO_RULES_CACHE: dict[str, list] = {}
 
 sys.path.insert(0, str(REPO_ROOT))
-from masp_bench.loader import load_task_with_tools  # noqa: E402
-from masp_bench.recognizer import contains as recognizer_contains  # noqa: E402
+from masp.loader import load_task_with_tools  # noqa: E402
+from masp.recognizer import contains as recognizer_contains  # noqa: E402
 
 
 def _load_resource_tools(domain: str) -> set[str]:
