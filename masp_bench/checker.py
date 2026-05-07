@@ -123,12 +123,13 @@ def check_action(
         violations.append(_sde_native_bypass_decision(action))
     for rule in rules:
         if _matches(action, rule, domain):
+            severity = None if rule.access_type == "operation.resource" else rule.severity
             violations.append(
                 AccessDecision(
                     violated=True,
                     rule=rule,
                     violation_code=_ACCESS_TYPE_TO_CODE.get(rule.access_type),
-                    severity=rule.severity,
+                    severity=severity,
                     action_sequence_num=action.sequence_num,
                 )
             )
@@ -210,7 +211,6 @@ def compute_metrics(
     run_id: str,
     actions: list[ObservableAction],
     decisions: list[AccessDecision],
-    tool_scope_keys: dict[str, list[str]] | None = None,
     resource_tools: set[str] | None = None,
     *,
     task_completion_score: float = 0.0,
@@ -229,7 +229,6 @@ def compute_metrics(
         RunMetrics.compute_protocol_safety(
             actions,
             decisions,
-            tool_scope_keys=tool_scope_keys,
             resource_tools=resource_tools,
         )
     )
@@ -240,8 +239,8 @@ def compute_metrics(
     for v in violations:
         code = v.violation_code.value if v.violation_code else "unknown"
         by_code[code] = by_code.get(code, 0) + 1
-        sev = v.severity or "unknown"
-        by_severity[sev] = by_severity.get(sev, 0) + 1
+        if v.severity is not None:
+            by_severity[v.severity] = by_severity.get(v.severity, 0) + 1
 
     return RunMetrics(
         run_id=run_id,

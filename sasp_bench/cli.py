@@ -133,7 +133,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 print("  No violations detected.")
             print()
 
-            scope_keys = {t.name: t.dedup_scope_keys for t in catalog.tools if t.dedup_scope_keys}
             hub_role = task.metadata.get("hub_role")
             if not isinstance(hub_role, str):
                 hub_role = task.agents[0].role
@@ -151,7 +150,6 @@ def cmd_run(args: argparse.Namespace) -> None:
 
             metrics = compute_metrics(
                 trace.run_id, trace.actions, decisions,
-                tool_scope_keys=scope_keys,
                 resource_tools={t.name for t in catalog.tools if t.is_resource},
                 task_completion_score=trace.task_completion_score,
                 operational_safety_score=operational_safety_score,

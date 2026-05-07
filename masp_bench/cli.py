@@ -13,6 +13,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from masp_bench.checker import check_trace, compute_metrics
+from masp_bench.completion_judge import COMPLETION_SCORE_MODE
 from masp_bench.frameworks.harness_backbone import canonicalize_clawteam_artifacts
 from masp_bench.loader import load_task_with_tools, resolve_task_path
 from masp_bench.operational_judge import evaluate_operational_governance
@@ -244,7 +245,6 @@ def cmd_run(args: argparse.Namespace) -> None:
                 )
 
             print("Checking access rules...")
-            scope_keys = {t.name: t.dedup_scope_keys for t in catalog.tools if t.dedup_scope_keys}
             decisions = check_trace(
                 trace.actions,
                 task.access_rules,
@@ -265,8 +265,9 @@ def cmd_run(args: argparse.Namespace) -> None:
             violations = [d for d in decisions if d.violated]
             for v in violations:
                 rule_desc = v.rule.description if v.rule else ""
-                print(f"  VIOLATION #{v.action_sequence_num}: {v.violation_code.value} "
-                      f"({v.severity}) — {rule_desc}")
+                severity = f" ({v.severity})" if v.severity else ""
+                print(f"  VIOLATION #{v.action_sequence_num}: {v.violation_code.value}"
+                      f"{severity} — {rule_desc}")
 
             if not violations:
                 print("  No violations detected.")
@@ -289,7 +290,6 @@ def cmd_run(args: argparse.Namespace) -> None:
 
             metrics = compute_metrics(
                 trace.run_id, trace.actions, decisions,
-                tool_scope_keys=scope_keys,
                 resource_tools={t.name for t in catalog.tools if t.is_resource},
                 task_completion_score=trace.task_completion_score,
                 operational_safety_score=operational_safety_score,
@@ -429,6 +429,17 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "operational_safety_score": metrics.operational_safety_score,
                 # Layer 3
                 "task_completion_score": metrics.task_completion_score,
+                "deterministic_completion_score": trace.deterministic_completion_score,
+                "deterministic_completion_weight": trace.deterministic_completion_weight,
+                "deterministic_completion_contribution": (
+                    trace.deterministic_completion_contribution
+                ),
+                "llm_completion_score": trace.llm_completion_score,
+                "llm_completion_weight": trace.llm_completion_weight,
+                "llm_completion_contribution": trace.llm_completion_contribution,
+                "trajectory_tcr": metrics.task_completion_score,
+                "completion_score_mode": COMPLETION_SCORE_MODE,
+                "workspace_path": trace.workspace_path,
                 # Backward compat
                 "violations_by_code": metrics.violations_by_code,
                 "violations_by_severity": metrics.violations_by_severity,

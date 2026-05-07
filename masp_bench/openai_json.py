@@ -17,6 +17,8 @@ class OpenAIJSONError(RuntimeError):
 
 
 log = logging.getLogger(__name__)
+_ASYNC_OPENAI_CLIENT: Any | None = None
+_ASYNC_OPENAI_CLIENT_CONFIG: tuple[str | None, ...] | None = None
 
 _TRANSIENT_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
 _TRANSIENT_ERROR_NAMES = {
@@ -130,6 +132,27 @@ async def _close_async_client(client: Any) -> None:
         log.debug("Failed to close async OpenAI client cleanly: %s", exc)
 
 
+async def _get_async_openai_client() -> Any:
+    """Return a process-local async OpenAI client for JSON judge calls."""
+
+    global _ASYNC_OPENAI_CLIENT, _ASYNC_OPENAI_CLIENT_CONFIG
+
+    openai = import_module("openai")
+    config = (
+        os.getenv("OPENAI_API_KEY"),
+        os.getenv("OPENAI_BASE_URL"),
+        os.getenv("OPENAI_ORG_ID"),
+        os.getenv("OPENAI_PROJECT"),
+        str(id(asyncio.get_running_loop())),
+    )
+    if _ASYNC_OPENAI_CLIENT is None or _ASYNC_OPENAI_CLIENT_CONFIG != config:
+        if _ASYNC_OPENAI_CLIENT is not None:
+            await _close_async_client(_ASYNC_OPENAI_CLIENT)
+        _ASYNC_OPENAI_CLIENT = openai.AsyncOpenAI()
+        _ASYNC_OPENAI_CLIENT_CONFIG = config
+    return _ASYNC_OPENAI_CLIENT
+
+
 def create_json_response(
     *,
     model: str,
@@ -188,8 +211,7 @@ async def create_json_response_async(
     max_output_tokens: int = 1024,
 ) -> Any:
     try:
-        openai = import_module("openai")
-        client = openai.AsyncOpenAI()
+        client = await _get_async_openai_client()
     except Exception as exc:  # noqa: BLE001
         raise OpenAIJSONError(
             "OpenAI SDK is required for LLM-as-judge scoring. "
@@ -198,33 +220,29 @@ async def create_json_response_async(
 
     attempts = _retry_attempts()
     base_delay = _retry_base_delay()
-    try:
-        for attempt in range(1, attempts + 1):
-            try:
-                response = await client.responses.create(
-                    model=model,
-                    instructions=system_prompt,
-                    input=user_prompt,
-                    temperature=0,
-                    max_output_tokens=max_output_tokens,
+    for attempt in range(1, attempts + 1):
+        try:
+            response = await client.responses.create(
+                model=model,
+                instructions=system_prompt,
+                input=user_prompt,
+                temperature=0,
+                max_output_tokens=max_output_tokens,
+            )
+            break
+        except Exception as exc:  # noqa: BLE001
+            if attempt < attempts and _is_transient_openai_error(exc):
+                delay = _retry_delay(base_delay, attempt)
+                log.warning(
+                    "Transient OpenAI JSON request failure on attempt %d/%d; "
+                    "retrying in %.1fs: %s",
+                    attempt,
+                    attempts,
+                    delay,
+                    exc,
                 )
-                break
-            except Exception as exc:  # noqa: BLE001
-                if attempt < attempts and _is_transient_openai_error(exc):
-                    delay = _retry_delay(base_delay, attempt)
-                    log.warning(
-                        "Transient OpenAI JSON request failure on attempt %d/%d; "
-                        "retrying in %.1fs: %s",
-                        attempt,
-                        attempts,
-                        delay,
-                        exc,
-                    )
-                    if delay:
-                        await asyncio.sleep(delay)
-                    continue
-                raise OpenAIJSONError(_request_error_message(exc)) from exc
-
-        return _parse_json_response(response)
-    finally:
-        await _close_async_client(client)
+                if delay:
+                    await asyncio.sleep(delay)
+                continue
+            raise OpenAIJSONError(_request_error_message(exc)) from exc
+    return _parse_json_response(response)

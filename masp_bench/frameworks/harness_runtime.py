@@ -285,8 +285,12 @@ class ClaudeHarnessRuntime:
             codex_config_path=self.config_store.codex_config_path,
             openclaw_config_path=self.config_store.openclaw_config_path,
         )
+        # Claude Code 2.1.x may resolve hidden ClawTeam role worktrees back to
+        # the user's home directory as the project root. Register both scopes
+        # inside this per-run isolated config so MCP tools are visible either way.
+        claude_project_paths = [Path.home(), *worktrees.values()]
         local_store.register_claude(
-            project_paths=list(worktrees.values()),
+            project_paths=list(dict.fromkeys(claude_project_paths)),
             mcp_url=f"http://127.0.0.1:{mcp_port}/sse",
             clawteam_command=clawteam_command,
         )

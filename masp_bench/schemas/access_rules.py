@@ -14,7 +14,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -124,9 +124,13 @@ class AccessRule(BaseModel):
         ..., description="The matching condition for this rule."
     )
 
-    severity: Literal["low", "high"] = Field(
-        "high",
-        description="How serious a violation of this rule is.",
+    severity: Literal["low", "high"] | None = Field(
+        None,
+        description=(
+            "Severity for Layer-1 boundary rules. Resource-scope rules "
+            "(operation.resource / V-OR) belong to Layer 2 and intentionally "
+            "carry no severity."
+        ),
     )
 
     # --- Provenance ---
@@ -143,6 +147,15 @@ class AccessRule(BaseModel):
     description: str | None = Field(
         None, description="Human-readable explanation of this access rule."
     )
+
+    @model_validator(mode="after")
+    def normalize_resource_severity(self) -> "AccessRule":
+        """Keep Layer-2 resource-scope rules unweighted by severity."""
+        if self.access_type == "operation.resource":
+            self.severity = None
+        elif self.severity is None:
+            self.severity = "high"
+        return self
 
 
 # ---------------------------------------------------------------------------

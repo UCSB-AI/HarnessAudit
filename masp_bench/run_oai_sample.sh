@@ -16,21 +16,49 @@ JUDGE_MODEL="${JUDGE_MODEL:-gpt-5.4}"
 AGENT_TIMEOUT="${AGENT_TIMEOUT:-360}"
 JUDGE_WORKERS="${JUDGE_WORKERS:-2}"
 SKIP_JUDGE="${SKIP_JUDGE:-0}"
+USE_LINGXI_FOR_GPT="${USE_LINGXI_FOR_GPT:-1}"
+SKIP_DONE="${SKIP_DONE:-1}"
+
+if [[ "$USE_LINGXI_FOR_GPT" == "1" && "$OAI_MODEL" == gpt* ]]; then
+  if [[ -z "${LINGXIMOYU_API_KEY:-}" ]]; then
+    echo "ERROR: LINGXIMOYU_API_KEY is required when USE_LINGXI_FOR_GPT=1 and OAI_MODEL=$OAI_MODEL" >&2
+    exit 1
+  fi
+  export OPENAI_API_KEY="$LINGXIMOYU_API_KEY"
+  export OPENAI_BASE_URL="${LINGXIMOYU_BASE_URL:-https://api.lingximoyu.com/v1}"
+fi
 
 TASKS=(
   "tasks/daily_life/dining/dl-t11.yaml"
-  "tasks/ecommerce/after_sales/ec-t13.yaml"
+  "tasks/daily_life/housing/dl-t13.yaml"
+  "tasks/ecommerce/shopping/ec-t10.yaml"
+  "tasks/ecommerce/shopping/ec-t1.yaml"
+  "tasks/ecommerce/transaction/ec-t12.yaml"
   "tasks/finance/financial_planning/fin-t16.yaml"
-  "tasks/healthcare/consultation/hc-t10.yaml"
+  "tasks/finance/insurance/fin-t10.yaml"
+  "tasks/finance/lending/fin-t11.yaml"
+  "tasks/finance/investing/fin-t5.yaml"
+  "tasks/healthcare/consultation/hc-t1.yaml"
+  "tasks/legal_compliance/audit/lc-t9.yaml"
+  "tasks/ecommerce/after_sales/ec-t22.yaml"
+  "tasks/ecommerce/after_sales/ec-t28.yaml"
+  "tasks/ecommerce/shopping/ec-t39.yaml"
   "tasks/office/finance/off-t12.yaml"
+  "tasks/office/finance/off-t16.yaml"
+  "tasks/office/office_asset/off-t3.yaml"
+  "tasks/office/personnel/off-t10.yaml"
+  "tasks/social_interaction/report/si-t7.yaml"
+  "tasks/social_interaction/voice/si-t3.yaml"
 )
 
 echo "========================================"
 echo "MASP_Bench OpenAI Agents SDK Sample"
 echo "  Model:         $OAI_MODEL"
 echo "  Judge:         $JUDGE_MODEL"
+echo "  OpenAI API:    ${OPENAI_BASE_URL:-default}"
 echo "  Timeout:       ${AGENT_TIMEOUT}s"
 echo "  Judge workers: $JUDGE_WORKERS"
+echo "  Skip done:     $SKIP_DONE"
 echo "  Results:       $SCRIPT_DIR/results/oai/$OAI_MODEL"
 echo "  Traces:        $SCRIPT_DIR/traces/oai/$OAI_MODEL"
 echo "========================================"
@@ -39,8 +67,17 @@ cd "$REPO_ROOT" || exit 1
 
 pass=0
 fail=0
+skip=0
 
 for task in "${TASKS[@]}"; do
+  task_id="$(basename "$task" .yaml)"
+  result_glob="masp_bench/results/oai/$OAI_MODEL/${task_id}_*.json"
+  if [[ "$SKIP_DONE" == "1" ]] && compgen -G "$result_glob" > /dev/null; then
+    echo "SKIP $(date -Is) task=$task existing_result=$result_glob"
+    skip=$((skip + 1))
+    continue
+  fi
+
   echo "--- $(date -Is) task=$task framework=oai harness=oai model=$OAI_MODEL ---"
   cmd=(
     python -m masp_bench run "$task"
@@ -68,7 +105,7 @@ for task in "${TASKS[@]}"; do
 done
 
 echo "========================================"
-echo "OpenAI Agents SDK sample complete: pass=$pass fail=$fail total=${#TASKS[@]}"
+echo "OpenAI Agents SDK sample complete: pass=$pass skip=$skip fail=$fail total=${#TASKS[@]}"
 echo "========================================"
 
 if [[ "$fail" -ne 0 ]]; then

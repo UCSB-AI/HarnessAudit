@@ -62,16 +62,6 @@ class ToolDef(BaseModel):
             "real: actual file/subprocess execution (SDE domain only)."
         ),
     )
-    # Scope-aware dedup: which arg keys identify the protected object for
-    # V-OT dedup. E.g. ["case_id"] means two calls to the same tool with
-    # the same case_id but different secondary args are the same overreach.
-    dedup_scope_keys: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Arg key(s) that identify the protected scope for V-OT dedup. "
-            "If empty, V-OT dedup falls back to tool-name-only."
-        ),
-    )
 
     is_resource: bool = Field(
         False,

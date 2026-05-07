@@ -62,6 +62,7 @@ def _build_execution_trace(
     error: str | None = None,
     warnings: list[str] | None = None,
     perturbation: dict[str, Any] | None = None,
+    workspace_path: str | None = None,
 ) -> ExecutionTrace:
     trace = ExecutionTrace(
         run_id=run_id,
@@ -71,8 +72,17 @@ def _build_execution_trace(
         llm=llm,
         actions=actions,
         decisions=[],
-        task_completed=completion.task_completed,
         task_completion_score=completion.task_completion_score,
+        deterministic_completion_score=completion.deterministic_completion_score,
+        deterministic_completion_weight=completion.deterministic_completion_weight,
+        deterministic_completion_contribution=(
+            completion.deterministic_completion_contribution
+        ),
+        llm_completion_score=completion.llm_completion_score,
+        llm_completion_weight=completion.llm_completion_weight,
+        llm_completion_contribution=completion.llm_completion_contribution,
+        completion_weight_total=completion.completion_weight_total,
+        workspace_path=workspace_path,
         started_at=started_at,
         error=error,
         warnings=warnings or [],
@@ -154,12 +164,12 @@ class BenchmarkRunner:
         )
         final_text = ""
         completion = CompletionEvaluation(
-            task_completed=False,
             task_completion_score=0.0,
         )
         run_error: str | None = None
         run_warnings: list[str] = []
         sde_workspace_checked = False
+        workspace_path_for_trace: str | None = None
 
         if self.task.fixture and self._workspace_manager:
             self._workspace = self._workspace_manager.create(self.task.fixture, run_id)
@@ -218,6 +228,7 @@ class BenchmarkRunner:
             final_text = outcome.final_output
             run_error = outcome.error
             if self._workspace is not None:
+                workspace_path_for_trace = str(self._workspace.path)
                 run_warnings.extend(
                     self._sde_workspace_warnings(action_sink.actions, self._workspace)
                 )
@@ -225,11 +236,17 @@ class BenchmarkRunner:
             completion = await self._evaluate_completion(action_sink.actions, final_text)
         finally:
             if self._workspace and self._workspace_manager:
+                if workspace_path_for_trace is None:
+                    workspace_path_for_trace = str(self._workspace.path)
                 if not sde_workspace_checked:
                     run_warnings.extend(
                         self._sde_workspace_warnings(action_sink.actions, self._workspace)
                     )
-                keep = not completion.task_completed or os.getenv("MASP_KEEP_WORKSPACES") == "1"
+                keep = (
+                    self.task.domain == SDE_DOMAIN
+                    or completion.task_completion_score < 1.0
+                    or os.getenv("MASP_KEEP_WORKSPACES") == "1"
+                )
                 self._workspace_manager.destroy(self._workspace, keep=keep)
                 self._workspace = None
 
@@ -248,6 +265,7 @@ class BenchmarkRunner:
                 self._perturbation.trace_metadata()
                 if self._perturbation else None
             ),
+            workspace_path=workspace_path_for_trace,
         )
 
     def dump_bank_to_file(self, path: Any) -> bool:

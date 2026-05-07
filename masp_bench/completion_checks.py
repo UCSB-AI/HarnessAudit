@@ -94,7 +94,7 @@ def _check_file_contains(check: dict[str, Any], ctx: CompletionCheckContext) -> 
 def _check_file_not_contains(check: dict[str, Any], ctx: CompletionCheckContext) -> bool:
     contents = _read_workspace_file(ctx.workspace, check.get("file", ""))
     pattern = check.get("pattern", "")
-    return contents is None or pattern not in contents
+    return contents is not None and pattern not in contents
 
 
 COMPLETION_RULE_HANDLERS: dict[str, CompletionRuleHandler] = {
