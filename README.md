@@ -1,4 +1,4 @@
-# HarnessAudit-Bench
+# HarnessAudit
 
 HarnessAudit-Bench is a code and task suite for auditing agent harness safety over
 full execution trajectories. It evaluates whether a harness respects tool,
