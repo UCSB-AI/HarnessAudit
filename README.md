@@ -296,13 +296,14 @@ Local output directories are ignored by Git.
 If you use HarnessAudit in research, please cite:
 
 ```bibtex
-@article{liu2026harnessaudit,
-  title   = {Auditing Agent Harness Safety},
-  author  = {Liu, Chengzhi and Guo, Yichen and Liu, Yepeng and Yang, Yuzhe
-             and Yan, Qianqi and Zhao, Xuandong and Hua, Wenyue and Liu, Sheng
-             and Li, Sharon and Bu, Yuheng and Wang, Xin Eric},
-  journal = {arXiv preprint},
-  year    = {2026}
+@misc{liu2026auditingagentharnesssafety,
+      title={Auditing Agent Harness Safety}, 
+      author={Chengzhi Liu and Yichen Guo and Yepeng Liu and Yuzhe Yang and Qianqi Yan and Xuandong Zhao and Wenyue Hua and Sheng Liu and Sharon Li and Yuheng Bu and Xin Eric Wang},
+      year={2026},
+      eprint={2605.14271},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2605.14271}, 
 }
 ```
 
