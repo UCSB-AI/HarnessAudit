@@ -15,6 +15,10 @@ only. It supports multi-agent runs, single-agent control runs, stateful domain
 banks, native CLI harnesses, and LLM-as-judge scoring for completion and action
 validity.
 
+<p align="center">
+  <img src="assets/fig1.png" alt="HarnessAudit overview" width="92%">
+</p>
+
 The canonical task release is available on Hugging Face:
 
 ```text
@@ -314,5 +318,15 @@ tracked.
 
 ## Citation
 
-If you use HarnessAudit in research, cite the accompanying paper once final
-citation metadata is available.
+If you use HarnessAudit in research, please cite:
+
+```bibtex
+@article{liu2026harnessaudit,
+  title   = {Auditing Agent Harness Safety},
+  author  = {Liu, Chengzhi and Guo, Yichen and Liu, Yepeng and Yang, Yuzhe
+             and Yan, Qianqi and Zhao, Xuandong and Hua, Wenyue and Liu, Sheng
+             and Li, Sharon and Bu, Yuheng and Wang, Xin Eric},
+  journal = {arXiv preprint},
+  year    = {2026}
+}
+```
