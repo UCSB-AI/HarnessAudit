@@ -16,7 +16,7 @@ banks, native CLI harnesses, and LLM-as-judge scoring for completion and action
 validity.
 
 <p align="center">
-  <img src="assets/fig1.png" alt="HarnessAudit overview" width="92%">
+  <img src="assets/title.png" alt="HarnessAudit overview" width="92%">
 </p>
 
 ## 💡 Update
