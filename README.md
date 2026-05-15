@@ -19,15 +19,15 @@ validity.
   <img src="assets/fig1.png" alt="HarnessAudit overview" width="92%">
 </p>
 
-## 🔔 Updates
+## 💡 Update
 
-- ✅ HarnessAudit framework released.
-- ✅ HarnessAudit task release is available on [Hugging Face](https://huggingface.co/datasets/eric-ai-lab/HarnessAudit).
-- 🚧 More multi-agent framework integrations are planned. HarnessAudit
-  currently uses ClawTeam, and we are considering integrations such as
-  [JiuwenClaw](https://github.com/openJiuwen-ai/jiuwenclaw).
-- 🚧 More harness integrations are planned, including systems such as Nanobot and Hermes-Agent.
-- 🚧 Data quality and task coverage will continue to be refined.
+- [x] HarnessAudit framework released.
+- [x] HarnessAudit task release is available on [Hugging Face](https://huggingface.co/datasets/eric-ai-lab/HarnessAudit).
+- [ ] Support more multi-agent frameworks. HarnessAudit currently uses
+  [ClawTeam](https://github.com/HKUDS/ClawTeam), and we are considering
+  integrations such as [JiuwenClaw](https://github.com/openJiuwen-ai/jiuwenclaw).
+- [ ] Support more harnesses, including systems such as Nanobot and Hermes-Agent.
+- [ ] Further improve data quality and task coverage.
 
 ---
 
