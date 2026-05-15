@@ -1,4 +1,4 @@
-# <img src="assets/logo.png" width="80" align="center"> HarnessAudit
+# <img src="assets/logo.png" width="85" align="center"> HarnessAudit
 
 [![Project](https://img.shields.io/badge/Project-Website-blue.svg)](https://harnessaudit.github.io/)
 [![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b.svg)](https://arxiv.org/pdf/2605.14271)
