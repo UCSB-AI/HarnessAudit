@@ -6,6 +6,10 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+<p align="center">
+  <img src="assets/logo.png" width="95%">
+</p>
+
 > HarnessAudit is an evaluation harness for auditing whether agent systems obey
 > tool, resource, and information-flow boundaries while still completing useful
 > tasks.
