@@ -1,140 +1,217 @@
 # HarnessAudit
 
-HarnessAudit is a code and task suite for auditing agent harness safety over
-full execution trajectories. It evaluates whether a harness respects tool,
-resource, and information-flow boundaries while still completing useful tasks,
-and includes both multi-agent and single-agent control settings.
+[![Project](https://img.shields.io/badge/Project-Website-blue.svg)](https://harnessaudit.github.io/)
+[![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b.svg)](https://arxiv.org/pdf/2605.14271)
+[![Dataset](https://img.shields.io/badge/Dataset-Hugging%20Face-yellow.svg)](https://huggingface.co/datasets/eric-ai-lab/HarnessAudit)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-The repository is organized around two benchmark packages:
+> HarnessAudit is an evaluation harness for auditing whether agent systems obey
+> tool, resource, and information-flow boundaries while still completing useful
+> tasks.
 
-- `multi_agent/`: multi-agent HarnessAudit tasks, tools, framework adapters,
-  trace collection, access checking, completion scoring, and perturbation
-  evaluation.
-- `single_agent/`: single-agent control tasks and runner using the same task format,
-  checker, tool backends, and judging stack where applicable.
+HarnessAudit evaluates full execution trajectories rather than final answers
+only. It supports multi-agent runs, single-agent control runs, stateful domain
+banks, native CLI harnesses, and LLM-as-judge scoring for completion and action
+validity.
 
-The benchmark currently includes 210 multi-agent tasks across eight domains and
-34 single-agent control tasks. Multi-agent domains include finance, e-commerce,
-healthcare, office, daily life, legal compliance, social interaction, and
-software engineering.
+The canonical task release is available on Hugging Face:
+
+```text
+https://huggingface.co/datasets/eric-ai-lab/HarnessAudit
+```
+
+This GitHub repository contains the runner, framework adapters, stateful mock
+services, schemas, and reproducibility scripts. Local traces, result JSONs,
+SQLite bank snapshots, workspaces, private keys, and paper build artifacts are
+not committed.
+
+---
+
+## What HarnessAudit Measures
+
+HarnessAudit reports paper-facing metrics from normalized traces:
+
+| Metric | Meaning |
+| --- | --- |
+| `sar_tool` | Safety adherence for out-of-scope tool use |
+| `sar_resource` | Safety adherence for protected-resource access |
+| `sar_flow` | Safety adherence for information-flow constraints |
+| `sar_avg` | Average Safety Adherence Rate across the three L1 channels |
+| `avs` | Action Validity Score for L2 execution fidelity |
+| `tcr` | Task Completion Rate from deterministic and LLM completion checks |
+
+The trace schema records normalized tool calls, communications, access
+decisions, completion scores, operational judgments, and run-level metadata.
+
+---
 
 ## Repository Layout
 
 ```text
 .
-├── multi_agent/                     # Multi-agent benchmark package
-│   ├── tasks/                # 210 task YAMLs and task-local assets
-│   ├── tools/                # Domain tool catalogs
-│   ├── banks/                # Stateful mock service backends
-│   ├── frameworks/           # Claw-Team, native harness, OAI, and ADK adapters
-│   ├── perturbation_specs/   # Perturbation index and variant specifications
-│   ├── schemas/              # Pydantic schemas for tasks, actions, and traces
-│   └── trace/                # JSONL trace writer and event models
-├── single_agent/                     # Single-agent benchmark package
-│   ├── tasks/                # 34 single-agent task YAMLs
-│   ├── tools/                # Single-agent domain tool catalogs
-│   └── frameworks/           # Single-agent runner integration
-├── fixtures/                 # Real workspace fixtures for SDE tasks
-├── scripts/                  # Task generation, perturbation, and validation tools
-├── multi_agent/sar_final.py  # Metric aggregation helper
-└── pyproject.toml            # Package metadata and CLI entry points
+├── multi_agent/             # Multi-agent runner, tasks, banks, adapters, traces
+│   ├── run_ma.sh            # Full multi-agent sweep script
+│   ├── banks/               # Stateful SQLite-backed domain services
+│   ├── frameworks/          # ClawTeam, OpenClaw, Claude Code, Codex, OAI, ADK
+│   ├── schemas/             # Task, action, access-rule, and trace schemas
+│   ├── tasks/               # Materialized task YAMLs when using the HF release
+│   └── tools/               # Domain tool catalogs
+├── single_agent/            # Single-agent control runner and task format
+│   ├── run_sa.sh            # Full single-agent sweep script
+│   ├── banks/               # Single-agent fixture-aware bank factory
+│   ├── tasks/               # Materialized task YAMLs when using the HF release
+│   └── tools/               # Single-agent tool catalogs
+├── fixtures/                # SDE workspace fixtures used by task runs
+├── pyproject.toml           # Package metadata and CLI entry points
+└── README.md
 ```
 
-Local run artifacts such as traces, result JSONs, logs, workspaces, staging
-files, `.env`, and paper sources are intentionally ignored by Git.
+---
 
-## Installation
+## Quick Start
 
-Use Python 3.11 or newer.
+Use Python 3.11 or newer. A clean virtual environment is recommended.
 
 ```bash
+git clone https://github.com/eric-ai-lab/HarnessAudit.git
+cd HarnessAudit
+
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,oai]"
 ```
 
-Optional adapters require their own runtime dependencies:
+If you use ClawTeam-backed harnesses, install ClawTeam in the same environment:
 
 ```bash
-# OpenAI Agents SDK / OpenAI-compatible model calls
-python -m pip install -e ".[oai]"
-
-# Claw-Team integration, if available in your environment
 python -m pip install -e ".[clawteam]"
 ```
 
-Native harness experiments additionally require the corresponding external CLI
-runtime to be installed and authenticated, for example Claude Code, Codex, or
-OpenClaw. These CLIs are not vendored in this repository.
+Install and authenticate any native harness CLIs you plan to evaluate:
 
-## Environment Variables
+- OpenClaw for `HARNESS=openclaw`
+- Codex CLI for `HARNESS=codex`
+- Claude Code CLI for `HARNESS=claude`
 
-The runners load `.env` from the repository root when present. Keep `.env`
-local; it is ignored by Git.
+OpenClaw requires a recent Node.js runtime. If your system `node` is old, put a
+newer Node binary earlier in `PATH` before running OpenClaw experiments.
 
-Common variables:
+---
+
+## Download Tasks and Fixtures
+
+Tasks are distributed through Hugging Face. After installing
+`huggingface_hub`, download the release into the repository root:
 
 ```bash
-# OpenAI-compatible calls used by judges, Codex API-key mode, and in-process adapters.
-CODEX_AUTH_MODE=auto         # optional: auto | api_key | cli_login
+python -m pip install huggingface_hub
+huggingface-cli download eric-ai-lab/HarnessAudit \
+  --repo-type dataset \
+  --local-dir . \
+  --local-dir-use-symlinks False
+```
+
+The expected materialized layout is:
+
+```text
+multi_agent/tasks/
+multi_agent/tools/
+multi_agent/fixtures/
+single_agent/tasks/
+single_agent/tools/
+single_agent/fixtures/
+fixtures/
+```
+
+If you already cloned a repository snapshot that contains those directories, no
+additional download step is required.
+
+---
+
+## Configure Secrets
+
+The CLIs load `.env` from the repository root. Keep it local; it is ignored by
+Git.
+
+```bash
+# Used by judges, OAI/ADK adapters, and Codex API-key mode.
 OPENAI_API_KEY=...
-OPENAI_BASE_URL=...          # optional
+OPENAI_BASE_URL=...              # optional
 
-# Claude Code official API-key auth; alternatively use local claude CLI login state
-CLAUDE_CODE_AUTH_MODE=auto   # optional: auto | api_key | cli_login
-ANTHROPIC_API_KEY=...        # optional
-ANTHROPIC_BASE_URL=...       # optional
+# Codex can use either OPENAI_API_KEY or local codex CLI login state.
+CODEX_AUTH_MODE=auto             # auto | api_key | cli_login
 
-# OpenClaw aliases
+# Claude Code can use either ANTHROPIC_API_KEY or local claude CLI login state.
+ANTHROPIC_API_KEY=...
+ANTHROPIC_BASE_URL=...           # optional
+CLAUDE_CODE_AUTH_MODE=auto       # auto | api_key | cli_login
+
+# OpenClaw model routing through OpenRouter.
 OPENROUTER_API_KEY=...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
 
-# Optional isolation/debug controls
-MASP_WORKSPACES_ROOT=...
+Optional debugging controls:
+
+```bash
+MASP_WORKSPACES_ROOT=/tmp/harnessaudit_workspaces
 MASP_KEEP_CLAUDE_ISOLATION=1
 MASP_KEEP_CODEX_ISOLATION=1
 MASP_KEEP_OPENCLAW_ISOLATION=1
 ```
 
-The repository does not include API keys or private provider URLs.
+---
 
-## Quick Checks
+## Reproduce Multi-Agent Results
 
-Verify that the package entry points import and expose their CLIs:
-
-```bash
-python -m multi_agent --help
-python -m single_agent --help
-```
-
-Run Python bytecode checks over the tracked code:
+Run a single task first to validate the environment:
 
 ```bash
-python -m compileall multi_agent single_agent scripts fixtures
-```
-
-## Running a Multi-Agent Task
-
-Run one task with the multi-agent runner:
-
-```bash
-python -m multi_agent run tasks/daily_life/dining/dl-t11.yaml \
+python -m multi_agent run multi_agent/tasks/daily_life/wellness/dl-t4.yaml \
   --framework clawteam \
   --harness openclaw \
   --model gpt-5.4 \
-  --output multi_agent/results \
-  --trace-dir multi_agent/traces
+  --judge-model gpt-5.4 \
+  --judge-workers 4 \
+  --trace-dir multi_agent/traces \
+  --output multi_agent/results
 ```
 
-Useful flags:
+Run the full multi-agent task suite:
 
-- `--skip-judge`: skip LLM-as-judge scoring while keeping deterministic checks.
-- `--judge-model gpt-5.4`: select the model used for completion and operational
-  judging.
-- `--judge-workers 1`: run judge calls serially.
-- `--agent-timeout 300`: set the per-agent timeout.
-- `--repeat N`: repeat the same task sequentially.
+```bash
+HARNESS=openclaw \
+MODEL=gpt-5.4 \
+TASK_WORKERS=4 \
+JUDGE_MODEL=gpt-5.4 \
+JUDGE_WORKERS=4 \
+bash multi_agent/run_ma.sh
+```
+
+`run_ma.sh` supports:
+
+```text
+HARNESS=openclaw|claude|codex|oai|adk
+FRAMEWORK=clawteam|oai|adk
+MODEL=<harness model name>
+TASK_WORKERS=<concurrent task runs>
+JUDGE_MODEL=gpt-5.4
+JUDGE_WORKERS=<concurrent judge calls per task>
+SKIP_JUDGE=1
+SKIP_EXISTING=1
+TASK_FILE=<one yaml>
+TASK_LIST=<newline-delimited yaml list>
+PYTHON_CMD="conda run -n harnessaudit python"
+EXTRA_ARGS="..."
+```
+
+When `HARNESS=openclaw`, the script first records the enabled plugin snapshot:
+
+```bash
+openclaw plugins list --enabled --json > /tmp/openclaw_plugins_enabled.json
+```
 
 Artifacts are written under harness/model-scoped directories, for example:
 
@@ -144,119 +221,85 @@ multi_agent/results/openclaw/gpt-5.4/*.json
 multi_agent/results/openclaw/gpt-5.4/*.sqlite
 ```
 
-The JSONL trace is append-only and records normalized `tool_call`,
-`communication`, `access_decision`, and run-boundary events. The result JSON
-summarizes action counts, violation counts, paper-facing metrics
-(`sar_tool`, `sar_resource`, `sar_flow`, `sar_avg`, `avs`, `tcr`), diagnostic
-penalties, warnings, and any error status.
+---
 
-## Running the Smoke Suite
+## Reproduce Single-Agent Results
 
-The smoke script runs five representative multi-agent tasks and writes logs,
-traces, and result reports under ignored artifact directories.
-
-```bash
-SKIP_JUDGE=1 RUN_ALL_WORKERS=1 MASP_HARNESS=openclaw ./multi_agent/run_smoke.sh
-```
-
-Select native harness/model labels with environment variables:
-
-```bash
-MASP_HARNESS=claude MASP_CLAUDE_MODEL=claude-sonnet-4-6 ./multi_agent/run_smoke.sh
-MASP_HARNESS=codex MASP_CODEX_MODEL=gpt-5.4 ./multi_agent/run_smoke.sh
-MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=qwen3.5-plus ./multi_agent/run_smoke.sh
-```
-
-`multi_agent/run_smoke_2.sh` contains the remaining larger task batch used for the
-same harness/model execution path.
-
-## Running a Single-Agent Control Task
+Run a single control task:
 
 ```bash
 python -m single_agent run single_agent/tasks/finance/sa-fin-t1.yaml \
+  --framework openclaw_local \
   --model gpt-5.4 \
-  --output single_agent/results \
-  --trace-dir single_agent/traces
+  --judge-model gpt-5.4 \
+  --judge-workers 4 \
+  --trace-dir single_agent/traces \
+  --output single_agent/results
 ```
 
-Single-agent reports use the same deterministic access checker and operational
-judge machinery, but do not report inter-agent information-flow metrics.
-
-## Perturbation Evaluation
-
-Perturbation variants are stored in `multi_agent/perturbation_specs/` and indexed by
-`multi_agent/perturbation_specs/index.jsonl`.
-
-Run one perturbation variant directly:
+Run the full single-agent task suite:
 
 ```bash
-python -m multi_agent run tasks/ecommerce/after_sales/ec-t13.yaml \
-  --framework clawteam \
-  --harness openclaw \
-  --model gpt-5.4 \
-  --perturbation-id ec-t13-inj-1 \
-  --output multi_agent/results \
-  --trace-dir multi_agent/traces
+MODEL=gpt-5.4 \
+TASK_WORKERS=1 \
+JUDGE_MODEL=gpt-5.4 \
+JUDGE_WORKERS=4 \
+bash single_agent/run_sa.sh
 ```
 
-Run a perturbation matrix:
+`run_sa.sh` supports the same `TASK_WORKERS`, `JUDGE_MODEL`, `JUDGE_WORKERS`,
+`SKIP_JUDGE`, `SKIP_EXISTING`, `TASK_FILE`, `TASK_LIST`, `PYTHON_CMD`, and
+`EXTRA_ARGS` controls. Single-agent evaluation intentionally supports only the
+`openclaw_local` framework:
+
+```text
+FRAMEWORK=openclaw_local
+MODEL=<OpenClaw model name>
+```
+
+`run_sa.sh` writes `/tmp/openclaw_plugins_enabled.json` before launching tasks.
+
+---
+
+## Output Files
+
+Each completed run writes:
+
+| File | Purpose |
+| --- | --- |
+| `*.jsonl` | Normalized append-only trajectory trace |
+| `*.json` | Run summary with SAR, AVS, TCR, violations, warnings, and errors |
+| `*.sqlite` | Per-run stateful bank snapshot for post-hoc inspection |
+| `_run_logs/<harness>/<model>/*.log` | Per-task stdout/stderr from full-suite scripts |
+
+Local output directories are ignored by Git.
+
+---
+
+## Sanity Checks
 
 ```bash
-python scripts/run_perturbations.py \
-  --attack-type injection \
-  --domain ecommerce \
-  --harness openclaw \
-  --model gpt-5.4 \
-  --workers 1 \
-  --skip-existing
+python -m multi_agent --help
+python -m single_agent --help
+python -m py_compile multi_agent/cli.py single_agent/cli.py
+bash -n multi_agent/run_ma.sh single_agent/run_sa.sh
 ```
 
-Summarize perturbation reports:
+For a cheap environment smoke test, add `SKIP_JUDGE=1` and `TASK_FILE=<one yaml>`
+to either full-suite script.
 
-```bash
-python scripts/summarize_perturbations.py multi_agent/results/openclaw/gpt-5.4
-```
-
-## Task Generation and Validation
-
-The released tasks are already materialized under `multi_agent/tasks/` and
-`single_agent/tasks/`. The scripts below are for extending or validating the benchmark.
-
-Validate existing generated tasks for a domain:
-
-```bash
-python scripts/generate_tasks.py --domain finance --validate-existing
-```
-
-Generate new task candidates in dry-run mode:
-
-```bash
-python scripts/generate_tasks.py --domain finance --target-count 5 --dry-run
-```
-
-Generate perturbation specifications:
-
-```bash
-python scripts/generate_perturbations.py --domain finance --generator template --dry-run
-```
-
-The validation stack checks schema validity, tool coverage, useful-tool
-invariants, tool partitioning, fixture coherence, recognizer registration, SQL
-completion predicates, task loading, deduplication, and multimodal assets.
+---
 
 ## Git Hygiene
 
-This repository is prepared so GitHub archives contain only the benchmark code,
-tasks, fixtures, and supporting scripts. The following are intentionally ignored:
+The repository intentionally ignores local secrets and generated artifacts:
 
-- `.env` and `.env.*`
-- `multi_agent/traces/`, `multi_agent/results/`, `multi_agent/logs/`, `multi_agent/workspaces/`
-- `single_agent/traces/`, `single_agent/results/`, `single_agent/logs/`
-- `scripts/_staging/` and generated intermediate reports
+- `.env`, `.env.*`
+- traces, results, logs, workspaces
+- local scratch reports and paper build outputs
 - Python caches and build outputs
-- paper sources and generated paper artifacts under `paper/`
 
-Before publishing, useful checks are:
+Before publishing changes:
 
 ```bash
 git status --short
@@ -264,10 +307,12 @@ git ls-files -ci --exclude-standard
 git ls-files | rg '(^paper/|results/|traces/|logs/|workspaces/|__pycache__|\.env$|\.pyc$)'
 ```
 
-The first command should show only intended changes. The second command should
-be empty; it catches files that are ignored but still tracked.
+The second command should be empty; it catches files that are ignored but still
+tracked.
+
+---
 
 ## Citation
 
-If you use this benchmark, cite the accompanying HarnessAudit paper once the
-final citation metadata is available.
+If you use HarnessAudit in research, cite the accompanying paper once final
+citation metadata is available.

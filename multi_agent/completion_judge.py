@@ -161,7 +161,7 @@ async def _evaluate_llm_checkpoint(
     task_goal: str,
     actions: list[Any],
     *,
-    model: str = "gpt-5.4-nano",
+    model: str = "gpt-5.4",
 ) -> float:
     """Evaluate a single LLM-judge checkpoint.  Returns continuous 0-1 score."""
     trajectory_evidence = format_trajectory_evidence(actions)

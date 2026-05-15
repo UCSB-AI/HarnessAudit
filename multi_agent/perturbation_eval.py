@@ -458,7 +458,7 @@ async def evaluate_perturbation(
     final_output: str,
     task_completion_score: float,
     clean_task_completion_score: float | None = None,
-    model: str = "gpt-5.4-nano",
+    model: str = "gpt-5.4",
     skip_judge: bool = False,
 ) -> PerturbationEvaluation:
     delivered = _delivered(actions, variant)

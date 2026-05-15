@@ -29,9 +29,22 @@ from multi_agent.workspace import WorkspaceManager
 from single_agent.loader import load_sa_task_with_tools, resolve_sa_task_path
 
 
-def _scoped_dir(base_dir: Path, scope: str) -> Path:
-    """Store artifacts under a framework-specific child directory."""
-    return base_dir if base_dir.name == scope else base_dir / scope
+def _model_dir_name(model: str) -> str:
+    """Return a filesystem-safe model directory name."""
+    model_name = (model or "unknown-model").strip() or "unknown-model"
+    return model_name.replace("/", "__").replace(os.sep, "__")
+
+
+def _artifact_scoped_dir(base_dir: Path, harness: str, model: str) -> Path:
+    """Store artifacts under harness/model child directories."""
+    model_dir = _model_dir_name(model)
+    if base_dir.name == model_dir and base_dir.parent.name == harness:
+        return base_dir
+    if base_dir.name == model_dir:
+        return base_dir
+    if base_dir.name == harness:
+        return base_dir / model_dir
+    return base_dir / harness / model_dir
 
 
 def _normalize_model(name: str) -> str:
@@ -50,6 +63,7 @@ def _metric_event_fields(metrics: object | None) -> dict[str, object]:
 def cmd_run(args: argparse.Namespace) -> None:
     """Run a single SA task and evaluate."""
     args.model = _normalize_model(args.model)
+    harness = "openclaw_local"
     pkg_root = Path(__file__).resolve().parent        # single_agent/
     repo_root = pkg_root.parent                       # HarnessAudit/
     task_path = resolve_sa_task_path(args.task, project_root=pkg_root, cwd=Path.cwd())
@@ -68,12 +82,15 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"  tools:      {len(catalog.tools)} in catalog")
         print()
 
-        trace_dir = _scoped_dir(Path(args.trace_dir), args.framework)
-        output_dir = _scoped_dir(Path(args.output), args.framework) if args.output else None
+        trace_dir = _artifact_scoped_dir(Path(args.trace_dir), harness, args.model)
+        output_dir = (
+            _artifact_scoped_dir(Path(args.output), harness, args.model)
+            if args.output else None
+        )
         run_id = next_run_id(
             args.model,
             framework_slug=framework_run_id_slug(args.framework),
-            harness_slug=args.framework,
+            harness_slug=harness,
         )
         trace_path = trace_dir / f"{task.task_id}_{run_id}.jsonl"
         writer = TraceWriter(trace_path)
@@ -88,13 +105,13 @@ def cmd_run(args: argparse.Namespace) -> None:
         # Use SA bank factory instead of MAS bank factory
         from single_agent import banks as sa_banks
 
-        print(f"Running (framework={args.framework}, model={args.model})...")
+        print(f"Running (framework={args.framework}, harness={harness}, model={args.model})...")
         runner = BenchmarkRunner(
             task, catalog, model=args.model, framework=args.framework,
             trace_writer=writer, max_turns=args.max_turns,
             workspace_manager=workspace_manager,
             bank_factory=sa_banks.get_bank,
-            harness="openclaw",
+            harness=harness,
             agent_timeout=args.agent_timeout,
             judge_model=args.judge_model,
             skip_judge=args.skip_judge,
@@ -219,6 +236,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "task_id": task.task_id,
                 "run_id": trace.run_id,
                 "framework": trace.framework,
+                "harness": harness,
                 "llm": trace.llm,
                 "n_actions": trace.n_actions,
                 "n_tool_calls": trace.n_tool_calls,
