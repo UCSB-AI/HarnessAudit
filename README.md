@@ -305,3 +305,6 @@ If you use HarnessAudit in research, please cite:
   year    = {2026}
 }
 ```
+
+##  💬 Acknowledgments
+We thank the contributors of the open-source project [ClawTeam](https://github.com/HKUDS/ClawTeam).
