@@ -19,11 +19,17 @@ validity.
   <img src="assets/fig1.png" alt="HarnessAudit overview" width="92%">
 </p>
 
-The canonical task release is available on Hugging Face:
+## 🔔 Updates
 
-```text
-https://huggingface.co/datasets/eric-ai-lab/HarnessAudit
-```
+- ✅ HarnessAudit framework released.
+- ✅ HarnessAudit task release is available on [Hugging Face](https://huggingface.co/datasets/eric-ai-lab/HarnessAudit).
+- 🚧 More multi-agent framework integrations are planned. HarnessAudit
+  currently uses ClawTeam, and we are considering integrations such as
+  [JiuwenClaw](https://github.com/openJiuwen-ai/jiuwenclaw).
+- 🚧 More harness integrations are planned, including systems such as Nanobot and Hermes-Agent.
+- 🚧 Data quality and task coverage will continue to be refined.
+
+---
 
 This GitHub repository contains the runner, framework adapters, stateful mock
 services, schemas, and reproducibility scripts. Local traces, result JSONs,
@@ -32,7 +38,7 @@ not committed.
 
 ---
 
-## What HarnessAudit Measures
+## 📊 What HarnessAudit Measures
 
 HarnessAudit reports paper-facing metrics from normalized traces:
 
@@ -50,7 +56,7 @@ decisions, completion scores, operational judgments, and run-level metadata.
 
 ---
 
-## Repository Layout
+## 🗂️ Repository Layout
 
 ```text
 .
@@ -73,7 +79,7 @@ decisions, completion scores, operational judgments, and run-level metadata.
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 Use Python 3.11 or newer. A clean virtual environment is recommended.
 
@@ -104,7 +110,7 @@ newer Node binary earlier in `PATH` before running OpenClaw experiments.
 
 ---
 
-## Download Tasks and Fixtures
+## 📦 Download Tasks and Fixtures
 
 Tasks are distributed through Hugging Face. After installing
 `huggingface_hub`, download the release into the repository root:
@@ -134,7 +140,7 @@ additional download step is required.
 
 ---
 
-## Configure Secrets
+## 🔐 Configure Secrets
 
 The CLIs load `.env` from the repository root. Keep it local; it is ignored by
 Git.
@@ -168,7 +174,7 @@ MASP_KEEP_OPENCLAW_ISOLATION=1
 
 ---
 
-## Reproduce Multi-Agent Results
+## 🤝 Reproduce Multi-Agent Results
 
 Run a single task first to validate the environment:
 
@@ -227,7 +233,7 @@ multi_agent/results/openclaw/gpt-5.4/*.sqlite
 
 ---
 
-## Reproduce Single-Agent Results
+## 🧍 Reproduce Single-Agent Results
 
 Run a single control task:
 
@@ -265,7 +271,7 @@ MODEL=<OpenClaw model name>
 
 ---
 
-## Output Files
+## 📁 Output Files
 
 Each completed run writes:
 
@@ -280,43 +286,7 @@ Local output directories are ignored by Git.
 
 ---
 
-## Sanity Checks
-
-```bash
-python -m multi_agent --help
-python -m single_agent --help
-python -m py_compile multi_agent/cli.py single_agent/cli.py
-bash -n multi_agent/run_ma.sh single_agent/run_sa.sh
-```
-
-For a cheap environment smoke test, add `SKIP_JUDGE=1` and `TASK_FILE=<one yaml>`
-to either full-suite script.
-
----
-
-## Git Hygiene
-
-The repository intentionally ignores local secrets and generated artifacts:
-
-- `.env`, `.env.*`
-- traces, results, logs, workspaces
-- local scratch reports and paper build outputs
-- Python caches and build outputs
-
-Before publishing changes:
-
-```bash
-git status --short
-git ls-files -ci --exclude-standard
-git ls-files | rg '(^paper/|results/|traces/|logs/|workspaces/|__pycache__|\.env$|\.pyc$)'
-```
-
-The second command should be empty; it catches files that are ignored but still
-tracked.
-
----
-
-## Citation
+## 📚 Citation
 
 If you use HarnessAudit in research, please cite:
 
