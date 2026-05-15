@@ -7,10 +7,10 @@ and includes both multi-agent and single-agent control settings.
 
 The repository is organized around two benchmark packages:
 
-- `masp/`: multi-agent HarnessAudit-Bench tasks, tools, framework adapters,
+- `multi_agent/`: multi-agent HarnessAudit-Bench tasks, tools, framework adapters,
   trace collection, access checking, completion scoring, and perturbation
   evaluation.
-- `sasp/`: single-agent control tasks and runner using the same task format,
+- `single_agent/`: single-agent control tasks and runner using the same task format,
   checker, tool backends, and judging stack where applicable.
 
 The benchmark currently includes 210 multi-agent tasks across eight domains and
@@ -22,7 +22,7 @@ software engineering.
 
 ```text
 .
-├── masp/                     # Multi-agent benchmark package
+├── multi_agent/                     # Multi-agent benchmark package
 │   ├── tasks/                # 210 task YAMLs and task-local assets
 │   ├── tools/                # Domain tool catalogs
 │   ├── banks/                # Stateful mock service backends
@@ -30,13 +30,13 @@ software engineering.
 │   ├── perturbation_specs/   # Perturbation index and variant specifications
 │   ├── schemas/              # Pydantic schemas for tasks, actions, and traces
 │   └── trace/                # JSONL trace writer and event models
-├── sasp/                     # Single-agent benchmark package
+├── single_agent/                     # Single-agent benchmark package
 │   ├── tasks/                # 34 single-agent task YAMLs
 │   ├── tools/                # Single-agent domain tool catalogs
 │   └── frameworks/           # Single-agent runner integration
 ├── fixtures/                 # Real workspace fixtures for SDE tasks
 ├── scripts/                  # Task generation, perturbation, and validation tools
-├── sar_final.py              # Metric aggregation helper
+├── multi_agent/sar_final.py  # Metric aggregation helper
 └── pyproject.toml            # Package metadata and CLI entry points
 ```
 
@@ -76,14 +76,13 @@ local; it is ignored by Git.
 Common variables:
 
 ```bash
-# OpenAI-compatible calls used by judges and in-process adapters.
-# Codex uses CODEX_API_KEY first, then OPENAI_API_KEY, then local codex CLI login state.
-MASP_CODEX_AUTH_MODE=auto    # optional: auto | api_key | cli_login
-CODEX_API_KEY=...            # optional
+# OpenAI-compatible calls used by judges, Codex API-key mode, and in-process adapters.
+CODEX_AUTH_MODE=auto         # optional: auto | api_key | cli_login
 OPENAI_API_KEY=...
 OPENAI_BASE_URL=...          # optional
 
 # Claude Code official API-key auth; alternatively use local claude CLI login state
+CLAUDE_CODE_AUTH_MODE=auto   # optional: auto | api_key | cli_login
 ANTHROPIC_API_KEY=...        # optional
 ANTHROPIC_BASE_URL=...       # optional
 
@@ -105,14 +104,14 @@ The repository does not include API keys or private provider URLs.
 Verify that the package entry points import and expose their CLIs:
 
 ```bash
-python -m masp --help
-python -m sasp --help
+python -m multi_agent --help
+python -m single_agent --help
 ```
 
 Run Python bytecode checks over the tracked code:
 
 ```bash
-python -m compileall masp sasp scripts fixtures
+python -m compileall multi_agent single_agent scripts fixtures
 ```
 
 ## Running a Multi-Agent Task
@@ -120,12 +119,12 @@ python -m compileall masp sasp scripts fixtures
 Run one task with the multi-agent runner:
 
 ```bash
-python -m masp run tasks/daily_life/dining/dl-t11.yaml \
+python -m multi_agent run tasks/daily_life/dining/dl-t11.yaml \
   --framework clawteam \
   --harness openclaw \
   --model gpt-5.4 \
-  --output masp/results \
-  --trace-dir masp/traces
+  --output multi_agent/results \
+  --trace-dir multi_agent/traces
 ```
 
 Useful flags:
@@ -140,15 +139,16 @@ Useful flags:
 Artifacts are written under harness/model-scoped directories, for example:
 
 ```text
-masp/traces/openclaw/gpt-5.4/*.jsonl
-masp/results/openclaw/gpt-5.4/*.json
-masp/results/openclaw/gpt-5.4/*.sqlite
+multi_agent/traces/openclaw/gpt-5.4/*.jsonl
+multi_agent/results/openclaw/gpt-5.4/*.json
+multi_agent/results/openclaw/gpt-5.4/*.sqlite
 ```
 
 The JSONL trace is append-only and records normalized `tool_call`,
 `communication`, `access_decision`, and run-boundary events. The result JSON
-summarizes action counts, violation counts, Layer-1 penalties, operational
-score, completion score, warnings, and any error status.
+summarizes action counts, violation counts, paper-facing metrics
+(`sar_tool`, `sar_resource`, `sar_flow`, `sar_avg`, `avs`, `tcr`), diagnostic
+penalties, warnings, and any error status.
 
 ## Running the Smoke Suite
 
@@ -156,27 +156,27 @@ The smoke script runs five representative multi-agent tasks and writes logs,
 traces, and result reports under ignored artifact directories.
 
 ```bash
-SKIP_JUDGE=1 RUN_ALL_WORKERS=1 MASP_HARNESS=openclaw ./masp/run_smoke.sh
+SKIP_JUDGE=1 RUN_ALL_WORKERS=1 MASP_HARNESS=openclaw ./multi_agent/run_smoke.sh
 ```
 
 Select native harness/model labels with environment variables:
 
 ```bash
-MASP_HARNESS=claude MASP_CLAUDE_MODEL=claude-sonnet-4-6 ./masp/run_smoke.sh
-MASP_HARNESS=codex MASP_CODEX_MODEL=gpt-5.4 ./masp/run_smoke.sh
-MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=qwen3.5-plus ./masp/run_smoke.sh
+MASP_HARNESS=claude MASP_CLAUDE_MODEL=claude-sonnet-4-6 ./multi_agent/run_smoke.sh
+MASP_HARNESS=codex MASP_CODEX_MODEL=gpt-5.4 ./multi_agent/run_smoke.sh
+MASP_HARNESS=openclaw MASP_OPENCLAW_MODEL=qwen3.5-plus ./multi_agent/run_smoke.sh
 ```
 
-`masp/run_smoke_2.sh` contains the remaining larger task batch used for the
+`multi_agent/run_smoke_2.sh` contains the remaining larger task batch used for the
 same harness/model execution path.
 
 ## Running a Single-Agent Control Task
 
 ```bash
-python -m sasp run sasp/tasks/finance/sa-fin-t1.yaml \
+python -m single_agent run single_agent/tasks/finance/sa-fin-t1.yaml \
   --model gpt-5.4 \
-  --output sasp/results \
-  --trace-dir sasp/traces
+  --output single_agent/results \
+  --trace-dir single_agent/traces
 ```
 
 Single-agent reports use the same deterministic access checker and operational
@@ -184,19 +184,19 @@ judge machinery, but do not report inter-agent information-flow metrics.
 
 ## Perturbation Evaluation
 
-Perturbation variants are stored in `masp/perturbation_specs/` and indexed by
-`masp/perturbation_specs/index.jsonl`.
+Perturbation variants are stored in `multi_agent/perturbation_specs/` and indexed by
+`multi_agent/perturbation_specs/index.jsonl`.
 
 Run one perturbation variant directly:
 
 ```bash
-python -m masp run tasks/ecommerce/after_sales/ec-t13.yaml \
+python -m multi_agent run tasks/ecommerce/after_sales/ec-t13.yaml \
   --framework clawteam \
   --harness openclaw \
   --model gpt-5.4 \
   --perturbation-id ec-t13-inj-1 \
-  --output masp/results \
-  --trace-dir masp/traces
+  --output multi_agent/results \
+  --trace-dir multi_agent/traces
 ```
 
 Run a perturbation matrix:
@@ -214,13 +214,13 @@ python scripts/run_perturbations.py \
 Summarize perturbation reports:
 
 ```bash
-python scripts/summarize_perturbations.py masp/results/openclaw/gpt-5.4
+python scripts/summarize_perturbations.py multi_agent/results/openclaw/gpt-5.4
 ```
 
 ## Task Generation and Validation
 
-The released tasks are already materialized under `masp/tasks/` and
-`sasp/tasks/`. The scripts below are for extending or validating the benchmark.
+The released tasks are already materialized under `multi_agent/tasks/` and
+`single_agent/tasks/`. The scripts below are for extending or validating the benchmark.
 
 Validate existing generated tasks for a domain:
 
@@ -250,8 +250,8 @@ This repository is prepared so GitHub archives contain only the benchmark code,
 tasks, fixtures, and supporting scripts. The following are intentionally ignored:
 
 - `.env` and `.env.*`
-- `masp/traces/`, `masp/results/`, `masp/logs/`, `masp/workspaces/`
-- `sasp/traces/`, `sasp/results/`, `sasp/logs/`
+- `multi_agent/traces/`, `multi_agent/results/`, `multi_agent/logs/`, `multi_agent/workspaces/`
+- `single_agent/traces/`, `single_agent/results/`, `single_agent/logs/`
 - `scripts/_staging/` and generated intermediate reports
 - Python caches and build outputs
 - paper sources and generated paper artifacts under `paper/`

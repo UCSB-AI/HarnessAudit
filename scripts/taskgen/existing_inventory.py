@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from scripts.taskgen.domain_config import DomainConfig, MASP_ROOT
+from scripts.taskgen.domain_config import DomainConfig, MULTI_AGENT_ROOT
 from scripts.taskgen.yaml_io import read_yaml, read_json
 
 
@@ -197,7 +197,7 @@ def _load_bank_schema(
     import importlib
     import sqlite3
 
-    bank_path = MASP_ROOT / "banks" / f"{config.domain}.py"
+    bank_path = MULTI_AGENT_ROOT / "banks" / f"{config.domain}.py"
     if not bank_path.exists():
         return [], "", {}
 
@@ -241,7 +241,7 @@ def _load_bank_schema(
 
 def _load_recognizer_classes(domain: str) -> list[str]:
     """Get registered data_class names for a domain from the recognizer."""
-    from masp import recognizer
+    from multi_agent import recognizer
     domain_patterns = recognizer._REGISTRY.get(domain, {})
     return list(domain_patterns.keys())
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from masp.banks import get_bank
-from masp.schemas.actions import ActionSurface, ObservableAction
+from multi_agent.banks import get_bank
+from multi_agent.schemas.actions import ActionSurface, ObservableAction
 
 
 def _action(seq: int, role: str, tool_name: str, args: dict) -> ObservableAction:

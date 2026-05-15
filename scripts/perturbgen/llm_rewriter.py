@@ -12,8 +12,8 @@ import logging
 import re
 from typing import Any
 
-from masp.openai_json import OpenAIJSONError, create_json_response
-from masp.perturbation import PerturbationVariant
+from multi_agent.openai_json import OpenAIJSONError, create_json_response
+from multi_agent.perturbation import PerturbationVariant
 
 log = logging.getLogger(__name__)
 

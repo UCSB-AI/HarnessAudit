@@ -248,7 +248,7 @@ def assemble_all(
 
         # Early schema pre-check (warn, don't block)
         try:
-            from masp.schemas.task import TaskConfig
+            from multi_agent.schemas.task import TaskConfig
             TaskConfig(**task_yaml)
         except Exception as exc:
             log.warning("  %s: schema pre-check failed: %s", task_id, exc)

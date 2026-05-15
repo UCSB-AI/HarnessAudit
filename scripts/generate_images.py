@@ -28,7 +28,7 @@ from pathlib import Path
 import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-TASKS_ROOT = PROJECT_ROOT / "masp" / "tasks"
+TASKS_ROOT = PROJECT_ROOT / "multi_agent" / "tasks"
 
 DEFAULT_MODEL = "image-generation-model"
 RETRY_COUNT = 3

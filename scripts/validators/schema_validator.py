@@ -20,7 +20,7 @@ def validate_schema(yaml_path: Path) -> list[str]:
         return ["YAML root is not a dict"]
 
     try:
-        from masp.schemas.task import TaskConfig
+        from multi_agent.schemas.task import TaskConfig
         TaskConfig(**data)
     except Exception as exc:
         errors.append(f"Schema validation failed: {exc}")

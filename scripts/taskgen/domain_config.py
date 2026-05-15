@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-MASP_ROOT = Path(__file__).resolve().parents[2] / "masp"
+MULTI_AGENT_ROOT = Path(__file__).resolve().parents[2] / "multi_agent"
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class DomainConfig:
 
     @property
     def tasks_dir(self) -> Path:
-        return MASP_ROOT / "tasks" / (self.tasks_dir_name or self.domain)
+        return MULTI_AGENT_ROOT / "tasks" / (self.tasks_dir_name or self.domain)
 
     @property
     def existing_count(self) -> int:
@@ -87,9 +87,9 @@ def _reg(
         target_multimodal_new=target_mm,
         categories=categories,
         exemplar_task_ids=exemplars,
-        tools_yaml=MASP_ROOT / "tools" / f"{domain}.yaml",
-        fixtures_dir=MASP_ROOT / "fixtures" / domain,
-        bank_module=bank_module or f"masp.banks.{domain}",
+        tools_yaml=MULTI_AGENT_ROOT / "tools" / f"{domain}.yaml",
+        fixtures_dir=MULTI_AGENT_ROOT / "fixtures" / domain,
+        bank_module=bank_module or f"multi_agent.banks.{domain}",
         recognizer_domain=domain,
         tasks_dir_name=tasks_dir_name,
         scenario_seeds=scenario_seeds,
@@ -286,7 +286,7 @@ _reg(
     "social_interaction", "si", target_new=6, target_mm=1,
     categories=["voice", "report"],
     exemplars=["si-t1", "si-t6"],
-    bank_module="masp.banks.social_interaction",
+    bank_module="multi_agent.banks.social_interaction",
     role_templates=(
         "engagement_coordinator (hub)",
         "trust_safety_reviewer",

@@ -29,7 +29,7 @@ from collections import Counter
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-TRACES_ROOT = REPO_ROOT / "masp" / "traces"
+TRACES_ROOT = REPO_ROOT / "multi_agent" / "traces"
 
 FRAMEWORK_DIRS = ("openclaw", "codex", "claude")
 
@@ -80,7 +80,7 @@ def classify_trace(path: Path) -> dict | None:
     task_id = ""
     framework_model = ""
     trace_id = ""
-    task_completion_score: float | None = None
+    tcr: float | None = None
 
     try:
         with path.open("r", encoding="utf-8") as fh:
@@ -111,9 +111,9 @@ def classify_trace(path: Path) -> dict | None:
                                 hub_role = str(ag.get("role", ""))
                                 break
                 elif etype == "trace_end":
-                    score = evt.get("task_completion_score")
+                    score = evt.get("tcr", evt.get("task_completion_score"))
                     if isinstance(score, (int, float)):
-                        task_completion_score = float(score)
+                        tcr = float(score)
                 elif evt.get("surface") == "tool_call":
                     n_tool_calls += 1
                     role = evt.get("agent_role") or ""
@@ -169,7 +169,8 @@ def classify_trace(path: Path) -> dict | None:
         "n_user_comms": len(user_comms),
         "final_output_len": len(final_output),
         "final_output_preview": final_output[:160].replace("\n", " "),
-        "task_completion_score": task_completion_score,
+        "tcr": tcr,
+        "task_completion_score": tcr,
         "verdict": verdict,
         "reason": reason,
     }

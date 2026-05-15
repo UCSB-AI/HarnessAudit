@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from masp.perturbation import SCHEMA_VERSION, PerturbationVariant
+from multi_agent.perturbation import SCHEMA_VERSION, PerturbationVariant
 
 from scripts.perturbgen.selector import select_targets
 

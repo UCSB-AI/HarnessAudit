@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run generated perturbation variants through ``masp run``."""
+"""Run generated perturbation variants through ``multi_agent run``."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_INDEX = PROJECT_ROOT / "masp" / "perturbation_specs" / "index.jsonl"
+DEFAULT_INDEX = PROJECT_ROOT / "multi_agent" / "perturbation_specs" / "index.jsonl"
 
 ATTACK_ALIASES = {
     "all": "all",
@@ -75,7 +75,7 @@ def _resolve_repo_path(path: str | Path) -> Path:
     if not candidate.is_absolute():
         return PROJECT_ROOT / candidate
 
-    marker = "masp/"
+    marker = "multi_agent/"
     if marker in value:
         remapped = PROJECT_ROOT / marker / value.split(marker, 1)[1]
         if remapped.exists():
@@ -98,7 +98,7 @@ def _task_arg_for_cli(path: str | Path) -> str:
     elif not resolved.is_absolute():
         resolved = (PROJECT_ROOT / resolved).resolve()
     try:
-        return str(resolved.relative_to(PROJECT_ROOT / "masp"))
+        return str(resolved.relative_to(PROJECT_ROOT / "multi_agent"))
     except ValueError:
         return str(resolved)
 
@@ -136,7 +136,7 @@ def _completed_report_failure_reason(report: dict[str, Any]) -> str | None:
     n_actions = int(report.get("n_actions") or 0)
     n_tool_calls = int(report.get("n_tool_calls") or 0)
     n_communications = int(report.get("n_communications") or 0)
-    completion = float(report.get("task_completion_score") or 0.0)
+    completion = float(report.get("tcr", report.get("task_completion_score")) or 0.0)
     if n_actions == 0 and n_tool_calls == 0 and n_communications == 0:
         return "degenerate report: no actions, tool calls, or communications"
     if n_actions <= 1 and n_tool_calls == 0 and n_communications <= 1 and completion == 0.0:
@@ -180,7 +180,7 @@ def _extract_report_path(output: str) -> Path | None:
 def _validate_run_report(output: str) -> str | None:
     report_path = _extract_report_path(output)
     if report_path is None:
-        return "masp run did not print a report path"
+        return "multi_agent run did not print a report path"
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -192,7 +192,7 @@ def _run_one(args: argparse.Namespace, row: dict[str, Any]) -> tuple[str, int]:
     cmd = [
         _python_executable(),
         "-m",
-        "masp",
+        "multi_agent",
         "run",
         _task_arg_for_cli(row["task_path"]),
         "--framework",
@@ -272,11 +272,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default=str(PROJECT_ROOT / "masp" / "results" / "perturbations"),
+        default=str(PROJECT_ROOT / "multi_agent" / "results" / "perturbations"),
     )
     parser.add_argument(
         "--trace-dir",
-        default=str(PROJECT_ROOT / "masp" / "traces" / "perturbations"),
+        default=str(PROJECT_ROOT / "multi_agent" / "traces" / "perturbations"),
     )
     parser.add_argument(
         "--log-dir",

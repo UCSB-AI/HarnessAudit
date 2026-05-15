@@ -1,6 +1,6 @@
 """LLM client wrapper for task generation pipeline.
 
-Uses the shared OpenAI JSON helper from masp.openai_json.
+Uses the shared OpenAI JSON helper from multi_agent.openai_json.
 Adds retry logic, rate limiting, and structured JSON output parsing.
 """
 
@@ -11,7 +11,7 @@ import logging
 import time
 from typing import Any
 
-from masp.openai_json import OpenAIJSONError, create_json_response
+from multi_agent.openai_json import OpenAIJSONError, create_json_response
 
 log = logging.getLogger(__name__)
 

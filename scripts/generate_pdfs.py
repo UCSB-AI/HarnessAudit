@@ -36,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-TASKS_ROOT = PROJECT_ROOT / "masp" / "tasks"
+TASKS_ROOT = PROJECT_ROOT / "multi_agent" / "tasks"
 
 DOMAIN_DIRS = {
     "daily_life": "daily_life",
