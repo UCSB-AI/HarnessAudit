@@ -26,7 +26,9 @@ validity.
 - [ ] Support more multi-agent frameworks. HarnessAudit currently uses
   [ClawTeam](https://github.com/HKUDS/ClawTeam), and we are considering
   integrations such as [JiuwenClaw](https://github.com/openJiuwen-ai/jiuwenclaw).
-- [ ] Support more harnesses, including systems such as Nanobot and Hermes-Agent.
+- [ ] Support more harnesses, including systems such as
+  [Nanobot](https://github.com/HKUDS/nanobot) and
+  [Hermes-Agent](https://github.com/NousResearch/hermes-agent).
 - [ ] Further improve data quality and task coverage.
 
 ---
