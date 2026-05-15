@@ -54,6 +54,10 @@ HarnessAudit reports paper-facing metrics from normalized traces:
 The trace schema records normalized tool calls, communications, access
 decisions, completion scores, operational judgments, and run-level metadata.
 
+<p align="center">
+  <img src="assets/pipline.png" width="92%">
+</p>
+
 ---
 
 ## 🗂️ Repository Layout
