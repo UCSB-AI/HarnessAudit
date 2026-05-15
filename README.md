@@ -2,7 +2,7 @@
 
 [![Project](https://img.shields.io/badge/Project-Website-blue.svg)](https://harnessaudit.github.io/)
 [![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b.svg)](https://arxiv.org/pdf/2605.14271)
-[![Dataset](https://img.shields.io/badge/Dataset-Hugging%20Face-yellow.svg)](https://huggingface.co/datasets/eric-ai-lab/HarnessAudit)
+[![Dataset](https://img.shields.io/badge/Dataset-Hugging%20Face-yellow.svg)](https://huggingface.co/datasets/LCZZZZ/HarnessAudit)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
