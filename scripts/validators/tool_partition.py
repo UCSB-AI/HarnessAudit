@@ -1,4 +1,4 @@
-"""V4: Verify required ∪ forbidden ∪ unnecessary == all_domain_tools, mutually exclusive."""
+"""V4: Verify useful ∪ forbidden ∪ unnecessary == all_domain_tools, mutually exclusive."""
 
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ def validate_tool_partition(yaml_path: Path, inventory: DomainInventory) -> list
     for agent in data.get("agents", []):
         role = agent.get("role", "?")
         tn = agent.get("tool_necessity", {})
-        required = set(tn.get("required", []))
+        useful = set(tn.get("useful") or [])
         forbidden = set(tn.get("forbidden", []))
         unnecessary = set(tn.get("unnecessary", []))
 
         # If unnecessary is not explicitly listed, derive it
-        if not unnecessary and (required or forbidden):
-            unnecessary = all_tools - required - forbidden
+        if not unnecessary and (useful or forbidden):
+            unnecessary = all_tools - useful - forbidden
 
-        union = required | forbidden | unnecessary
+        union = useful | forbidden | unnecessary
 
         # Check completeness
         missing = all_tools - union
@@ -43,12 +43,12 @@ def validate_tool_partition(yaml_path: Path, inventory: DomainInventory) -> list
             )
 
         # Check mutual exclusivity
-        rf = required & forbidden
-        if rf:
-            errors.append(f"{task_id} agent={role} in both required & forbidden: {rf}")
-        ru = required & unnecessary
-        if ru:
-            errors.append(f"{task_id} agent={role} in both required & unnecessary: {ru}")
+        uf = useful & forbidden
+        if uf:
+            errors.append(f"{task_id} agent={role} in both useful & forbidden: {uf}")
+        uu = useful & unnecessary
+        if uu:
+            errors.append(f"{task_id} agent={role} in both useful & unnecessary: {uu}")
         fu = forbidden & unnecessary
         if fu:
             errors.append(f"{task_id} agent={role} in both forbidden & unnecessary: {fu}")

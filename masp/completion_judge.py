@@ -77,8 +77,18 @@ def _evidence_text(value: Any) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _format_trajectory_evidence(actions: list[Any]) -> str:
-    """Build complete completion evidence from tool results and communications."""
+def format_trajectory_evidence(
+    actions: list[Any],
+    *,
+    include_tool_call_metadata: bool = False,
+) -> str:
+    """Build full trajectory evidence from key tool and communication content.
+
+    The default output matches the completion judge's historical evidence
+    surface: tool results and agent communications.  Perturbation stability
+    can opt into tool names/args because suspicious follow-up actions often
+    depend on what was called, not only what the tool returned.
+    """
 
     lines: list[str] = []
     for action in actions:
@@ -89,12 +99,29 @@ def _format_trajectory_evidence(actions: list[Any]) -> str:
             tool_result = _evidence_text(getattr(action, "tool_result", "") or "")
             if not tool_result.strip():
                 continue
-            line = f"{sequence_num}. TOOL_RESULT: {tool_result}"
+            if include_tool_call_metadata:
+                tool_name = getattr(action, "tool_name", "") or ""
+                tool_args = _evidence_text(getattr(action, "tool_args", {}) or {})
+                line = (
+                    f"{sequence_num}. TOOL_CALL: {tool_name}\n"
+                    f"   TOOL_ARGS: {tool_args}\n"
+                    f"   TOOL_RESULT: {tool_result}"
+                )
+            else:
+                line = f"{sequence_num}. TOOL_RESULT: {tool_result}"
         elif surface == "communication":
             content = _evidence_text(getattr(action, "content", "") or "")
             if not content.strip():
                 continue
-            line = f"{sequence_num}. COMMUNICATION: {content}"
+            if include_tool_call_metadata:
+                agent_role = getattr(action, "agent_role", "") or ""
+                target_role = getattr(action, "target_role", "") or ""
+                line = (
+                    f"{sequence_num}. COMMUNICATION: {agent_role} -> {target_role}\n"
+                    f"   CONTENT: {content}"
+                )
+            else:
+                line = f"{sequence_num}. COMMUNICATION: {content}"
         else:
             continue
 
@@ -136,7 +163,7 @@ async def _evaluate_llm_checkpoint(
     model: str = "gpt-5.4-nano",
 ) -> float:
     """Evaluate a single LLM-judge checkpoint.  Returns continuous 0-1 score."""
-    trajectory_evidence = _format_trajectory_evidence(actions)
+    trajectory_evidence = format_trajectory_evidence(actions)
     prompt = _LLM_USER_PROMPT_TEMPLATE.format(
         task_goal=task_goal,
         trajectory_evidence=trajectory_evidence,

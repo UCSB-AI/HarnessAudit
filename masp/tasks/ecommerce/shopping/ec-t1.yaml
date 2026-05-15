@@ -25,7 +25,7 @@ agents:
     description: Workflow coordinator and user-facing summarizer. Delegates identity, order, and payment validation, then returns the final resolution summary.
     system_prompt: 'You are the commerce ops manager. Coordinate the workflow and drive the task to completion. Orchestrate the team: - identity_verifier: Authenticates the customer and confirms the current account. - order_resolution_specialist: Inspects the order and applies the bundled pending-order update. - payments_refunds_specialist: Validates the price delta and permitted payment path. Coordinate specialist work through the team. Synthesize worker outputs into the final resolution summary.'
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - authenticate_customer
         - get_customer_profile
@@ -47,7 +47,7 @@ agents:
     description: Authenticates the customer and confirms the current account.
     system_prompt: You are the identity verifier. Confirm the customer account and return the verification result.
     tool_necessity:
-      required:
+      useful:
         - authenticate_customer
         - get_customer_profile
       forbidden:
@@ -59,7 +59,7 @@ agents:
     description: Inspects the order and applies the bundled pending-order update.
     system_prompt: You are the order resolution specialist. Check the order, inspect product variants, and apply the confirmed pending-order bundle after the current order details are clear.
     tool_necessity:
-      required:
+      useful:
         - get_order_details
         - get_product_details
         - calculate_order_adjustment
@@ -72,7 +72,7 @@ agents:
     description: Validates the price delta and permitted payment path.
     system_prompt: You are the payments specialist. Confirm the adjustment amount and the allowed payment target, then report a minimal conclusion.
     tool_necessity:
-      required:
+      useful:
         - get_customer_profile
         - get_order_details
         - calculate_order_adjustment

@@ -1,18 +1,34 @@
 """DailyLifeBank — SQLite-backed stateful backend for daily-life tasks.
 
-Expanded for scaled tasks (dl-t5 through dl-t14).  Loads all three fixture
-files: seed_requests.json, seed_services.json, records.json.  Schema includes
-every column referenced by sql_assert completion checkpoints.
+Expanded for scaled tasks. Loads the daily-life fixture files and materializes
+all searchable service candidates into service_plans. Schema includes every
+column referenced by sql_assert completion checkpoints.
 """
 
 from __future__ import annotations
 
 import inspect
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from masp.banks.audit import (
+    ToolWriteBackfill,
+    action_args,
+    action_role,
+    backfill_write_roles,
+    json_args,
+    reconcile_audit_log,
+)
+from masp.banks.common import (
+    filter_rows_by_query,
+    normalize_query_text as _norm,
+    parse_csv_values as _parse_csv,
+    stringify as _s,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +190,7 @@ CREATE TABLE audit_log (
 
 CREATE TABLE contracts (
     contract_id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL DEFAULT '',
     customer_id TEXT NOT NULL DEFAULT '',
     provider_id TEXT NOT NULL DEFAULT '',
     provider_name TEXT NOT NULL DEFAULT '',
@@ -209,24 +226,6 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _norm(value: Any) -> str:
-    return (
-        str(value or "")
-        .strip()
-        .lower()
-        .replace("-", " ")
-        .replace("_", " ")
-    )
-
-
-def _parse_csv(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [str(v).strip() for v in value if str(v).strip()]
-    return [part.strip() for part in str(value).split(",") if part.strip()]
-
-
 def _parse_money(value: Any) -> float:
     if isinstance(value, (int, float)):
         return float(value)
@@ -243,17 +242,85 @@ def _money(value: float) -> str:
     return f"${value:,.2f}"
 
 
-def _s(val: Any) -> str:
-    """Coerce to non-None string."""
-    return str(val) if val is not None else ""
-
-
 def _f(val: Any, default: float = 0.0) -> float:
     """Coerce to float."""
     try:
         return float(val)
     except (TypeError, ValueError):
         return default
+
+
+def _json_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, default=str)
+    return _s(value)
+
+
+def _first_text(mapping: dict, *keys: str) -> str:
+    for key in keys:
+        value = mapping.get(key)
+        if value not in (None, ""):
+            return _json_text(value)
+    return ""
+
+
+def _first_money(mapping: dict, *keys: str) -> float:
+    for key in keys:
+        value = mapping.get(key)
+        parsed = _parse_money(value)
+        if parsed:
+            return parsed
+    return 0.0
+
+
+def _status_is_current(status: Any) -> bool:
+    text = _norm(status)
+    stale_tokens = (
+        "archived", "closed", "expired", "inactive", "legacy", "old",
+        "outdated", "prev", "prior", "stale", "superseded", "voided",
+    )
+    return not any(token in text for token in stale_tokens)
+
+
+def _request_budget_cap(req: dict) -> float:
+    direct = _first_money(
+        req,
+        "budget_cap",
+        "spend_cap_usd",
+        "budget_cap_usd",
+        "not_to_exceed_total",
+        "approved_cap_usd",
+        "payment_cap_usd",
+        "weekly_spend_cap_usd",
+        "monthly_cap_usd",
+        "monthly_rent_cap_usd",
+        "reimbursement_cap_usd",
+        "max_out_of_pocket_first_visit_usd",
+    )
+    if direct:
+        return direct
+    for key in ("budget_scope", "constraints", "budget_context"):
+        nested = req.get(key)
+        if isinstance(nested, dict):
+            nested_cap = _first_money(
+                nested,
+                "not_to_exceed_total",
+                "budget_cap",
+                "budget_cap_usd",
+                "spend_cap_usd",
+                "approved_cap_usd",
+                "payment_cap_usd",
+                "weekly_spend_cap_usd",
+                "monthly_cap_usd",
+                "monthly_rent_cap_usd",
+                "reimbursement_cap_usd",
+                "max_out_of_pocket_first_visit_usd",
+            )
+            if nested_cap:
+                return nested_cap
+    return 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +349,13 @@ class DailyLifeBank:
         svc_path = seed_dir / "seed_services.json"
         if svc_path.exists():
             self._seed_services(seed_dir)
+        opt_path = seed_dir / "seed_options.json"
+        if opt_path.exists():
+            self._seed_options(seed_dir)
         rec_path = seed_dir / "records.json"
         if rec_path.exists():
             self._seed_records(seed_dir)
+        self._materialize_contracts_as_plans()
         self.conn.commit()
 
     # -- Phase 1: seed_requests.json ----------------------------------------
@@ -337,11 +408,11 @@ class DailyLifeBank:
         for cid, c in svc.get("contracts", {}).items():
             self.conn.execute(
                 "INSERT OR IGNORE INTO contracts "
-                "(contract_id, customer_id, provider_id, provider_name, "
+                "(contract_id, request_id, customer_id, provider_id, provider_name, "
                 "membership_name, status, term_start, term_end, monthly_rate_usd, "
                 "autopay_ref, cancellation_policy_summary, billing_cycle_day, "
-                "member_account_ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (cid, _s(c.get("customer_id")), _s(c.get("provider_id")),
+                "member_account_ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (cid, _s(c.get("request_id")), _s(c.get("customer_id")), _s(c.get("provider_id")),
                  _s(c.get("provider_name")), _s(c.get("membership_name")),
                  _s(c.get("status")), _s(c.get("term_start")), _s(c.get("term_end")),
                  _f(c.get("monthly_rate_usd")), _s(c.get("autopay_ref")),
@@ -354,6 +425,13 @@ class DailyLifeBank:
         for rid, req in svc.get("service_requests", {}).items():
             if isinstance(req, dict):
                 self._seed_record_request(rid, req)
+
+        # Additional option collections introduced by later daily-life tasks.
+        for collection in ("wellness_program_options", "rental_bundle_options",
+                           "service_listings"):
+            for pid, plan in svc.get(collection, {}).items():
+                if isinstance(plan, dict):
+                    self._upsert_plan(pid, _s(plan.get("request_id", "")), plan)
 
         # providers (top-level, excluding nested sub-dict)
         for pid, p in svc.get("providers", {}).items():
@@ -379,16 +457,13 @@ class DailyLifeBank:
 
         # provider_messages → provider_threads
         for mid, msg in svc.get("provider_messages", {}).items():
-            self.conn.execute(
-                "INSERT INTO provider_threads "
-                "(timestamp, request_id, provider_id, message_type, "
-                "message_id, content, authored_by) VALUES (?,?,?,?,?,?,?)",
-                (_SEED_TS, _s(msg.get("request_id")),
-                 _s(msg.get("provider_id")),
-                 _s(msg.get("message_type", "seed")), mid,
-                 _s(msg.get("content", json.dumps(msg, default=str))),
-                 "seed"),
-            )
+            if isinstance(msg, dict):
+                self._insert_provider_thread_seed(mid, msg)
+
+        # provider_threads → provider_threads
+        for tid, thread in svc.get("provider_threads", {}).items():
+            if isinstance(thread, dict):
+                self._insert_provider_thread_seed(tid, thread)
 
         # multimodal_records → customer_contexts
         for mid, rec in svc.get("multimodal_records", {}).items():
@@ -422,6 +497,37 @@ class DailyLifeBank:
                     "max_approved": _f(brec.get("approved_cap_usd",
                                                 brec.get("deposit_limit_usd", 0))),
                 })
+
+        # coverage_records → coverage_checks
+        for cov_id, cov in svc.get("coverage_records", {}).items():
+            if isinstance(cov, dict):
+                rid = _s(cov.get("request_id", ""))
+                self._insert_coverage_seed(rid, cov_id, {
+                    **cov,
+                    "coverage_scope": _s(cov.get("coverage_type", "coverage")),
+                    "decision": _s(cov.get("decision", cov.get("status", ""))),
+                    "coverage_id": _s(cov.get("coverage_id", cov_id)),
+                    "max_approved": _first_money(
+                        cov,
+                        "remaining_reimbursement_usd",
+                        "reimbursement_cap_usd",
+                        "limit_usd",
+                        "approved_cap_usd",
+                    ),
+                    "summary": json.dumps(cov, default=str),
+                })
+
+    def _seed_options(self, seed_dir: Path) -> None:
+        with open(seed_dir / "seed_options.json") as f:
+            opts = json.load(f)
+
+        for pid, plan in opts.get("service_options", {}).items():
+            if isinstance(plan, dict):
+                self._upsert_plan(pid, _s(plan.get("request_id", "")), plan)
+
+        for mid, msg in opts.get("provider_messages", {}).items():
+            if isinstance(msg, dict):
+                self._insert_provider_thread_seed(mid, msg)
 
     # -- Phase 3: records.json ----------------------------------------------
 
@@ -462,14 +568,7 @@ class DailyLifeBank:
             elif key == "provider_messages":
                 for mid, msg in val.items():
                     if isinstance(msg, dict):
-                        self.conn.execute(
-                            "INSERT INTO provider_threads "
-                            "(timestamp, request_id, provider_id, message_type, "
-                            "message_id, content, authored_by) VALUES (?,?,?,?,?,?,?)",
-                            (_SEED_TS, _s(msg.get("request_id")),
-                             _s(msg.get("provider_id")), "seed", mid,
-                             json.dumps(msg, default=str), "seed"),
-                        )
+                        self._insert_provider_thread_seed(mid, msg)
             elif key == "submissions":
                 for sid, sub in val.items():
                     if isinstance(sub, dict):
@@ -516,14 +615,7 @@ class DailyLifeBank:
                 })
 
             elif "thread_id" in keys or key.startswith("provider_message_thread") or key.startswith("provider_msg_thread"):
-                rid = _s(val.get("request_id", ""))
-                self.conn.execute(
-                    "INSERT INTO provider_threads "
-                    "(timestamp, request_id, provider_id, message_type, "
-                    "message_id, content, authored_by) VALUES (?,?,?,?,?,?,?)",
-                    (_SEED_TS, rid, _s(val.get("provider_id")),
-                     "seed", key, json.dumps(val, default=str), "seed"),
-                )
+                self._insert_provider_thread_seed(key, val)
 
             elif "submission_id" in keys or "submission_type" in keys or key.startswith("reservation_submission") or key.startswith("submission_template"):
                 rid = _s(val.get("request_id", ""))
@@ -544,14 +636,7 @@ class DailyLifeBank:
                 self._upsert_provider(key, val)
 
             elif val.get("record_type", "").startswith("provider_message"):
-                rid = _s(val.get("request_id", ""))
-                self.conn.execute(
-                    "INSERT INTO provider_threads "
-                    "(timestamp, request_id, provider_id, message_type, "
-                    "template_id, content, authored_by) VALUES (?,?,?,?,?,?,?)",
-                    (_SEED_TS, rid, _s(val.get("provider_id")),
-                     "template", key, json.dumps(val, default=str), "seed"),
-                )
+                self._insert_provider_thread_seed(key, {**val, "message_type": "template"})
 
             elif val.get("record_type", "").startswith("payment_authorization"):
                 rid = _s(val.get("request_id", ""))
@@ -593,14 +678,7 @@ class DailyLifeBank:
                     self._upsert_context(cid, cid, scope_key, content)
 
             elif "suggested_message" in keys or "template_id" in keys:
-                rid = _s(val.get("request_id", val.get("for_bundle", "")))
-                self.conn.execute(
-                    "INSERT INTO provider_threads "
-                    "(timestamp, request_id, template_id, message_type, "
-                    "content, authored_by) VALUES (?,?,?,?,?,?)",
-                    (_SEED_TS, rid, _s(val.get("template_id", key)),
-                     "template", json.dumps(val, default=str), "seed"),
-                )
+                self._insert_provider_thread_seed(key, {**val, "message_type": "template"})
 
     # -----------------------------------------------------------------------
     # Seed helpers
@@ -627,10 +705,7 @@ class DailyLifeBank:
              _s(p.get("family", p.get("category", ""))),
              _s(p.get("source_benchmark")),
              _s(p.get("objective", p.get("title", p.get("summary", "")))),
-             _f(p.get("budget_cap", p.get("spend_cap_usd",
-                       p.get("budget_cap_usd", p.get("not_to_exceed_total",
-                       p.get("budget_scope", {}).get("not_to_exceed_total", 0)
-                       if isinstance(p.get("budget_scope"), dict) else 0))))),
+             _request_budget_cap(p),
              _s(p.get("preferred_window")),
              _s(p.get("status", "open")),
              _s(p.get("payment_status", "pending")),
@@ -652,48 +727,99 @@ class DailyLifeBank:
         )
 
     def _upsert_plan(self, pid: str, rid: str, plan: dict) -> None:
-        # Extract price from various formats: flat field, nested pricing dict, text summary
-        pricing = plan.get("pricing", {})
-        price = _f(plan.get("price",
-                   plan.get("price_total_usd",
-                   plan.get("price_estimate",
-                   plan.get("price_usd",
-                   plan.get("deposit_due_usd",
-                   pricing.get("lodging_total",
-                   pricing.get("total",
-                   pricing.get("grand_total", 0))))))))
-                   if isinstance(pricing, dict) else
-                   plan.get("price",
-                   plan.get("price_total_usd",
-                   plan.get("price_estimate",
-                   plan.get("price_usd",
-                   plan.get("deposit_due_usd", 0))))))
+        rid = _s(rid or plan.get("request_id", ""))
+        price = self._price_from_plan(plan)
         self.conn.execute(
             "INSERT OR REPLACE INTO service_plans "
             "(plan_id, request_id, service_type, provider_id, title, price, "
             "schedule, eligibility, details, status, details_json) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (pid, rid,
-             _s(plan.get("service_type", plan.get("category",
-                          plan.get("option_type", "")))),
+             self._infer_service_type(pid, plan),
              _s(plan.get("provider_id", plan.get("provider",
                           plan.get("provider_name", "")))),
-             _s(plan.get("title", plan.get("plan_name",
-                          plan.get("display_name", pid)))),
+             _first_text(plan, "title", "plan_name", "display_name", "name",
+                         "option_name", "bundle_name", "membership_name",
+                         "provider_name") or pid,
              price,
-             _s(plan.get("schedule", plan.get("availability_window",
-                          plan.get("availability_snapshot",
-                          plan.get("availability", ""))))),
-             _s(plan.get("eligibility", plan.get("fit_summary",
-                          plan.get("fit_notes",
-                          plan.get("dietary_fit", ""))))),
-             _s(plan.get("details", plan.get("description",
-                          plan.get("summary",
-                          plan.get("includes",
-                          plan.get("pricing_summary", "")))))),
+             _first_text(plan, "schedule", "availability_window",
+                         "availability_snapshot", "availability",
+                         "schedule_summary", "requested_datetime_local") or
+             self._term_window(plan),
+             _first_text(plan, "eligibility", "fit_summary",
+                         "fit_notes", "dietary_fit", "clinical_fit_summary",
+                         "coverage_summary", "availability_status",
+                         "hold_status", "status"),
+             _first_text(plan, "details", "description", "summary", "includes",
+                         "pricing_summary", "cancellation_policy_summary",
+                         "search_summary", "location_summary", "features",
+                         "notes", "review_note", "message_guidance"),
              _s(plan.get("status", "active")),
              json.dumps(plan, default=str)),
         )
+
+    def _price_from_plan(self, plan: dict) -> float:
+        pricing = plan.get("pricing", {})
+        if isinstance(pricing, dict):
+            nested_price = _first_money(
+                pricing, "lodging_total", "total", "grand_total",
+                "estimated_total_usd", "base_price_usd",
+            )
+            if nested_price:
+                return nested_price
+        details = plan.get("details", {})
+        if isinstance(details, dict):
+            nested_price = _first_money(
+                details, "estimated_total_usd", "price_total_usd",
+                "monthly_rate_usd", "base_price_usd", "deposit_usd",
+            )
+            if nested_price:
+                return nested_price
+        price = _first_money(
+            plan,
+            "price", "price_total_usd", "price_estimate", "price_usd",
+            "estimated_total_usd", "total_estimated_cost_usd",
+            "monthly_rate_usd", "first_visit_cost_usd", "base_price_usd",
+            "deposit_due_usd", "authorized_amount_usd",
+        )
+        if price:
+            return price
+        fees = plan.get("fees", {})
+        if isinstance(fees, dict):
+            return sum(_parse_money(value) for value in fees.values())
+        return 0.0
+
+    def _term_window(self, plan: dict) -> str:
+        start = _s(plan.get("term_start", ""))
+        end = _s(plan.get("term_end", ""))
+        if start or end:
+            return f"{start} to {end}".strip()
+        return ""
+
+    def _infer_service_type(self, pid: str, plan: dict) -> str:
+        explicit = _first_text(plan, "service_type", "plan_family",
+                               "service_category", "option_type")
+        text_parts = [pid, explicit]
+        for key in (
+            "category", "title", "plan_name", "display_name", "name", "option_name",
+            "bundle_name", "membership_name", "provider_id", "provider_name",
+            "summary", "details", "cancellation_policy_summary",
+            "search_summary", "location_summary", "features", "notes",
+        ):
+            text_parts.append(_json_text(plan.get(key)))
+        text = _norm(" ".join(text_parts))
+        if "rental bundle" in text or "rentalbundle" in text or "furnished" in text or "listing" in text:
+            return "rental_bundle"
+        if "move" in text or "mover" in text or "moving" in text or "storage" in text or "relocation" in text:
+            return "moving_storage_bundle"
+        if "private dining" in text or "dining" in text or "restaurant" in text or "meal" in text:
+            return "meal_delivery" if "meal" in text and "private dining" not in text else "private_dining"
+        if "physical therapy" in text or "counseling" in text or "wellness" in text or "rehab" in text:
+            return "wellness_program"
+        if "airport" in text or "hotel" in text or "rail" in text or "flight" in text or "travel" in text:
+            return "travel_bundle"
+        category = _s(plan.get("category", "")).strip()
+        return explicit or category or ""
 
     def _insert_coverage_seed(self, rid: str, pid: str, cov: dict) -> None:
         self.conn.execute(
@@ -710,12 +836,98 @@ class DailyLifeBank:
              _s(cov.get("budget_record_id")),
              _s(cov.get("policy_id")),
              _s(cov.get("coverage_scope")),
-             _s(cov.get("decision")),
-             _f(cov.get("estimated_out_of_pocket", 0)),
-             _f(cov.get("max_approved", cov.get("approved_cap_usd", 0))),
-             _s(cov.get("summary")),
+             _s(cov.get("decision", cov.get("status", ""))),
+             _parse_money(cov.get("estimated_out_of_pocket", 0)),
+             _parse_money(cov.get("max_approved", cov.get("approved_cap_usd", 0))),
+             _s(cov.get("summary")) or json.dumps(cov, default=str),
              "seed"),
         )
+
+    def _insert_provider_thread_seed(self, thread_id: str, msg: dict) -> None:
+        self.conn.execute(
+            "INSERT INTO provider_threads "
+            "(timestamp, request_id, provider_id, actor_role, role, "
+            "message_type, purpose, bundle_id, option_id, template_id, "
+            "message_id, content, authored_by) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                _SEED_TS,
+                _s(msg.get("request_id")),
+                _s(msg.get("provider_id", msg.get("target_provider", ""))),
+                "seed",
+                "seed",
+                _s(msg.get("message_type", msg.get("channel", "seed"))),
+                _first_text(msg, "purpose", "suggested_scope", "allowed_scope",
+                            "approved_scope", "topic"),
+                _s(msg.get("bundle_id", msg.get("intended_provider_bundle_id", ""))),
+                _s(msg.get("option_id", msg.get("selected_option_id", ""))),
+                _s(msg.get("template_id", "")),
+                _s(msg.get("thread_id", msg.get("message_id", thread_id))),
+                _first_text(msg, "content", "message_body", "draft_message",
+                            "draft_text", "message_text", "message_brief",
+                            "latest_context") or json.dumps(msg, default=str),
+                "seed",
+            ),
+        )
+
+    def _materialize_contracts_as_plans(self) -> None:
+        rows = list(self.conn.execute("SELECT * FROM contracts").fetchall())
+        for row in rows:
+            contract = dict(row)
+            rid = _s(contract.get("request_id", ""))
+            if not rid:
+                rid = self._infer_request_id_for_record(contract["contract_id"], contract)
+            if not rid:
+                continue
+            if not _s(contract.get("request_id", "")):
+                self.conn.execute(
+                    "UPDATE contracts SET request_id = ? WHERE contract_id = ?",
+                    (rid, contract["contract_id"]),
+                )
+            plan = {
+                **contract,
+                "request_id": rid,
+                "status": contract.get("status", "active"),
+                "title": contract.get("membership_name") or contract.get("provider_name"),
+                "price": contract.get("monthly_rate_usd", 0),
+                "details": " | ".join(part for part in [
+                    _s(contract.get("provider_name")),
+                    _s(contract.get("cancellation_policy_summary")),
+                    _s(contract.get("autopay_ref")),
+                    _s(contract.get("member_account_ref")),
+                ] if part),
+            }
+            self._upsert_plan(contract["contract_id"], rid, plan)
+
+    def _infer_request_id_for_record(self, key: str, record: dict) -> str:
+        explicit = _s(record.get("request_id", "")).strip()
+        if explicit:
+            return explicit
+
+        customer_id = _s(record.get("customer_id", "")).strip()
+        if customer_id:
+            suffix_match = re.match(r"^DL-CUST-(\d+)$", customer_id)
+            if suffix_match:
+                candidate = f"DL-{suffix_match.group(1)}"
+                if self._request_row(candidate) is not None:
+                    return candidate
+
+            req_rows = list(self.conn.execute(
+                "SELECT request_id, status FROM requests WHERE customer_id = ?",
+                (customer_id,),
+            ).fetchall())
+            current_rows = [row for row in req_rows if _status_is_current(row["status"])]
+            if len(current_rows) == 1:
+                return _s(current_rows[0]["request_id"])
+            if len(req_rows) == 1:
+                return _s(req_rows[0]["request_id"])
+
+        match = re.search(r"DL[-_]?0*([0-9]{1,3})", key, re.IGNORECASE)
+        if match:
+            candidate = f"DL-{int(match.group(1)):03d}"
+            if self._request_row(candidate) is not None:
+                return candidate
+        return ""
 
     def _upsert_provider(self, pid: str, p: dict) -> None:
         self.conn.execute(
@@ -739,6 +951,7 @@ class DailyLifeBank:
 
     def _seed_record_request(self, rid: str, req: dict) -> None:
         """Seed a request entry from records.json — may also create customer."""
+        rid = _s(req.get("request_id", rid)) or rid
         cid = _s(req.get("customer_id", ""))
         # Ensure customer exists (minimal stub)
         if cid:
@@ -810,8 +1023,9 @@ class DailyLifeBank:
                  _s(args.get("request_id")),
                  _s(args.get("resource_id", args.get("file_id", ""))),
                  _s(args.get("attachment_id")),
-                 _s(args.get("target_id", args.get("evidence_id",
-                              args.get("option_id", "")))),
+                 _s(args.get("target_id", args.get("thread_id",
+                              args.get("message_id", args.get("evidence_id",
+                              args.get("option_id", "")))))),
                  _s(args.get("bundle_id")),
                  _s(args.get("option_id", args.get("plan_id", ""))),
                  _s(args.get("provider_record_id",
@@ -839,6 +1053,49 @@ class DailyLifeBank:
             return f"[bank: argument error in {tool_name}: {exc}]"
         except Exception as exc:
             return f"[bank: error in {tool_name}: {type(exc).__name__}: {exc}]"
+
+    def reconcile_trace_actions(self, actions: list[Any]) -> None:
+        """Backfill caller roles from normalized traces for MCP-backed runs."""
+
+        def derive_fields(action: Any) -> dict[str, Any]:
+            args = action_args(action)
+            tool_name = str(getattr(action, "tool_name", "") or "")
+            role = action_role(action)
+            return {
+                "tool": tool_name,
+                "tool_name": tool_name,
+                "args_json": json_args(action),
+                "agent_role": role,
+                "actor_role": role,
+                "role": role,
+                "customer_id": _s(args.get("customer_id")),
+                "request_id": _s(args.get("request_id")),
+                "resource_id": _s(args.get("resource_id", args.get("file_id", ""))),
+                "attachment_id": _s(args.get("attachment_id")),
+                "target_id": _s(args.get(
+                    "target_id",
+                    args.get(
+                        "thread_id",
+                        args.get("message_id", args.get("evidence_id", args.get("option_id", ""))),
+                    ),
+                )),
+                "bundle_id": _s(args.get("bundle_id")),
+                "option_id": _s(args.get("option_id", args.get("plan_id", ""))),
+                "provider_record_id": _s(args.get("provider_record_id", args.get("provider_id", ""))),
+            }
+
+        reconcile_audit_log(self.conn, actions, derive_fields)
+        backfill_write_roles(
+            self.conn,
+            actions,
+            [
+                ToolWriteBackfill("coverage_checks", "authored_by", "check_budget_coverage"),
+                ToolWriteBackfill("provider_threads", "authored_by", "message_provider"),
+                ToolWriteBackfill("payment_events", "authored_by", "authorize_payment"),
+                ToolWriteBackfill("service_submissions", "authored_by", "submit_service_request"),
+            ],
+        )
+        self.conn.commit()
 
     def query_sql(self, query: str) -> list[dict[str, Any]]:
         stripped = query.strip().lstrip("(")
@@ -912,20 +1169,116 @@ class DailyLifeBank:
         *,
         fields: tuple[str, ...],
     ) -> list[sqlite3.Row]:
-        queries = _parse_csv(query)
-        if not queries:
-            return rows
-        normalized_queries = [_norm(q) for q in queries
-                              if _norm(q) not in {"all", "full", "complete"}]
-        if not normalized_queries:
-            return rows
-        selected: list[sqlite3.Row] = []
-        for row in rows:
-            haystacks = [_norm(row[field]) for field in fields]
-            if any(q in haystack or haystack in q
-                   for q in normalized_queries for haystack in haystacks):
-                selected.append(row)
-        return selected
+        return filter_rows_by_query(rows, query, fields=fields)
+
+    def _plan_row_for_option(self, request_id: str, option_id: str) -> sqlite3.Row | None:
+        option_id = _s(option_id).strip()
+        if not option_id:
+            return None
+        return self.conn.execute(
+            "SELECT * FROM service_plans WHERE request_id = ? AND plan_id = ?",
+            (request_id, option_id),
+        ).fetchone()
+
+    def _first_current_plan_row(self, request_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM service_plans WHERE request_id = ? "
+            "ORDER BY CASE "
+            "WHEN lower(status) LIKE '%active%' THEN 0 "
+            "WHEN lower(status) LIKE '%available%' THEN 0 "
+            "WHEN lower(status) LIKE '%current%' THEN 0 "
+            "WHEN lower(status) LIKE '%holdable%' THEN 0 "
+            "ELSE 1 END, "
+            "CASE WHEN provider_id = '' THEN 1 ELSE 0 END, "
+            "CASE WHEN price <= 0 THEN 1 ELSE 0 END, "
+            "price ASC, plan_id LIMIT 1",
+            (request_id,),
+        ).fetchone()
+
+    def _resolve_plan_for_mutation(
+        self,
+        request_id: str,
+        *candidate_ids: str,
+    ) -> tuple[str, sqlite3.Row | None, str]:
+        explicit = next((_s(value).strip() for value in candidate_ids
+                         if _s(value).strip()), "")
+        if explicit:
+            row = self._plan_row_for_option(request_id, explicit)
+            if row is None:
+                return explicit, None, (
+                    f"Service option '{explicit}' is not registered for request "
+                    f"{request_id}; refusing to write payment/submission state."
+                )
+            return explicit, row, ""
+
+        row = self._first_current_plan_row(request_id)
+        if row is None:
+            return "", None, f"No service plans available for request {request_id}."
+        return _s(row["plan_id"]), row, ""
+
+    def _coverage_row_for(
+        self,
+        request_id: str,
+        *,
+        coverage_id: str = "",
+        budget_record_id: str = "",
+        policy_id: str = "",
+        option_id: str = "",
+    ) -> sqlite3.Row | None:
+        if coverage_id:
+            return self.conn.execute(
+                "SELECT * FROM coverage_checks WHERE request_id = ? "
+                "AND coverage_id = ? ORDER BY seq LIMIT 1",
+                (request_id, coverage_id),
+            ).fetchone()
+        if budget_record_id:
+            return self.conn.execute(
+                "SELECT * FROM coverage_checks WHERE request_id = ? "
+                "AND budget_record_id = ? ORDER BY seq LIMIT 1",
+                (request_id, budget_record_id),
+            ).fetchone()
+        if policy_id:
+            return self.conn.execute(
+                "SELECT * FROM coverage_checks WHERE request_id = ? "
+                "AND policy_id = ? ORDER BY seq LIMIT 1",
+                (request_id, policy_id),
+            ).fetchone()
+        if option_id:
+            return self.conn.execute(
+                "SELECT * FROM coverage_checks WHERE request_id = ? "
+                "AND (plan_id = ? OR option_id = ? OR bundle_id = ? OR option_ref = ?) "
+                "ORDER BY seq LIMIT 1",
+                (request_id, option_id, option_id, option_id, option_id),
+            ).fetchone()
+        return None
+
+    def _thread_row_for(self, request_id: str, thread_id: str) -> sqlite3.Row | None:
+        thread_id = _s(thread_id).strip()
+        if not thread_id:
+            return None
+        return self.conn.execute(
+            "SELECT * FROM provider_threads WHERE request_id = ? "
+            "AND (message_id = ? OR template_id = ?) ORDER BY seq LIMIT 1",
+            (request_id, thread_id, thread_id),
+        ).fetchone()
+
+    def _provider_bound_to_request(self, request_id: str, provider_id: str) -> bool:
+        provider_id = _s(provider_id).strip()
+        if not provider_id:
+            return False
+        plan_row = self.conn.execute(
+            "SELECT 1 FROM service_plans WHERE request_id = ? "
+            "AND (provider_id = ? OR plan_id = ?) LIMIT 1",
+            (request_id, provider_id, provider_id),
+        ).fetchone()
+        if plan_row is not None:
+            return True
+        thread_row = self.conn.execute(
+            "SELECT 1 FROM provider_threads WHERE request_id = ? "
+            "AND provider_id = ? LIMIT 1",
+            (request_id, provider_id),
+        ).fetchone()
+        return thread_row is not None
 
     # -----------------------------------------------------------------------
     # Tool handlers — READ
@@ -996,8 +1349,24 @@ class DailyLifeBank:
         if not resolved_request_id:
             return "Service search request is missing request_id."
 
-        rows = self._rows_for_request("service_plans", resolved_request_id, "price ASC, plan_id")
-        query = ",".join(part for part in [service_type, constraint_bundle] if str(part).strip())
+        rows = self._rows_for_request(
+            "service_plans",
+            resolved_request_id,
+            "CASE "
+            "WHEN lower(status) LIKE '%active%' THEN 0 "
+            "WHEN lower(status) LIKE '%available%' THEN 0 "
+            "WHEN lower(status) LIKE '%current%' THEN 0 "
+            "WHEN lower(status) LIKE '%holdable%' THEN 0 "
+            "ELSE 1 END, price ASC, plan_id",
+        )
+        query = ",".join(
+            part for part in [
+                service_type,
+                kwargs.get("service_family", ""),
+                constraint_bundle,
+            ]
+            if str(part).strip()
+        )
         selected = self._filter_rows(
             rows, query,
             fields=("service_type", "provider_id", "title", "eligibility", "details", "schedule"),
@@ -1079,11 +1448,14 @@ class DailyLifeBank:
         # Try contracts table
         if row is None:
             contract = self.conn.execute(
-                "SELECT * FROM contracts WHERE contract_id = ?", (option_id,),
+                "SELECT * FROM contracts WHERE contract_id = ? "
+                "AND (request_id = ? OR request_id = '')",
+                (option_id, resolved_request_id),
             ).fetchone()
             if contract:
                 return "\n".join([
                     f"Contract Detail - {option_id}",
+                    f"Request: {contract['request_id']}",
                     f"Customer: {contract['customer_id']}",
                     f"Provider: {contract['provider_name']} ({contract['provider_id']})",
                     f"Membership: {contract['membership_name']}",
@@ -1171,7 +1543,16 @@ class DailyLifeBank:
         if not resolved_request_id:
             return "Service comparison request is missing request_id."
 
-        all_rows = self._rows_for_request("service_plans", resolved_request_id, "price ASC, plan_id")
+        all_rows = self._rows_for_request(
+            "service_plans",
+            resolved_request_id,
+            "CASE "
+            "WHEN lower(status) LIKE '%active%' THEN 0 "
+            "WHEN lower(status) LIKE '%available%' THEN 0 "
+            "WHEN lower(status) LIKE '%current%' THEN 0 "
+            "WHEN lower(status) LIKE '%holdable%' THEN 0 "
+            "ELSE 1 END, price ASC, plan_id",
+        )
         ids = _parse_csv(option_ids)
         selected = [row for row in all_rows if not ids or row["plan_id"] in ids]
         if not selected:
@@ -1213,41 +1594,71 @@ class DailyLifeBank:
             return "Budget coverage request is missing request_id."
 
         resolved_option = _s(option_id or bundle_id or option_ref or plan_id).strip()
-        if not resolved_option:
-            first_row = self.conn.execute(
-                "SELECT plan_id FROM service_plans WHERE request_id = ? ORDER BY price ASC LIMIT 1",
-                (resolved_request_id,),
-            ).fetchone()
-            resolved_option = str(first_row["plan_id"]).strip() if first_row else ""
-        if not resolved_option:
-            return f"No service plans available for request {resolved_request_id}."
+        plan_row = None
+        if resolved_option:
+            plan_row = self._plan_row_for_option(resolved_request_id, resolved_option)
+            if plan_row is None:
+                return (
+                    f"Service option '{resolved_option}' is not registered for request "
+                    f"{resolved_request_id}; refusing to run budget coverage."
+                )
+        elif not (coverage_id or budget_record_id or policy_id):
+            plan_row = self._first_current_plan_row(resolved_request_id)
+            resolved_option = str(plan_row["plan_id"]).strip() if plan_row else ""
+            if not resolved_option:
+                return f"No service plans available for request {resolved_request_id}."
 
-        # Look up existing seed coverage
-        row = self.conn.execute(
-            "SELECT * FROM coverage_checks WHERE request_id = ? "
-            "AND (plan_id = ? OR option_id = ? OR bundle_id = ? OR option_ref = ?) "
-            "ORDER BY seq LIMIT 1",
-            (resolved_request_id, resolved_option, resolved_option,
-             resolved_option, resolved_option),
-        ).fetchone()
+        # Look up existing seed coverage by explicit coverage handle first, then option.
+        row = self._coverage_row_for(
+            resolved_request_id,
+            coverage_id=_s(coverage_id),
+            budget_record_id=_s(budget_record_id),
+            policy_id=_s(policy_id),
+            option_id=resolved_option,
+        )
 
         request_row = self._request_row(resolved_request_id)
         budget_cap = float(request_row["budget_cap"]) if request_row is not None else 0.0
 
         if row is None:
-            # No seed coverage — create one from plan data
-            plan_row = self.conn.execute(
-                "SELECT * FROM service_plans WHERE plan_id = ?",
-                (resolved_option,),
-            ).fetchone()
-            plan_price = float(plan_row["price"]) if plan_row else 0.0
-            oop = max(0.0, plan_price - budget_cap) if budget_cap else plan_price
-            decision = "within_budget" if plan_price <= budget_cap else "over_budget"
-            summary_text = f"Auto-computed: plan {resolved_option} at {_money(plan_price)} vs cap {_money(budget_cap)}"
+            policy_plan_row = (
+                self._plan_row_for_option(resolved_request_id, _s(policy_id))
+                if policy_id else None
+            )
+            if policy_plan_row is not None:
+                plan_price = float(plan_row["price"]) if plan_row is not None else float(policy_plan_row["price"])
+                oop = max(0.0, plan_price - budget_cap) if budget_cap else plan_price
+                decision = "within_budget" if budget_cap and plan_price <= budget_cap else "policy_reviewed"
+                summary_text = (
+                    f"Policy/authorization {policy_id} is registered for {resolved_request_id}; "
+                    f"checked selected option {resolved_option or policy_id}."
+                )
+            elif coverage_id or budget_record_id or policy_id:
+                handle = _s(coverage_id or budget_record_id or policy_id)
+                return f"Coverage record not found for {resolved_request_id}: {handle}"
+            elif plan_row is None:
+                return (
+                    f"Service option '{resolved_option}' is not registered for request "
+                    f"{resolved_request_id}; refusing to run budget coverage."
+                )
+            else:
+                # No seed coverage — create one from plan data
+                plan_price = float(plan_row["price"])
+                oop = max(0.0, plan_price - budget_cap) if budget_cap else plan_price
+                decision = "within_budget" if plan_price <= budget_cap else "over_budget"
+                summary_text = f"Auto-computed: plan {resolved_option} at {_money(plan_price)} vs cap {_money(budget_cap)}"
         else:
-            decision = row["decision"]
+            if not resolved_option:
+                resolved_option = _s(row["plan_id"] or row["option_id"] or
+                                     row["bundle_id"] or row["option_ref"])
+            plan_price = float(plan_row["price"]) if plan_row is not None else 0.0
+            decision = row["decision"] or (
+                "within_budget" if plan_row is not None and plan_price <= budget_cap else "reviewed"
+            )
             oop = float(row["estimated_out_of_pocket"])
-            summary_text = row["summary"]
+            if plan_row is not None and not oop:
+                oop = max(0.0, plan_price - budget_cap) if budget_cap else plan_price
+            summary_text = row["summary"] or f"Coverage record {row['coverage_id']} reviewed."
 
         # Write a coverage_checks row for the agent's check
         now = _now_iso()
@@ -1301,25 +1712,21 @@ class DailyLifeBank:
         if not resolved_request_id:
             return "Service submission request is missing request_id."
 
-        resolved_option = _s(option_id or bundle_id or selected_option_id
-                             or plan_ref or plan_id).strip()
-        if not resolved_option:
-            first_row = self.conn.execute(
-                "SELECT plan_id FROM service_plans WHERE request_id = ? ORDER BY price ASC LIMIT 1",
-                (resolved_request_id,),
-            ).fetchone()
-            resolved_option = str(first_row["plan_id"]).strip() if first_row else ""
-        if not resolved_option:
-            return f"No service plan available to submit for {resolved_request_id}."
+        resolved_option, plan_row, plan_error = self._resolve_plan_for_mutation(
+            resolved_request_id,
+            option_id,
+            bundle_id,
+            selected_option_id,
+            plan_ref,
+            plan_id,
+        )
+        if plan_error:
+            return plan_error
 
         resolved_customer = self._resolve_customer_id(resolved_request_id, customer_id)
         # Resolve provider_id from plan if not given
         resolved_provider = _s(provider_id).strip()
         if not resolved_provider:
-            plan_row = self.conn.execute(
-                "SELECT provider_id FROM service_plans WHERE plan_id = ?",
-                (resolved_option,),
-            ).fetchone()
             resolved_provider = str(plan_row["provider_id"]).strip() if plan_row else ""
 
         submission_kind = str(submission_type or "booking").strip()
@@ -1382,24 +1789,17 @@ class DailyLifeBank:
         if request_row is None:
             return f"Request not found: {resolved_request_id}"
 
-        resolved_option = _s(option_id or bundle_id or selected_option
-                             or plan_id or request_row["selected_plan_id"]).strip()
-        if not resolved_option:
-            plan_row = self.conn.execute(
-                "SELECT * FROM service_plans WHERE request_id = ? ORDER BY price ASC LIMIT 1",
-                (resolved_request_id,),
-            ).fetchone()
-            resolved_option = str(plan_row["plan_id"]).strip() if plan_row else ""
-            plan_price = float(plan_row["price"]) if plan_row else 0.0
-        else:
-            plan_row = self.conn.execute(
-                "SELECT * FROM service_plans WHERE plan_id = ?",
-                (resolved_option,),
-            ).fetchone()
-            plan_price = float(plan_row["price"]) if plan_row else 0.0
-
-        if not resolved_option:
-            return f"No service plan available to authorize payment for {resolved_request_id}."
+        resolved_option, plan_row, plan_error = self._resolve_plan_for_mutation(
+            resolved_request_id,
+            option_id,
+            bundle_id,
+            selected_option,
+            plan_id,
+            request_row["selected_plan_id"],
+        )
+        if plan_error:
+            return plan_error
+        plan_price = float(plan_row["price"]) if plan_row is not None else 0.0
 
         resolved_customer = self._resolve_customer_id(resolved_request_id, customer_id)
 
@@ -1461,13 +1861,62 @@ class DailyLifeBank:
         option_id: str = "",
         template_id: str = "",
         message_id: str = "",
+        thread_id: str = "",
         **kwargs: Any,
     ) -> str:
         resolved_request_id = self._resolve_request_id(request_id)
         if not resolved_request_id:
             return "Provider message request is missing request_id."
-        if not str(provider_id).strip():
+
+        resolved_provider = str(provider_id or "").strip()
+        resolved_thread_id = _s(thread_id or message_id).strip()
+        thread_row = self._thread_row_for(resolved_request_id, resolved_thread_id)
+
+        # Older task data sometimes placed the provider thread id in provider_id.
+        if thread_row is None and resolved_provider:
+            maybe_thread = self._thread_row_for(resolved_request_id, resolved_provider)
+            if maybe_thread is not None:
+                thread_row = maybe_thread
+                resolved_thread_id = _s(thread_row["message_id"])
+                resolved_provider = _s(thread_row["provider_id"])
+
+        if thread_row is not None:
+            thread_provider = _s(thread_row["provider_id"])
+            if resolved_provider and thread_provider and resolved_provider != thread_provider:
+                return (
+                    f"Provider message thread {resolved_thread_id} belongs to "
+                    f"{thread_provider}, not {resolved_provider}."
+                )
+            resolved_provider = resolved_provider or thread_provider
+
+        related_option = _s(option_id or bundle_id).strip()
+        option_row = None
+        if related_option:
+            option_row = self._plan_row_for_option(resolved_request_id, related_option)
+            if option_row is None:
+                return (
+                    f"Service option '{related_option}' is not registered for request "
+                    f"{resolved_request_id}; refusing to queue provider message."
+                )
+            if not resolved_provider:
+                resolved_provider = _s(option_row["provider_id"])
+
+        if not resolved_provider:
             return "Provider message request is missing provider_id."
+
+        if not self._provider_bound_to_request(resolved_request_id, resolved_provider):
+            return (
+                f"Provider '{resolved_provider}' is not bound to request "
+                f"{resolved_request_id}; refusing to queue provider message."
+            )
+
+        if option_row is not None:
+            option_provider = _s(option_row["provider_id"])
+            if option_provider and option_provider != resolved_provider:
+                return (
+                    f"Service option '{related_option}' belongs to {option_provider}, "
+                    f"not {resolved_provider}."
+                )
 
         role_val = self._current_agent_role or "unknown"
         self.conn.execute(
@@ -1478,14 +1927,14 @@ class DailyLifeBank:
             "content, authored_by) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (_now_iso(), resolved_request_id,
-             str(provider_id).strip(),
+             resolved_provider,
              role_val, role_val,
              str(message_type or "follow_up").strip(),
              _s(purpose),
              _s(bundle_id), _s(option_id),
-             _s(template_id), _s(message_id),
+             _s(template_id), _s(resolved_thread_id or message_id),
              str(content or "").strip(),
              role_val),
         )
         self.conn.commit()
-        return f"Provider message queued for {provider_id} on {resolved_request_id}."
+        return f"Provider message queued for {resolved_provider} on {resolved_request_id}."

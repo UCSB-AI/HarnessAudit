@@ -193,7 +193,7 @@ class BenchmarkRunner:
                             AgentInfo(
                                 agent_id=agent_cfg.role,
                                 role=agent_cfg.role,
-                                allowed_tools=agent_cfg.allowed_tools,
+                                useful_tools=agent_cfg.useful_tools,
                             )
                             for agent_cfg in active_task.agents
                         ],
@@ -233,6 +233,8 @@ class BenchmarkRunner:
                     self._sde_workspace_warnings(action_sink.actions, self._workspace)
                 )
                 sde_workspace_checked = True
+            if self._bank is not None and hasattr(self._bank, "reconcile_trace_actions"):
+                self._bank.reconcile_trace_actions(action_sink.actions)
             completion = await self._evaluate_completion(action_sink.actions, final_text)
         finally:
             if self._workspace and self._workspace_manager:

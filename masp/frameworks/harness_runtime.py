@@ -11,7 +11,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Mapping, Protocol
 
 from .harness_config_store import MASP_OWNED_KEY, HarnessConfigStore, _parse_toml_document
 from .harness_profiles import session_name
@@ -28,6 +28,10 @@ CLAUDE_CODE_AGENT_TOOL = "Agent"
 CLAUDE_CODE_ALLOWED_TOOLS_FLAG = "--allowedTools"
 CLAUDE_CODE_DISALLOWED_TOOLS_FLAG = "--disallowedTools"
 CLAUDE_CODE_TOOLS_FLAG = "--tools"
+CLAUDE_API_KEY_ENV = "ANTHROPIC_API_KEY"
+CLAUDE_AUTH_MODE_ENV = "MASP_CLAUDE_AUTH_MODE"
+CODEX_AUTH_MODE_ENV = "MASP_CODEX_AUTH_MODE"
+CODEX_AUTH_STATE_NAMES = ("auth.json", "accounts")
 KEEP_CLAUDE_ISOLATION_ENV = "MASP_KEEP_CLAUDE_ISOLATION"
 KEEP_CODEX_ISOLATION_ENV = "MASP_KEEP_CODEX_ISOLATION"
 KEEP_OPENCLAW_ISOLATION_ENV = "MASP_KEEP_OPENCLAW_ISOLATION"
@@ -35,8 +39,20 @@ CLAUDE_ISOLATION_ROOT_ENV = "MASP_CLAUDE_ISOLATION_ROOT"
 CODEX_ISOLATION_ROOT_ENV = "MASP_CODEX_ISOLATION_ROOT"
 OPENCLAW_ISOLATION_ROOT_ENV = "MASP_OPENCLAW_ISOLATION_ROOT"
 OPENCLAW_VALIDATE_TIMEOUT_ENV = "MASP_OPENCLAW_VALIDATE_TIMEOUT"
-OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 CLAUDE_CONFIG_FILE_NAME = ".claude.json"
+
+
+@dataclass(frozen=True)
+class HarnessRunContext:
+    """Shared registration context for native CLI harness runtimes."""
+
+    run_id: str
+    worktrees: dict[str, Path]
+    mcp_port: int
+    clawteam_command: str
+    sde_mcp_only: bool = False
+    catalog_names: frozenset[str] = field(default_factory=frozenset)
+    model: str = ""
 
 
 def _process_output_text(*parts: object) -> str:
@@ -158,25 +174,17 @@ class HarnessRuntime(Protocol):
     def register_mcp(
         self,
         *,
-        run_id: str,
-        worktrees: dict[str, Path],
-        mcp_port: int,
-        clawteam_command: str,
-        sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
-        model: str = "",
+        context: HarnessRunContext,
     ) -> None:
         ...
 
-    def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
+    def unregister_mcp(self) -> None:
         ...
 
     def build_spawn_env(
         self,
         *,
         agent_role: str,
-        cwd: str,
-        sde_mcp_only: bool = False,
     ) -> dict[str, str]:
         ...
 
@@ -185,7 +193,6 @@ class HarnessRuntime(Protocol):
         command: list[str],
         *,
         sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
     ) -> list[str]:
         ...
 
@@ -246,6 +253,7 @@ class ClaudeHarnessRuntime:
     _alternate_config_path: Path | None = field(default=None, init=False)
     _agent_log_dir: Path | None = field(default=None, init=False)
     _run_id: str | None = field(default=None, init=False)
+    _auth_mode: str | None = field(default=None, init=False)
     name: str = "claude"
 
     @property
@@ -255,19 +263,12 @@ class ClaudeHarnessRuntime:
     def register_mcp(
         self,
         *,
-        run_id: str,
-        worktrees: dict[str, Path],
-        mcp_port: int,
-        clawteam_command: str,
-        sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
-        model: str = "",
+        context: HarnessRunContext,
     ) -> None:
-        del sde_mcp_only, catalog_names, model
         self.cleanup()
 
         root_dir = _mk_isolation_root(
-            prefix=f"masp-claude-harness-{_safe_temp_fragment(run_id)}-",
+            prefix=f"masp-claude-harness-{_safe_temp_fragment(context.run_id)}-",
             root_env=CLAUDE_ISOLATION_ROOT_ENV,
         )
         config_dir = root_dir / ".claude"
@@ -279,6 +280,13 @@ class ClaudeHarnessRuntime:
         config_path = root_dir / CLAUDE_CONFIG_FILE_NAME
         alternate_config_path = config_dir / CLAUDE_CONFIG_FILE_NAME
         self._inherit_claude_config(config_dir, config_path, alternate_config_path)
+        auth_mode = self._detect_auth_mode(config_dir, config_path)
+        if auth_mode == "missing":
+            log.warning(
+                "Claude harness has neither %s nor copied local Claude login state; "
+                "Claude Code may prompt or fail during spawn.",
+                CLAUDE_API_KEY_ENV,
+            )
 
         local_store = HarnessConfigStore(
             claude_config_path=config_path,
@@ -288,11 +296,11 @@ class ClaudeHarnessRuntime:
         # Claude Code 2.1.x may resolve hidden ClawTeam role worktrees back to
         # the user's home directory as the project root. Register both scopes
         # inside this per-run isolated config so MCP tools are visible either way.
-        claude_project_paths = [Path.home(), *worktrees.values()]
+        claude_project_paths = [Path.home(), *context.worktrees.values()]
         local_store.register_claude(
             project_paths=list(dict.fromkeys(claude_project_paths)),
-            mcp_url=f"http://127.0.0.1:{mcp_port}/sse",
-            clawteam_command=clawteam_command,
+            mcp_url=f"http://127.0.0.1:{context.mcp_port}/sse",
+            clawteam_command=context.clawteam_command,
         )
         self._mirror_claude_config(config_path, alternate_config_path)
 
@@ -301,10 +309,10 @@ class ClaudeHarnessRuntime:
         self._config_path = config_path
         self._alternate_config_path = alternate_config_path
         self._agent_log_dir = agent_log_dir
-        self._run_id = run_id
+        self._run_id = context.run_id
+        self._auth_mode = auth_mode
 
-    def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
-        del worktrees
+    def unregister_mcp(self) -> None:
         return None
 
     def _inherit_claude_config(
@@ -336,18 +344,28 @@ class ClaudeHarnessRuntime:
         alternate_config_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(config_path, alternate_config_path)
 
+    @staticmethod
+    def _detect_auth_mode(config_dir: Path, config_path: Path) -> str:
+        if os.environ.get(CLAUDE_API_KEY_ENV, "").strip():
+            return "api_key"
+        if (config_dir / ".credentials.json").is_file():
+            return "cli_login"
+        config_text = _load_text_or_empty(config_path).strip()
+        if config_text and config_text != "{}":
+            return "cli_login"
+        return "missing"
+
     def build_spawn_env(
         self,
         *,
         agent_role: str,
-        cwd: str,
-        sde_mcp_only: bool = False,
     ) -> dict[str, str]:
-        del cwd, sde_mcp_only
         if self._config_dir is None:
             raise RuntimeError("Claude runtime must register_mcp before spawning agents")
         env = dict(os.environ)
         env["CLAUDE_CONFIG_DIR"] = str(self._config_dir)
+        if self._auth_mode:
+            env[CLAUDE_AUTH_MODE_ENV] = self._auth_mode
         if self._agent_log_dir is not None and self._run_id:
             log_name = (
                 f"{_safe_temp_fragment(self._run_id)}-"
@@ -361,9 +379,7 @@ class ClaudeHarnessRuntime:
         command: list[str],
         *,
         sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
     ) -> list[str]:
-        del catalog_names
         adjusted = _append_disallowed_tool(command, CLAUDE_CODE_AGENT_TOOL)
         if not sde_mcp_only:
             return adjusted
@@ -474,6 +490,7 @@ class ClaudeHarnessRuntime:
         self._alternate_config_path = None
         self._agent_log_dir = None
         self._run_id = None
+        self._auth_mode = None
 
 
 @dataclass
@@ -488,6 +505,7 @@ class CodexHarnessRuntime:
     _agent_sessions_dirs: dict[str, Path] = field(default_factory=dict, init=False)
     _agent_log_dir: Path | None = field(default=None, init=False)
     _run_id: str | None = field(default=None, init=False)
+    _auth_mode: str | None = field(default=None, init=False)
     name: str = "codex"
 
     @property
@@ -513,19 +531,12 @@ class CodexHarnessRuntime:
     def register_mcp(
         self,
         *,
-        run_id: str,
-        worktrees: dict[str, Path],
-        mcp_port: int,
-        clawteam_command: str,
-        sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
-        model: str = "",
+        context: HarnessRunContext,
     ) -> None:
-        del worktrees, catalog_names, model
         self.cleanup()
 
         root_dir = _mk_isolation_root(
-            prefix=f"masp-codex-harness-{_safe_temp_fragment(run_id)}-",
+            prefix=f"masp-codex-harness-{_safe_temp_fragment(context.run_id)}-",
             root_env=CODEX_ISOLATION_ROOT_ENV,
         )
         codex_home = root_dir / "codex_homes"
@@ -536,26 +547,27 @@ class CodexHarnessRuntime:
         agent_log_dir.mkdir(parents=True, exist_ok=True)
         config_path = root_dir / "config.toml"
 
+        auth_mode = self._detect_auth_mode()
         raw_config = _load_text_or_empty(self.config_store.codex_config_path)
         doc = _parse_toml_document(raw_config)
         openai_base_url = os.environ.get("OPENAI_BASE_URL")
-        if openai_base_url:
+        if openai_base_url and auth_mode == "api_key":
             doc.upsert_preamble_value("openai_base_url", openai_base_url)
-        if sde_mcp_only:
+        if context.sde_mcp_only:
             doc.upsert_preamble_value("include_apply_patch_tool", False)
             doc.upsert_preamble_value("approval_policy", "never")
             doc.upsert_preamble_value("sandbox_mode", "read-only")
-        mcp_approval_mode = "approve" if sde_mcp_only else "auto"
+        mcp_approval_mode = "approve" if context.sde_mcp_only else "auto"
         doc.replace_section(
             "mcp_servers.masp_tools",
             {
-                "url": f"http://127.0.0.1:{mcp_port}/mcp",
+                "url": f"http://127.0.0.1:{context.mcp_port}/mcp",
                 "default_tools_approval_mode": mcp_approval_mode,
                 MASP_OWNED_KEY: True,
             },
         )
         clawteam_server: dict[str, Any] = {
-            "command": clawteam_command,
+            "command": context.clawteam_command,
             "default_tools_approval_mode": mcp_approval_mode,
             MASP_OWNED_KEY: True,
         }
@@ -578,10 +590,16 @@ class CodexHarnessRuntime:
         self._agent_codex_homes = {}
         self._agent_sessions_dirs = {}
         self._agent_log_dir = agent_log_dir
-        self._run_id = run_id
+        self._run_id = context.run_id
+        self._auth_mode = auth_mode
+        if self._auth_mode == "missing":
+            log.warning(
+                "Codex harness has neither CODEX_API_KEY/OPENAI_API_KEY nor "
+                "local Codex login state under %s; Codex may prompt or fail.",
+                self.config_store.codex_config_path.parent,
+            )
 
-    def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
-        del worktrees
+    def unregister_mcp(self) -> None:
         return None
 
     def _ensure_agent_codex_home(self, agent_role: str) -> Path:
@@ -594,27 +612,80 @@ class CodexHarnessRuntime:
         agent_sessions_dir = agent_home / "sessions"
         agent_sessions_dir.mkdir(parents=True, exist_ok=True)
         (agent_home / "config.toml").write_text(self._config_text, encoding="utf-8")
+        self._provision_local_auth_state(agent_home)
         self._agent_codex_homes[agent_role] = agent_home
         self._agent_sessions_dirs[agent_role] = agent_sessions_dir
         return agent_home
+
+    @staticmethod
+    def _api_key_auth_available(env: Mapping[str, str] | None = None) -> bool:
+        env_map = env or os.environ
+        return any(
+            str(env_map.get(key, "")).strip()
+            for key in ("CODEX_API_KEY", "OPENAI_API_KEY")
+        )
+
+    def _local_auth_state_available(self) -> bool:
+        source_home = self.config_store.codex_config_path.parent
+        return any((source_home / name).exists() for name in CODEX_AUTH_STATE_NAMES)
+
+    def _detect_auth_mode(self) -> str:
+        requested = os.environ.get(CODEX_AUTH_MODE_ENV, "auto").strip().lower()
+        if requested not in {"", "auto", "api_key", "cli_login"}:
+            log.warning(
+                "Ignoring unsupported %s=%r; expected auto, api_key, or cli_login.",
+                CODEX_AUTH_MODE_ENV,
+                requested,
+            )
+            requested = "auto"
+        if requested == "api_key":
+            return "api_key" if self._api_key_auth_available() else "missing"
+        if requested == "cli_login":
+            return "cli_login" if self._local_auth_state_available() else "missing"
+        if self._api_key_auth_available():
+            return "api_key"
+        if self._local_auth_state_available():
+            return "cli_login"
+        return "missing"
+
+    def _provision_local_auth_state(self, agent_home: Path) -> None:
+        if self._auth_mode != "cli_login":
+            return
+        source_home = self.config_store.codex_config_path.parent
+        for name in CODEX_AUTH_STATE_NAMES:
+            source = source_home / name
+            if not source.exists():
+                continue
+            target = agent_home / name
+            if target.exists() or target.is_symlink():
+                continue
+            try:
+                target.symlink_to(source, target_is_directory=source.is_dir())
+            except OSError:
+                if source.is_dir():
+                    shutil.copytree(source, target, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(source, target)
 
     def build_spawn_env(
         self,
         *,
         agent_role: str,
-        cwd: str,
-        sde_mcp_only: bool = False,
     ) -> dict[str, str]:
-        del cwd, sde_mcp_only
         agent_home = self._ensure_agent_codex_home(agent_role)
         env = dict(os.environ)
         env["CODEX_HOME"] = str(agent_home)
-        if not env.get("CODEX_API_KEY"):
+        if self._auth_mode == "cli_login":
+            env.pop("CODEX_API_KEY", None)
+            env.pop("OPENAI_API_KEY", None)
+        elif not env.get("CODEX_API_KEY"):
             for source_key in ("OPENAI_API_KEY",):
                 source_value = env.get(source_key, "").strip()
                 if source_value:
                     env["CODEX_API_KEY"] = source_value
                     break
+        if self._auth_mode:
+            env[CODEX_AUTH_MODE_ENV] = self._auth_mode
         if self._agent_log_dir is not None and self._run_id:
             log_name = (
                 f"{_safe_temp_fragment(self._run_id)}-"
@@ -628,9 +699,8 @@ class CodexHarnessRuntime:
         command: list[str],
         *,
         sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
     ) -> list[str]:
-        del sde_mcp_only, catalog_names
+        del sde_mcp_only
         return list(command)
 
     def asset_stage_dir(self) -> Path | None:
@@ -707,6 +777,7 @@ class CodexHarnessRuntime:
         self._agent_sessions_dirs = {}
         self._agent_log_dir = None
         self._run_id = None
+        self._auth_mode = None
         return None
 
 
@@ -741,19 +812,12 @@ class OpenClawHarnessRuntime:
     def register_mcp(
         self,
         *,
-        run_id: str,
-        worktrees: dict[str, Path],
-        mcp_port: int,
-        clawteam_command: str,
-        sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
-        model: str = "",
+        context: HarnessRunContext,
     ) -> None:
-        del worktrees, catalog_names
         self.cleanup()
 
         root_dir = _mk_isolation_root(
-            prefix=f"masp-openclaw-harness-{_safe_temp_fragment(run_id)}-",
+            prefix=f"masp-openclaw-harness-{_safe_temp_fragment(context.run_id)}-",
             root_env=OPENCLAW_ISOLATION_ROOT_ENV,
         )
         state_dir = root_dir / "state"
@@ -768,12 +832,12 @@ class OpenClawHarnessRuntime:
 
         managed_servers = {
             "masp_tools": {
-                "url": f"http://127.0.0.1:{mcp_port}/sse",
+                "url": f"http://127.0.0.1:{context.mcp_port}/sse",
                 "transport": "sse",
                 MASP_OWNED_KEY: True,
             },
             "clawteam": {
-                "command": clawteam_command,
+                "command": context.clawteam_command,
                 MASP_OWNED_KEY: True,
             },
         }
@@ -815,15 +879,13 @@ class OpenClawHarnessRuntime:
         config["agents"] = agents_config
 
         # Override the OpenClaw model when the benchmark requests a specific one.
-        if model:
+        if context.model:
             apply_openclaw_model_config(
                 config,
-                model,
+                context.model,
                 env=os.environ,
-                openai_base_url_fallback=OPENCLAW_DEFAULT_OPENAI_BASE_URL,
-                include_openai_base_url_env=False,
             )
-        if sde_mcp_only:
+        if context.sde_mcp_only:
             _merge_openclaw_tool_deny(config, SDE_OPENCLAW_NATIVE_TOOLS)
         config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         self._validate_config(config_path, state_dir)
@@ -834,7 +896,7 @@ class OpenClawHarnessRuntime:
         self._sessions_dir = sessions_dir
         self._agent_workspace_dir = agent_workspace_dir
         self._agent_log_dir = agent_log_dir
-        self._run_id = run_id
+        self._run_id = context.run_id
 
     @staticmethod
     def _validate_config(config_path: Path, state_dir: Path) -> None:
@@ -870,18 +932,14 @@ class OpenClawHarnessRuntime:
                 suffix = f"{suffix}\n{detail}"
             raise RuntimeError(f"Generated OpenClaw config is invalid: {suffix}")
 
-    def unregister_mcp(self, *, worktrees: dict[str, Path]) -> None:
-        del worktrees
+    def unregister_mcp(self) -> None:
         return None
 
     def build_spawn_env(
         self,
         *,
         agent_role: str,
-        cwd: str,
-        sde_mcp_only: bool = False,
     ) -> dict[str, str]:
-        del cwd, sde_mcp_only
         if (
             self._config_path is None
             or self._state_dir is None
@@ -904,9 +962,8 @@ class OpenClawHarnessRuntime:
         command: list[str],
         *,
         sde_mcp_only: bool = False,
-        catalog_names: set[str] | None = None,
     ) -> list[str]:
-        del sde_mcp_only, catalog_names
+        del sde_mcp_only
         return list(command)
 
     def asset_stage_dir(self) -> Path | None:

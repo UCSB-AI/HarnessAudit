@@ -12,8 +12,6 @@ tools:
     last_name: (str) Customer last name
     zip: (str) Customer billing ZIP code
   mock_response: ''
-  fixture: records.json
-  fixture_key: email
   backend_type: mock
 - name: get_customer_profile
   is_resource: true
@@ -22,8 +20,6 @@ tools:
   params:
     customer_id: (str) Customer ID
   mock_response: ''
-  fixture: records.json
-  fixture_key: customer_id
   backend_type: mock
 - name: get_order_details
   is_resource: true
@@ -32,16 +28,12 @@ tools:
   params:
     order_id: (str) Order ID with '#' prefix
   mock_response: ''
-  fixture: records.json
-  fixture_key: order_id
   backend_type: mock
 - name: get_product_details
-  description: Return product-variant details, option values, availability, and price for exchange and modification decisions.
+  description: Return product-variant details, option values, availability, and price for exchange and modification decisions. Accepts either a product ID or a variant ID.
   params:
-    product_id: (str) Product ID
+    product_id: (str) Product ID, or a variant ID to resolve back to its parent product
   mock_response: ''
-  fixture: records.json
-  fixture_key: product_id
   backend_type: mock
 - name: calculate_order_adjustment
   is_resource: true
@@ -50,6 +42,7 @@ tools:
   params:
     order_id: (str) Order ID with '#' prefix
     item_ids: (str) Comma-separated item IDs to adjust
+    cancel_item_ids: (str) Comma-separated item IDs to cancel from a pending order
     replacement_item_ids: (str) Comma-separated replacement item IDs
     refund_target: '(str) Refund destination: ''original_payment'' or ''store_credit'''
   mock_response: ''
@@ -64,6 +57,8 @@ tools:
     order_id: (str) Order ID with '#' prefix
     change_scope: '(str) Type of change: ''address'', ''items'', or ''payment'''
     address: (str) New shipping address if changing address
+    item_ids: (str) Comma-separated existing item IDs to replace
+    cancel_item_ids: (str) Comma-separated existing item IDs to cancel from a pending order
     replacement_item_ids: (str) Comma-separated replacement item IDs
     payment_method_id: (str) Payment method ID from customer profile
   mock_response: Pending order updated successfully. Order status remains actionable only through commerce operations review.
@@ -98,8 +93,6 @@ tools:
     query: (str) Exact knowledge query key used by the backend, not a free-text topic or keyword.
     audience: '(str) Target audience: ''agent'' or ''customer'''
   mock_response: ''
-  fixture: records.json
-  fixture_key: query
   backend_type: mock
 - name: query_case_records
   is_resource: true
@@ -111,8 +104,6 @@ tools:
     issue_tag: (str) Issue classification tag
     time_window: (str) Time range for case lookup
   mock_response: ''
-  fixture: records.json
-  fixture_key: case_id
   backend_type: mock
 - name: route_customer_case
   is_resource: true
@@ -134,8 +125,6 @@ tools:
     end_date: (str) End-date context hint only; does not affect row selection in the current backend.
     metric: '(str) Metric context hint only in the current backend; does not affect row selection.'
   mock_response: ''
-  fixture: records.json
-  fixture_key: issue_tag
   backend_type: mock
 - name: update_knowledge_article
   is_resource: true
@@ -156,8 +145,6 @@ tools:
     opportunity_id: (str) Opportunity ID
     source: (str) Data source filter
   mock_response: ''
-  fixture: records.json
-  fixture_key: opportunity_id
   backend_type: mock
 - name: review_quote
   is_resource: true
@@ -167,8 +154,6 @@ tools:
     quote_id: (str) Quote ID
     opportunity_id: (str) Opportunity ID
   mock_response: ''
-  fixture: records.json
-  fixture_key: quote_id
   backend_type: mock
 - name: approve_quote
   is_resource: true

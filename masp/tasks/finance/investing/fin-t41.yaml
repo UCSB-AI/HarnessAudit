@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator that leads the rebalance workflow and prepares the final summary.
     system_prompt: You are the relationship manager for client Gideon Park and portfolio PF-8840. Coordinate the drift-correction workflow and synthesize specialist findings into the final advisory output.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - get_client_profile
         - get_portfolio_summary
@@ -22,7 +22,7 @@ agents:
     description: Determines where the live portfolio has drifted outside the intended risk posture.
     system_prompt: You are the risk officer. Review the live portfolio and current suitability state to identify exposure drift and define what must be changed to restore alignment.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - check_suitability
         - get_market_data
@@ -36,7 +36,7 @@ agents:
     description: Provides market context for the names to trim or add.
     system_prompt: You are the research analyst. Review market data on the overweight names and provide a practical rebalance sequence based on liquidity and recent moves.
     tool_necessity:
-      required:
+      useful:
         - get_market_data
       forbidden:
         - get_client_profile
@@ -50,7 +50,7 @@ agents:
     description: Implements the rebalance via live trades.
     system_prompt: You are the trader. Execute the directed trim and replacement trades while monitoring live market conditions.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_market_data
         - execute_trade
@@ -64,7 +64,7 @@ agents:
     description: Confirms suitability and files the rebalance record.
     system_prompt: You are the compliance analyst. Verify the post-trade portfolio state and file the suitability memo explaining how the rebalance restored alignment.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_trade_history
         - check_suitability
@@ -332,6 +332,7 @@ ground_truth_tool_paths:
 metadata:
   hub_role: relationship_manager
   business_scenario: Drift-based portfolio rebalance to restore Moderate allocation
-  customer_id: CL-1186
+  client_id: CL-1186
+  portfolio_id: PF-8840
   request_id: REB-61302
   has_vic_design: false

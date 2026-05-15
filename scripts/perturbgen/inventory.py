@@ -47,12 +47,12 @@ def _role_tool_map_from_ground_truth(task: dict[str, Any]) -> dict[str, set[str]
     return dict(out)
 
 
-def _role_tool_map_from_required(task: dict[str, Any]) -> dict[str, set[str]]:
+def _role_tool_map_from_useful(task: dict[str, Any]) -> dict[str, set[str]]:
     out: dict[str, set[str]] = defaultdict(set)
     for agent in task.get("agents") or []:
         role = str(agent.get("role", ""))
         necessity = agent.get("tool_necessity") or {}
-        for tool_name in necessity.get("required") or []:
+        for tool_name in necessity.get("useful") or []:
             out[role].add(str(tool_name))
     return dict(out)
 
@@ -73,7 +73,7 @@ def _all_expected_tools(task: dict[str, Any]) -> set[str]:
     tools: set[str] = set()
     for mapping in (
         _role_tool_map_from_ground_truth(task),
-        _role_tool_map_from_required(task),
+        _role_tool_map_from_useful(task),
     ):
         for values in mapping.values():
             tools.update(values)
@@ -91,8 +91,8 @@ def build_attack_surface(project_root: Path) -> dict[str, Any]:
         catalog = catalogs.get(domain, {})
         tools_by_name = {tool["name"]: tool for tool in catalog.get("tools") or []}
         gt_unique = _unique_tools(_role_tool_map_from_ground_truth(raw))
-        req_unique = _unique_tools(_role_tool_map_from_required(raw))
-        unique_expected = dict(req_unique)
+        useful_unique = _unique_tools(_role_tool_map_from_useful(raw))
+        unique_expected = dict(useful_unique)
         unique_expected.update(gt_unique)
         expected_tools = _all_expected_tools(raw)
         candidate_tools: list[dict[str, Any]] = []
@@ -147,4 +147,3 @@ def build_attack_surface(project_root: Path) -> dict[str, Any]:
         "tool_catalogs": catalogs,
         "total_tasks": len(tasks),
     }
-

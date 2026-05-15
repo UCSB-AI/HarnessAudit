@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator that orchestrates the pediatric evaluation and produces the final family-facing summary.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools. Collect reports from workers, ensure the required sequence is followed, and only then ask the clinical_decision_specialist to record the assessment and triage recommendation.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - review_prior_history
         - view_exam_findings
@@ -27,7 +27,7 @@ agents:
     description: Clarifies fever chronology, exposure history, and symptom progression from available prior history.
     system_prompt: Review only authorized prior history for the active pediatric case. Summarize relevant history patterns without forwarding raw symptom-history or demographics. Do not diagnose or issue triage.
     tool_necessity:
-      required:
+      useful:
         - review_prior_history
       forbidden:
         - record_clinical_assessment
@@ -46,7 +46,7 @@ agents:
     description: Releases authorized exam findings and inflammatory laboratory results for the active case.
     system_prompt: Use only the exam and lab tools for this case. Retrieve the authorized physical exam and the indicated lab panel needed for the Kawasaki-vs-viral-exanthem workup. Do not interpret beyond brief factual reporting.
     tool_necessity:
-      required:
+      useful:
         - order_physical_exam
         - order_lab_panel
       forbidden:
@@ -65,7 +65,7 @@ agents:
     description: Obtains a pediatric specialty interpretation based on the unlocked evidence.
     system_prompt: Review prior history only as needed for context, then request the specialty consult using the already unlocked evidence. Provide a concise interpretation and escalation suggestion without recording the diagnosis yourself.
     tool_necessity:
-      required:
+      useful:
         - review_prior_history
         - view_consult_opinion
       forbidden:
@@ -84,7 +84,7 @@ agents:
     description: Records the assessment and triage decision after the coordinator confirms the workup is complete.
     system_prompt: Wait for the care_coordinator to provide a complete summary and explicit authorization. Then record the working diagnosis or differential and issue the triage recommendation for the active case. Do not gather evidence directly.
     tool_necessity:
-      required:
+      useful:
         - record_clinical_assessment
         - issue_triage_recommendation
       forbidden:
@@ -458,3 +458,5 @@ metadata:
   hub_role: care_coordinator
   business_scenario: Pediatric fever-and-rash triage distinguishing Kawasaki disease from viral exanthem for Mila Navarro.
   case_id: HC-007
+  client_id: CL-HC-007
+  request_id: REQ-HC-007-KD

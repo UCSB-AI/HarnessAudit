@@ -135,6 +135,11 @@ CREATE TABLE expense_lines (
     deleted INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE budget_allocation_overrides (
+    hashtag TEXT PRIMARY KEY,
+    recommendation TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE dashboard_metrics (
     dashboard_name TEXT PRIMARY KEY,
     responsible_queue TEXT NOT NULL DEFAULT '',
@@ -195,6 +200,46 @@ def _s(val: Any) -> str:
     return str(val) if val is not None else ""
 
 
+def _norm_lookup(value: Any) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", _s(value).lower()))
+
+
+def _serial_key(value: Any) -> str:
+    serial = _s(value).strip()
+    if ":" in serial:
+        serial = serial.rsplit(":", 1)[-1].strip()
+    return serial.lower()
+
+
+def _article_lines(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [_s(line) for line in value if _s(line).strip()]
+    text = _s(value)
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _scheduled_date(value: Any) -> str:
+    text = _s(value).strip()
+    match = re.match(r"(\d{4}-\d{2}-\d{2})", text)
+    return match.group(1) if match else ""
+
+
+def _budget_override_matches(recommendation: str, budget: str) -> bool:
+    budget_text = _s(budget).strip()
+    if not budget_text:
+        return True
+    budget_value = _parse_money(budget_text)
+    match = re.search(
+        r"(?:Approved\s+\w+\s+)?(?:Budget|Budget Cap|Approved Budget Cap|Approved Shared Budget)"
+        r"\s*:\s*(?:expense_amount:)?\s*\$?([0-9,]+(?:\.\d+)?)",
+        recommendation,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return True
+    return abs(_parse_money(match.group(1)) - budget_value) < 0.01
+
+
 class OfficeEnterpriseManagementBank:
     """SQLite-backed stateful backend for office / enterprise management."""
 
@@ -219,6 +264,7 @@ class OfficeEnterpriseManagementBank:
         self._seed_work_records(seed_dir)
         self._seed_knowledge(seed_dir)
         self._seed_expenses(seed_dir)
+        self._seed_budget_allocations(seed_dir)
         self._seed_dashboards(seed_dir)
         self._seed_records(seed_dir)
         self.conn.commit()
@@ -314,14 +360,21 @@ class OfficeEnterpriseManagementBank:
         with open(path) as f:
             data = json.load(f)
         for aid, p in data.get("articles", {}).items():
-            if not isinstance(p, dict):
-                continue
-            body = p.get("body_lines", p.get("body", []))
-            body_json = json.dumps(body) if isinstance(body, list) else _s(body)
+            if isinstance(p, dict):
+                title = _s(p.get("title")) or aid
+                audience = _s(p.get("audience"))
+                body = p.get("body_lines", p.get("body", p.get("content", "")))
+            else:
+                body = p
+                lines = _article_lines(p)
+                title = lines[0] if lines else aid
+                audience = ""
+            body_lines = _article_lines(body)
+            body_json = json.dumps(body_lines)
             self.conn.execute(
                 "INSERT OR IGNORE INTO knowledge_articles "
                 "(article_id, title, audience, body_json) VALUES (?,?,?,?)",
-                (aid, _s(p.get("title")), _s(p.get("audience")), body_json),
+                (aid, title, audience, body_json),
             )
         for qk, article_ids in data.get("queries", {}).items():
             if isinstance(article_ids, list):
@@ -353,6 +406,21 @@ class OfficeEnterpriseManagementBank:
                  _parse_money(p.get("return_score", 0)), _s(p.get("description")),
                  _s(p.get("cost_center")),
                  1 if p.get("deleted") else 0),
+            )
+
+    def _seed_budget_allocations(self, seed_dir: Path) -> None:
+        path = seed_dir / "budget_allocations.json"
+        if not path.exists():
+            return
+        with open(path) as f:
+            data = json.load(f)
+        for hashtag, recommendation in data.items():
+            if not isinstance(recommendation, str):
+                continue
+            self.conn.execute(
+                "INSERT OR REPLACE INTO budget_allocation_overrides "
+                "(hashtag, recommendation) VALUES (?, ?)",
+                (hashtag, recommendation),
             )
 
     def _seed_dashboards(self, seed_dir: Path) -> None:
@@ -483,11 +551,90 @@ class OfficeEnterpriseManagementBank:
             ).fetchone()
         return None
 
+    def _packet_by_lookup(self, user_lookup: str) -> sqlite3.Row | None:
+        lookup = _s(user_lookup).strip()
+        if not lookup:
+            return None
+
+        row = self.conn.execute(
+            "SELECT * FROM onboarding_packets WHERE packet_key = ?",
+            (lookup,),
+        ).fetchone()
+        if row:
+            return row
+
+        row = self.conn.execute(
+            "SELECT * FROM onboarding_packets WHERE lower(proposed_user_id) = lower(?) OR lower(email) = lower(?)",
+            (lookup, lookup),
+        ).fetchone()
+        if row:
+            return row
+
+        if "@" in lookup:
+            email_tail = lookup.lower().rsplit(":", 1)[-1].strip()
+            for candidate in self.conn.execute(
+                "SELECT * FROM onboarding_packets ORDER BY packet_key",
+            ).fetchall():
+                candidate_email = _s(candidate["email"]).lower().rsplit(":", 1)[-1].strip()
+                if candidate_email == email_tail:
+                    return candidate
+
+        normalized_lookup = _norm_lookup(lookup)
+        if not normalized_lookup:
+            return None
+
+        rows = list(self.conn.execute(
+            "SELECT * FROM onboarding_packets ORDER BY packet_key",
+        ).fetchall())
+        scored: list[tuple[int, sqlite3.Row]] = []
+        for candidate in rows:
+            key_norm = _norm_lookup(candidate["packet_key"])
+            name_norm = _norm_lookup(f"{candidate['first_name']} {candidate['last_name']}")
+            user_norm = _norm_lookup(candidate["proposed_user_id"])
+            score = 0
+            if normalized_lookup == key_norm:
+                score += 120
+            if normalized_lookup == user_norm:
+                score += 110
+            if normalized_lookup == name_norm:
+                score += 90
+            if normalized_lookup and normalized_lookup in key_norm:
+                score += 45
+            elif key_norm and key_norm in normalized_lookup:
+                score += 20
+            if not score:
+                continue
+            if any(flag in key_norm for flag in ("archived", "archive", "draft", "adjacent", "duplicate", "legacy", "same surname")):
+                score -= 60
+            if any(flag in user_norm for flag in ("draft", "tmp", "old", "archive")):
+                score -= 40
+            scored.append((score, candidate))
+
+        if not scored:
+            return None
+        scored.sort(key=lambda item: (item[0], item[1]["packet_key"]), reverse=True)
+        return scored[0][1]
+
     def _asset_rows_for_user(self, user_id: str) -> list[sqlite3.Row]:
         return list(self.conn.execute(
             "SELECT * FROM hardware_assets WHERE assigned_to = ? ORDER BY asset_id",
             (user_id,),
         ).fetchall())
+
+    def _asset_type_matches(self, row: sqlite3.Row, asset_type: str) -> bool:
+        needle = _norm_lookup(asset_type)
+        if not needle:
+            return True
+        haystack = _norm_lookup(
+            f"{row['model']} {row['condition']} {row['status']} {row['serial_number']}"
+        )
+        if needle == "laptop":
+            return any(token in haystack for token in ("laptop", "latitude", "thinkpad", "carbon", "notebook"))
+        if needle == "monitor":
+            return any(token in haystack for token in ("monitor", "display"))
+        if needle == "phone":
+            return any(token in haystack for token in ("phone", "iphone", "android", "mobile", "pixel"))
+        return needle in haystack
 
     def _render_incident(self, row: sqlite3.Row) -> str:
         return "\n".join([
@@ -533,9 +680,12 @@ class OfficeEnterpriseManagementBank:
     # -----------------------------------------------------------------------
 
     def tool_read_user_directory(self, user_lookup: str = "", **kwargs: Any) -> str:
-        packet = self.conn.execute(
-            "SELECT * FROM onboarding_packets WHERE packet_key = ?", (user_lookup,),
-        ).fetchone()
+        user_lookup = (
+            _s(user_lookup).strip() or
+            _s(kwargs.get("packet")).strip() or
+            _s(kwargs.get("user_id")).strip()
+        )
+        packet = self._packet_by_lookup(user_lookup)
         if packet:
             return "\n".join([
                 "Onboarding Packet",
@@ -569,14 +719,17 @@ class OfficeEnterpriseManagementBank:
         email: str = "", department: str = "", title: str = "",
         location: str = "", **kwargs: Any,
     ) -> str:
-        packet = self.conn.execute(
-            "SELECT * FROM onboarding_packets WHERE lower(email) = lower(?)",
-            (email,),
-        ).fetchone()
-        user_id = (
-            packet["proposed_user_id"] if packet
-            else f"USR-{first_name.strip().upper()}-{last_name.strip().upper()}".replace(" ", "-")
-        )
+        email = _s(email).strip() or _s(kwargs.get("employee_email")).strip()
+        packet = self._packet_by_lookup(_s(kwargs.get("user_id")).strip() or email or f"{first_name} {last_name}")
+        if not packet and email:
+            packet = self.conn.execute(
+                "SELECT * FROM onboarding_packets WHERE lower(email) = lower(?)",
+                (email,),
+            ).fetchone()
+        explicit_user_id = _s(kwargs.get("user_id")).strip()
+        user_id = explicit_user_id or (packet["proposed_user_id"] if packet else "")
+        if not user_id:
+            user_id = f"USR-{first_name.strip().upper()}-{last_name.strip().upper()}".replace(" ", "-")
         existing = self.conn.execute(
             "SELECT user_id FROM employees WHERE user_id = ?", (user_id,),
         ).fetchone()
@@ -604,18 +757,72 @@ class OfficeEnterpriseManagementBank:
         self, assigned_to: str = "", asset_type: str = "",
         query: str = "", **kwargs: Any,
     ) -> str:
-        rows = self._asset_rows_for_user(assigned_to)
+        assigned_to = _s(assigned_to).strip() or _s(kwargs.get("user_id")).strip()
+        query = _s(query).strip() or _s(kwargs.get("asset_id")).strip()
+        assigned_lookup = re.sub(r"^(?:assigned_to|user_id):", "", assigned_to, flags=re.I).strip()
+        resolved_assigned_to = assigned_lookup
+        if assigned_lookup:
+            packet = self._packet_by_lookup(assigned_lookup)
+            employee = self._employee_by_lookup(assigned_lookup)
+            if packet:
+                resolved_assigned_to = _s(packet["proposed_user_id"])
+            elif employee:
+                resolved_assigned_to = _s(employee["user_id"])
+
+        rows = list(self.conn.execute(
+            "SELECT * FROM hardware_assets ORDER BY asset_id",
+        ).fetchall())
+        if resolved_assigned_to:
+            rows = [row for row in rows if row["assigned_to"] == resolved_assigned_to]
+
+        if query:
+            explicit_ids = [asset_id.upper() for asset_id in re.findall(r"AST-[A-Z0-9-]+", query, flags=re.I)]
+            if explicit_ids:
+                rows = [row for row in rows if row["asset_id"].upper() in explicit_ids]
+            else:
+                query_norm = _norm_lookup(query)
+                rows = [
+                    row for row in rows
+                    if query_norm in _norm_lookup(
+                        " ".join([
+                            row["asset_id"],
+                            row["model"],
+                            row["serial_number"],
+                            row["assigned_to"],
+                            row["condition"],
+                            row["cost_center"],
+                            row["status"],
+                        ])
+                    )
+                ]
+
+        if asset_type:
+            rows = [row for row in rows if self._asset_type_matches(row, asset_type)]
+
         if not rows:
-            return f"Asset Inventory Query\nAssigned To: {assigned_to}\n(no assets found)"
-        lines = ["Asset Inventory Query", f"Assigned To: {assigned_to}"]
+            lines = ["Asset Inventory Query"]
+            if resolved_assigned_to:
+                lines.append(f"Assigned To: {resolved_assigned_to}")
+            if query:
+                lines.append(f"Query: {query}")
+            lines.append("(no assets found)")
+            return "\n".join(lines)
+
+        lines = ["Asset Inventory Query"]
+        if resolved_assigned_to:
+            lines.append(f"Assigned To: {resolved_assigned_to}")
+        if query:
+            lines.append(f"Query: {query}")
         for row in rows:
             lines.extend([
                 f"Asset ID: {row['asset_id']}",
+                f"Assigned To: {row['assigned_to'] or '(unassigned)'}",
                 f"Model: {row['model']}",
                 f"Serial Number: {row['serial_number']}",
                 f"Warranty Expiration: {row['warranty_expiration']}",
                 f"Condition: {row['condition']}",
                 f"Cost Center: {row['cost_center']}",
+                f"Status: {row['status']}",
             ])
         return "\n".join(lines)
 
@@ -624,8 +831,56 @@ class OfficeEnterpriseManagementBank:
         assigned_to: str = "", warranty_expiration: str = "",
         cost_center: str = "", **kwargs: Any,
     ) -> str:
+        serial_number = _s(serial_number).strip() or _s(kwargs.get("serial")).strip()
+        explicit_asset_id = _s(kwargs.get("asset_id")).strip()
+        existing = None
+        if explicit_asset_id:
+            existing = self.conn.execute(
+                "SELECT * FROM hardware_assets WHERE asset_id = ?",
+                (explicit_asset_id,),
+            ).fetchone()
+        if not existing and serial_number:
+            for row in self.conn.execute("SELECT * FROM hardware_assets ORDER BY asset_id").fetchall():
+                if _serial_key(row["serial_number"]) == _serial_key(serial_number):
+                    existing = row
+                    break
+        if existing:
+            asset_id = existing["asset_id"]
+            new_assigned_to = _s(assigned_to).strip() or existing["assigned_to"]
+            self.conn.execute(
+                "UPDATE hardware_assets SET model = ?, serial_number = ?, assigned_to = ?, "
+                "warranty_expiration = ?, condition = ?, cost_center = ?, status = ? "
+                "WHERE asset_id = ?",
+                (
+                    model or existing["model"],
+                    serial_number or existing["serial_number"],
+                    new_assigned_to,
+                    warranty_expiration or existing["warranty_expiration"],
+                    existing["condition"] or "registered from approved serial",
+                    cost_center or existing["cost_center"],
+                    "assigned" if new_assigned_to else "awaiting_assignment_confirmation",
+                    asset_id,
+                ),
+            )
+            self.conn.commit()
+            return "\n".join([
+                "Hardware Asset Created",
+                f"Asset ID: {asset_id}",
+                f"Model: {model or existing['model']}",
+                f"Assigned To: {new_assigned_to or '(unassigned)'}",
+                f"Serial Number: {serial_number or existing['serial_number']}",
+                "Status: awaiting assignment confirmation." if not new_assigned_to else "Status: assigned.",
+            ])
+
         digits = "".join(ch for ch in serial_number if ch.isdigit())
-        asset_id = f"AST-{digits[-4:]}" if len(digits) >= 4 else f"AST-{self._asset_counter}"
+        if explicit_asset_id:
+            asset_id = explicit_asset_id
+        elif len(digits) >= 5:
+            asset_id = f"AST-{digits[-5:]}"
+        elif len(digits) >= 4:
+            asset_id = f"AST-{digits[-4:]}"
+        else:
+            asset_id = f"AST-{self._asset_counter}"
         self._asset_counter += 1
         if self.conn.execute("SELECT asset_id FROM hardware_assets WHERE asset_id = ?", (asset_id,)).fetchone():
             asset_id = f"AST-{self._asset_counter}"
@@ -655,14 +910,22 @@ class OfficeEnterpriseManagementBank:
         ).fetchone()
         if not row:
             return f"Asset assignment update rejected: {asset_id} not found."
+        normalized_action = _norm(action)
+        if normalized_action == "unassign":
+            new_assigned_to = ""
+        elif assigned_to != "":
+            new_assigned_to = assigned_to
+        else:
+            new_assigned_to = row["assigned_to"]
+        new_status = "unassigned" if not new_assigned_to else "assigned"
         self.conn.execute(
-            "UPDATE hardware_assets SET assigned_to = ?, status = 'assigned' WHERE asset_id = ?",
-            (assigned_to or row["assigned_to"], asset_id),
+            "UPDATE hardware_assets SET assigned_to = ?, status = ? WHERE asset_id = ?",
+            (new_assigned_to, new_status, asset_id),
         )
         self.conn.commit()
         return "\n".join([
             f"Asset Assignment Updated — {asset_id}",
-            f"Assigned To: {assigned_to or row['assigned_to']}",
+            f"Assigned To: {new_assigned_to or '(unassigned)'}",
             f"Action: {action or 'assign'}",
         ])
 
@@ -671,8 +934,10 @@ class OfficeEnterpriseManagementBank:
         quantity: str = "", configuration: str = "", **kwargs: Any,
     ) -> str:
         qty = int(quantity or 1)
-        self._request_counter += 1
-        request_id = f"REQ-{self._request_counter}"
+        request_id = _s(kwargs.get("request_id")).strip()
+        if not request_id:
+            self._request_counter += 1
+            request_id = f"REQ-{self._request_counter}"
         self.conn.execute(
             "INSERT INTO service_catalog_requests "
             "(request_id, item_name, item_model, requested_for, quantity, "
@@ -696,6 +961,7 @@ class OfficeEnterpriseManagementBank:
         self, record_type: str = "", query: str = "",
         fields: str = "", sort_by: str = "", **kwargs: Any,
     ) -> str:
+        query = query or _s(kwargs.get("query_key")) or _s(kwargs.get("record_id"))
         query = re.sub(r'^(?:number|hashtag|tag)=', '', query)
         query = re.sub(r'\^.*$', '', query)
         query = query.strip()
@@ -708,7 +974,7 @@ class OfficeEnterpriseManagementBank:
         if row["record_type"] == "incident":
             return self._render_incident(row)
         if row["record_type"] == "change":
-            return self._render_change_set(query)
+            return self._render_change_set(row["query_key"] or row["record_id"])
         return "\n".join([
             f"Work Record — {row['record_id']}",
             f"Type: {row['record_type']}",
@@ -748,18 +1014,25 @@ class OfficeEnterpriseManagementBank:
         self, change_id: str = "", planned_start: str = "",
         planned_end: str = "", sequencing_note: str = "", **kwargs: Any,
     ) -> str:
+        change_id = change_id or _s(kwargs.get("record_id"))
         row = self.conn.execute(
             "SELECT * FROM work_records WHERE record_id = ? AND record_type = 'change'",
             (change_id,),
         ).fetchone()
         if not row:
             return f"Change scheduling rejected: {change_id} not found."
+        scheduled_date = (
+            _scheduled_date(planned_start) or
+            _scheduled_date(planned_end) or
+            _scheduled_date(row["window_block_start"]) or
+            _scheduled_date(row["window_block_end"])
+        )
         self.conn.execute(
             "INSERT OR REPLACE INTO change_schedules "
-            "(change_id, record_id, planned_start, planned_end, "
+            "(change_id, record_id, scheduled_date, planned_start, planned_end, "
             "window_block_start, window_block_end, sequencing_note) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (change_id, change_id, planned_start, planned_end,
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (change_id, change_id, scheduled_date, planned_start, planned_end,
              planned_start, planned_end, sequencing_note),
         )
         self.conn.execute(
@@ -778,8 +1051,13 @@ class OfficeEnterpriseManagementBank:
         self, record_type: str = "", short_description: str = "",
         payload: str = "", **kwargs: Any,
     ) -> str:
+        parent_record_id = _s(kwargs.get("parent_record_id")).strip() or _s(kwargs.get("related_to")).strip()
+        resolved_record_type = record_type or "incident"
+        if not parent_record_id and re.match(r"^(?:INC|CHG|REQ)-", record_type, flags=re.I):
+            parent_record_id = record_type
+            resolved_record_type = _s(kwargs.get("followup_type")).strip() or "incident"
         self._followup_counter += 1
-        prefix = "INC" if _norm(record_type) == "incident" else "WRK"
+        prefix = "INC" if _norm(resolved_record_type) == "incident" else "WRK"
         record_id = f"{prefix}-FUP-{self._followup_counter}"
         self.conn.execute(
             "INSERT INTO work_records "
@@ -790,15 +1068,16 @@ class OfficeEnterpriseManagementBank:
             "window_block_start, window_block_end, "
             "implementation_plan, rollback_plan, parent_record_id) "
             "VALUES (?, ?, '', 'Follow-up', 'Medium', '', '', '', ?, ?, "
-            "'Austin Workplace Support', '', ?, 'open', '', '', 0, '', '', '', '', '')",
-            (record_id, record_type or "incident",
-             short_description, payload or short_description, payload or ""),
+            "'Austin Workplace Support', '', ?, 'open', '', '', 0, '', '', '', '', ?)",
+            (record_id, resolved_record_type or "incident",
+             short_description, payload or short_description, payload or "", parent_record_id),
         )
         self.conn.commit()
         return "\n".join([
             "Follow-up Record Created",
             f"Record ID: {record_id}",
-            f"Record Type: {record_type or 'incident'}",
+            f"Record Type: {resolved_record_type or 'incident'}",
+            f"Parent Record ID: {parent_record_id or '(none)'}",
             f"Short Description: {short_description}",
             "Status: open",
         ])
@@ -806,6 +1085,7 @@ class OfficeEnterpriseManagementBank:
     def tool_search_knowledge_base(
         self, query: str = "", audience: str = "", **kwargs: Any,
     ) -> str:
+        query = query or _s(kwargs.get("query_key"))
         rows = self.conn.execute(
             "SELECT kq.query_key, ka.* FROM knowledge_queries kq "
             "JOIN knowledge_articles ka ON ka.article_id = kq.article_id "
@@ -815,12 +1095,18 @@ class OfficeEnterpriseManagementBank:
         if not rows:
             return f"Knowledge Search Result\nNo article matched query: {query}"
         row = rows[0]
+        try:
+            body_lines = json.loads(row["body_json"])
+            if isinstance(body_lines, str):
+                body_lines = [body_lines]
+        except json.JSONDecodeError:
+            body_lines = [row["body_json"]]
         lines = [
             "Knowledge Search Result",
             f"Article: {row['article_id']}",
             "Policy:",
         ]
-        lines.extend([f"- {line}" for line in json.loads(row["body_json"])])
+        lines.extend([f"- {line}" for line in body_lines])
         return "\n".join(lines)
 
     def tool_query_expense_lines(
@@ -847,6 +1133,13 @@ class OfficeEnterpriseManagementBank:
         self, hashtag: str = "", budget: str = "",
         objective: str = "", **kwargs: Any,
     ) -> str:
+        override = self.conn.execute(
+            "SELECT recommendation FROM budget_allocation_overrides WHERE hashtag = ?",
+            (hashtag,),
+        ).fetchone()
+        if override and _budget_override_matches(override["recommendation"], budget):
+            return override["recommendation"]
+
         rows = list(self.conn.execute(
             "SELECT * FROM expense_lines WHERE hashtag = ? AND deleted = 0 ORDER BY expense_id",
             (hashtag,),

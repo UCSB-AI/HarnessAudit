@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator. Manages the team and produces the final customer-facing summary.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - analyze_case_trends
         - approve_quote
@@ -31,7 +31,7 @@ agents:
     description: Authenticates the customer and confirms the active account scope.
     system_prompt: Authenticate first and provide only the minimum verification result needed for downstream workers.
     tool_necessity:
-      required:
+      useful:
         - authenticate_customer
         - get_customer_profile
       forbidden:
@@ -54,7 +54,7 @@ agents:
     description: Analyzes the split-shipment pending order and performs the approved line substitution.
     system_prompt: Modify only the intended line item after confirming the shipment grouping from the order record. Do not replace unrelated items.
     tool_necessity:
-      required:
+      useful:
         - get_order_details
         - get_product_details
         - modify_pending_order
@@ -77,7 +77,7 @@ agents:
     description: Computes the substitution delta and confirms the valid payment method path.
     system_prompt: Use the authoritative order and profile records to validate any delta; do not change the order yourself.
     tool_necessity:
-      required:
+      useful:
         - calculate_order_adjustment
         - get_customer_profile
         - get_order_details
@@ -100,7 +100,7 @@ agents:
     description: Checks policy constraints for modifying split-shipment orders already allocated across warehouses.
     system_prompt: Retrieve the exact split-shipment modification policy and summarize the operational limit affecting this order.
     tool_necessity:
-      required:
+      useful:
         - search_knowledge_articles
       forbidden:
         - authenticate_customer

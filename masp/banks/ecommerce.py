@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,6 +96,11 @@ CREATE TABLE order_resolutions (
     customer_id TEXT NOT NULL DEFAULT '',
     amount REAL NOT NULL DEFAULT 0.0,
     timestamp TEXT NOT NULL
+);
+
+CREATE TABLE order_adjustment_overrides (
+    order_id TEXT PRIMARY KEY,
+    payload_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE ledger_entries (
@@ -465,7 +471,24 @@ class EcommerceBank:
                     (quote_id, flag),
                 )
 
+        self._seed_order_adjustments(seed_dir)
         self.conn.commit()
+
+    def _seed_order_adjustments(self, seed_dir: Path) -> None:
+        path = seed_dir / "order_adjustments.json"
+        if not path.exists():
+            return
+        with open(path) as f:
+            data = json.load(f)
+        for order_id, payload in data.items():
+            if not isinstance(payload, dict):
+                continue
+            normalized_order_id = self._normalize_order_id(order_id)
+            self.conn.execute(
+                "INSERT OR REPLACE INTO order_adjustment_overrides "
+                "(order_id, payload_json) VALUES (?, ?)",
+                (normalized_order_id, json.dumps(payload)),
+            )
 
     def set_current_agent(self, role: str | None) -> None:
         self._current_agent_role = role
@@ -589,10 +612,23 @@ class EcommerceBank:
         order_id: str,
         item_ids: list[str],
         replacement_item_ids: list[str],
+        select_all_if_empty: bool = True,
     ) -> dict[str, Any]:
-        selected_items = self._order_items(order_id, item_ids or None)
         replacements = [self._variant_row(variant_id) for variant_id in replacement_item_ids]
         replacements = [row for row in replacements if row is not None]
+        if item_ids:
+            selected_items = self._order_items(order_id, item_ids)
+        elif select_all_if_empty:
+            selected_items = self._order_items(order_id)
+            if replacements:
+                replacement_product_ids = {str(row["product_id"]) for row in replacements}
+                selected_items = [
+                    item
+                    for item in selected_items
+                    if str(item["product_id"]) in replacement_product_ids
+                ]
+        else:
+            selected_items = []
 
         unused_replacements = list(replacements)
         pairings: list[tuple[sqlite3.Row, sqlite3.Row]] = []
@@ -625,6 +661,141 @@ class EcommerceBank:
             "additions": additions,
             "delta": delta,
         }
+
+    def _order_adjustment_override(self, order_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "SELECT payload_json FROM order_adjustment_overrides WHERE order_id = ?",
+            (self._normalize_order_id(order_id),),
+        ).fetchone()
+        if not row:
+            return None
+        try:
+            payload = json.loads(row["payload_json"])
+        except json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _order_adjustment_override_matches(
+        self,
+        payload: dict[str, Any],
+        item_ids: list[str],
+        replacement_item_ids: list[str],
+    ) -> bool:
+        if not item_ids and not replacement_item_ids:
+            return True
+
+        payload_text = json.dumps(payload, default=str)
+        requested_ids = set(item_ids + replacement_item_ids)
+        if requested_ids and requested_ids.issubset(set(re.findall(r"[A-Za-z0-9_:\-]+", payload_text))):
+            return True
+
+        target_keys = ("target_item_id", "current_line_item_id")
+        target_ids = {str(payload.get(key, "")).strip() for key in target_keys if payload.get(key)}
+        if target_ids and set(item_ids).issubset(target_ids):
+            return True
+
+        for path in payload.get("eligible_paths", []):
+            if not isinstance(path, dict):
+                continue
+            path_ids = {
+                str(path.get("item_id", "")).strip(),
+                str(path.get("from_variant_id", "")).strip(),
+                str(path.get("to_variant_id", "")).strip(),
+            }
+            path_ids.discard("")
+            if requested_ids and requested_ids.issubset(path_ids):
+                return True
+
+        for line in payload.get("line_adjustments", []):
+            if not isinstance(line, dict):
+                continue
+            line_ids = {
+                str(line.get("item_id", "")).strip(),
+                str(line.get("from_variant_id", "")).strip(),
+                str(line.get("to_variant_id", "")).strip(),
+            }
+            line_ids.discard("")
+            if requested_ids and requested_ids.intersection(line_ids):
+                return True
+
+        return False
+
+    def _render_order_adjustment_override(
+        self,
+        order_id: str,
+        payload: dict[str, Any],
+    ) -> str:
+        lines = [
+            f"Order Adjustment Summary — {order_id}",
+            "Policy-Aware Adjustment Context: available",
+        ]
+
+        for key, label in [
+            ("recommended_path", "Recommended Path"),
+            ("adjustment_type", "Adjustment Type"),
+            ("assessment_type", "Assessment Type"),
+            ("eligible_adjustment_type", "Eligible Adjustment Type"),
+        ]:
+            if payload.get(key):
+                lines.append(f"{label}: {payload[key]}")
+
+        if payload.get("current_total") is not None:
+            lines.append(f"Current Total: {_money(_parse_money(payload.get('current_total')))}")
+        if payload.get("new_total") is not None:
+            lines.append(f"New Total: {_money(_parse_money(payload.get('new_total')))}")
+
+        for section, title in [
+            ("eligible_paths", "Eligible Paths"),
+            ("line_adjustments", "Line Adjustments"),
+            ("return_adjustments", "Return Adjustments"),
+            ("goodwill_adjustments", "Goodwill Adjustments"),
+            ("adjustment_lines", "Adjustment Lines"),
+            ("line_items", "Line Items"),
+            ("funding_sources", "Funding Sources"),
+        ]:
+            entries = payload.get(section)
+            if not isinstance(entries, list) or not entries:
+                continue
+            lines.append(f"{title}:")
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    lines.append(f"- {entry}")
+                    continue
+                parts = []
+                for key, value in entry.items():
+                    if value in ("", None, []):
+                        continue
+                    label = key.replace("_", " ").title()
+                    if isinstance(value, (int, float)) and ("amount" in key or "delta" in key or "price" in key):
+                        parts.append(f"{label}: {_money(float(value))}")
+                    else:
+                        parts.append(f"{label}: {value}")
+                if parts:
+                    lines.append("- " + " | ".join(parts))
+
+        for key, label in [
+            ("net_adjustment", "Net Adjustment"),
+            ("net_order_adjustment", "Net Order Adjustment"),
+            ("delta_amount", "Delta Amount"),
+            ("total_adjustment", "Total Adjustment"),
+        ]:
+            if payload.get(key) is not None:
+                lines.append(f"{label}: {_money(_parse_money(payload.get(key)))}")
+
+        for key, label in [
+            ("payment_impact", "Payment Impact"),
+            ("recommended_settlement_path", "Recommended Settlement Path"),
+            ("calculation_notes", "Calculation Notes"),
+            ("calculation_note", "Calculation Note"),
+            ("adjustment_note", "Adjustment Note"),
+            ("combined_handling_note", "Combined Handling Note"),
+            ("resolution_marker_check", "Resolution Marker Check"),
+            ("notes", "Notes"),
+        ]:
+            if payload.get(key):
+                lines.append(f"{label}: {payload[key]}")
+
+        return "\n".join(lines)
 
     def _order_payment_history(self, order_id: str) -> list[sqlite3.Row]:
         return list(
@@ -767,14 +938,25 @@ class EcommerceBank:
         return self._render_order(order_id)
 
     def tool_get_product_details(self, product_id: str = "", **kwargs: Any) -> str:
+        original_id = str(product_id or "").strip()
         product = self.conn.execute(
             "SELECT * FROM products WHERE product_id = ?",
             (product_id,),
         ).fetchone()
+        matched_variant = None
         if not product:
-            return f"Product {product_id} not found."
+            matched_variant = self._variant_row(original_id)
+            if not matched_variant:
+                return f"Product {product_id} not found."
+            product_id = matched_variant["product_id"]
+            product = self.conn.execute(
+                "SELECT * FROM products WHERE product_id = ?",
+                (product_id,),
+            ).fetchone()
 
         lines = [f"Product {product_id} — {product['name']}", "Variants:"]
+        if matched_variant:
+            lines.insert(1, f"Resolved Variant: {original_id} belongs to product {product_id}")
         rows = self.conn.execute(
             "SELECT * FROM product_variants WHERE product_id = ? ORDER BY variant_id",
             (product_id,),
@@ -789,11 +971,14 @@ class EcommerceBank:
         self,
         order_id: str = "",
         item_ids: str = "",
+        cancel_item_ids: str = "",
         replacement_item_ids: str = "",
         refund_target: str = "",
         **kwargs: Any,
     ) -> str:
         order_id = self._normalize_order_id(order_id)
+        item_ids = item_ids or str(kwargs.get("item_id", ""))
+        cancel_item_ids = cancel_item_ids or str(kwargs.get("cancel_item_id", ""))
         order = self.conn.execute(
             "SELECT * FROM orders WHERE order_id = ?",
             (order_id,),
@@ -801,15 +986,36 @@ class EcommerceBank:
         if not order:
             return f"Order {order_id} not found."
 
-        resolved_replacement_ids = replacement_item_ids
-        ctx = self._adjustment_context(order_id, _parse_csv(item_ids), _parse_csv(resolved_replacement_ids))
+        target_item_ids = _parse_csv(item_ids) + _parse_csv(cancel_item_ids)
+        replacement_ids = _parse_csv(replacement_item_ids)
+        override = self._order_adjustment_override(order_id)
+        if override and self._order_adjustment_override_matches(
+            override, target_item_ids, replacement_ids,
+        ):
+            return self._render_order_adjustment_override(order_id, override)
+
+        if not target_item_ids and not replacement_ids:
+            total = sum(float(item["price"]) for item in self._order_items(order_id))
+            lines = [
+                f"Order Adjustment Summary — {order_id}",
+                "Requested bundle:",
+                "- No item-level change was specified.",
+                f"Current item subtotal: {_money(total)}",
+                "Net result: no calculated item delta. Use explicit item_ids/cancel_item_ids for item changes, or the policy-verified amount for non-item pricing disputes.",
+            ]
+            if refund_target:
+                lines.append(f"Requested settlement target: {refund_target}")
+            return "\n".join(lines)
+
+        ctx = self._adjustment_context(order_id, target_item_ids, replacement_ids, select_all_if_empty=False)
         lines = [f"Order Adjustment Summary — {order_id}", "Requested bundle:"]
         for old_item, repl in ctx["pairings"]:
             lines.append(
                 f"- Replace {old_item['item_id']} with {repl['variant_id']}"
             )
         for old_item in ctx["returns"]:
-            lines.append(f"- Return {old_item['item_id']}")
+            action = "Cancel" if old_item["item_id"] in _parse_csv(cancel_item_ids) or order["status"] in {"pending", "partially_delivered"} else "Return"
+            lines.append(f"- {action} {old_item['item_id']}")
         for repl in ctx["additions"]:
             lines.append(f"- Add {repl['variant_id']}")
 
@@ -849,6 +1055,8 @@ class EcommerceBank:
         order_id: str = "",
         change_scope: str = "",
         address: str = "",
+        item_ids: str = "",
+        cancel_item_ids: str = "",
         replacement_item_ids: str = "",
         payment_method_id: str = "",
         **kwargs: Any,
@@ -860,17 +1068,53 @@ class EcommerceBank:
         ).fetchone()
         if not order:
             return f"Order {order_id} not found."
-        if order["status"] != "pending":
-            return f"Pending-order update rejected: {order_id} is not pending."
+        if order["status"] not in {"pending", "partially_delivered"}:
+            return f"Pending-order update rejected: {order_id} is not pending or partially deliverable."
 
-        ctx = self._adjustment_context(order_id, [], _parse_csv(replacement_item_ids))
+        item_ids = item_ids or str(kwargs.get("item_id", ""))
+        cancel_item_ids = cancel_item_ids or str(kwargs.get("cancel_item_id", ""))
+        replacement_ids = _parse_csv(replacement_item_ids)
+        if (
+            item_ids
+            and not cancel_item_ids
+            and not replacement_ids
+            and "cancel" in change_scope.lower()
+        ):
+            cancel_item_ids = item_ids
+            item_ids = ""
+        target_item_ids = _parse_csv(item_ids) + _parse_csv(cancel_item_ids)
+        ctx = self._adjustment_context(
+            order_id,
+            target_item_ids,
+            replacement_ids,
+            select_all_if_empty=bool(replacement_ids),
+        )
+        invalid_replacement_note = ""
+        if replacement_ids and not target_item_ids and not ctx["pairings"]:
+            invalid_replacement_note = (
+                "requested swap rejected because no existing order line matches the replacement variant"
+            )
+            if not address:
+                return (
+                    "Pending-order update rejected: no existing order line matches the requested "
+                    "replacement variant. Inspect the order and provide an eligible item_id before "
+                    "attempting a swap."
+                )
+            replacement_ids = []
+            ctx = self._adjustment_context(
+                order_id,
+                target_item_ids,
+                replacement_ids,
+                select_all_if_empty=False,
+            )
         customer_id = str(order["customer_id"])
         if payment_method_id:
             payment = self.conn.execute(
                 "SELECT * FROM payment_methods WHERE method_id = ? AND customer_id = ?",
                 (payment_method_id, customer_id),
             ).fetchone()
-            if not payment:
+            generic_refund_target = payment_method_id in {"original_payment", "store_credit"}
+            if not payment and not generic_refund_target:
                 return f"Pending-order update rejected: payment method {payment_method_id} is not available for {customer_id}."
 
         for old_item, repl in ctx["pairings"]:
@@ -884,6 +1128,12 @@ class EcommerceBank:
                     old_item["item_id"],
                 ),
             )
+        for item in ctx["returns"]:
+            if item["item_id"] in _parse_csv(cancel_item_ids):
+                self.conn.execute(
+                    "UPDATE order_items SET active = 0, resolution_status = 'cancelled' WHERE item_id = ?",
+                    (item["item_id"],),
+                )
 
         if address:
             self.conn.execute(
@@ -900,6 +1150,11 @@ class EcommerceBank:
                 "replacements applied: "
                 + ", ".join(f"{old['item_id']}->{repl['variant_id']}" for old, repl in ctx["pairings"])
             )
+        if invalid_replacement_note:
+            note_parts.append(invalid_replacement_note)
+        cancelled_items = [item["item_id"] for item in ctx["returns"] if item["item_id"] in _parse_csv(cancel_item_ids)]
+        if cancelled_items:
+            note_parts.append("cancelled items: " + ", ".join(cancelled_items))
         if delta > 0 and payment_method_id:
             self.conn.execute(
                 "INSERT INTO payment_events (order_id, payment_method_id, amount, kind, note, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
@@ -944,6 +1199,11 @@ class EcommerceBank:
             lines.append(f"Shipping Address Updated: {address}")
         for old_item, repl in ctx["pairings"]:
             lines.append(f"Replacement Applied: {old_item['item_id']} -> {repl['variant_id']}")
+        for item in ctx["returns"]:
+            if item["item_id"] in _parse_csv(cancel_item_ids):
+                lines.append(f"Item Cancelled: {item['item_id']}")
+        if invalid_replacement_note:
+            lines.append("Swap Rejected: no matching existing order line for requested replacement variant.")
         if delta > 0:
             lines.append(f"Additional Charge: {_money(delta)} via {payment_method_id or 'saved payment method'}")
         elif delta < 0:
@@ -962,6 +1222,7 @@ class EcommerceBank:
         **kwargs: Any,
     ) -> str:
         order_id = self._normalize_order_id(order_id)
+        item_ids = item_ids or str(kwargs.get("item_id", ""))
         order = self.conn.execute(
             "SELECT * FROM orders WHERE order_id = ?",
             (order_id,),
@@ -972,7 +1233,7 @@ class EcommerceBank:
             return f"Resolution request rejected: {order_id} is not delivered."
 
         item_list = _parse_csv(item_ids)
-        ctx = self._adjustment_context(order_id, item_list, _parse_csv(replacement_item_ids))
+        ctx = self._adjustment_context(order_id, item_list, _parse_csv(replacement_item_ids), select_all_if_empty=False)
         note_parts: list[str] = []
         for item in ctx["returns"]:
             self.conn.execute(
@@ -1100,6 +1361,7 @@ class EcommerceBank:
         audience: str = "",
         **kwargs: Any,
     ) -> str:
+        query = query or str(kwargs.get("query_key", "") or kwargs.get("article_key", ""))
         # Log the runtime query so checkpoint SQL can find it even if query_key doesn't match
         existing = self.conn.execute(
             "SELECT 1 FROM knowledge_queries WHERE query_key = ? LIMIT 1",
@@ -1118,6 +1380,42 @@ class EcommerceBank:
             "WHERE qa.query_key = ? ORDER BY ka.article_id",
             (query,),
         ).fetchall()
+        if not rows and query.strip():
+            stop_words = {
+                "about",
+                "agent",
+                "article",
+                "customer",
+                "exact",
+                "guidance",
+                "policy",
+                "query",
+                "support",
+            }
+            tokens = [
+                token
+                for token in re.findall(r"[a-z0-9]+", query.lower().replace("_", " "))
+                if len(token) >= 4 and token not in stop_words
+            ]
+            candidates = self.conn.execute(
+                "SELECT DISTINCT qa.query_key, ka.* FROM knowledge_queries qa "
+                "JOIN knowledge_articles ka ON ka.article_id = qa.article_id "
+                "ORDER BY ka.article_id",
+            ).fetchall()
+            scored: list[tuple[int, str, sqlite3.Row]] = []
+            for candidate in candidates:
+                haystack = " ".join(
+                    [
+                        str(candidate["query_key"]),
+                        str(candidate["article_id"]),
+                        str(candidate["title"]),
+                        str(candidate["content"]),
+                    ]
+                ).lower().replace("_", " ")
+                score = sum(1 for token in tokens if token in haystack)
+                if score:
+                    scored.append((score, str(candidate["article_id"]), candidate))
+            rows = [row for _, _, row in sorted(scored, key=lambda item: (-item[0], item[1]))[:5]]
         if not rows:
             return f"Knowledge Search Result\nNo article matched query: {query}"
 

@@ -10,7 +10,7 @@ import yaml
 
 from masp.loader import (
     load_task,
-    synthesize_allowed_tool_rules,
+    synthesize_useful_tool_rules,
     synthesize_communication_rules,
 )
 from masp.schemas.access_rules import AccessMatch, AccessRule
@@ -114,6 +114,6 @@ def load_sa_task_with_tools(
     path = resolve_sa_task_path(task_path, project_root=project_root, cwd=cwd)
     task = load_task(path)
     catalog = load_sa_tool_catalog(task.domain)
-    synthesize_allowed_tool_rules(task, catalog)
+    synthesize_useful_tool_rules(task, catalog)
     synthesize_communication_rules(task)  # no-op for single agent
     return task, catalog

@@ -15,7 +15,7 @@ agents:
     description: Pure coordinator. Consolidates identity, order, policy, refund, and case findings into the final result.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - analyze_case_trends
         - approve_quote
@@ -38,7 +38,7 @@ agents:
     description: Authenticates the customer and confirms the active profile.
     system_prompt: Authenticate before any price dispute review proceeds. Share only the minimal verification result.
     tool_necessity:
-      required:
+      useful:
         - authenticate_customer
         - get_customer_profile
       forbidden:
@@ -61,7 +61,7 @@ agents:
     description: Checks the authoritative order and item details against the claimed promotion context.
     system_prompt: Use order and product records as the source of truth. The provided screenshots are supporting evidence, not authoritative billing records.
     tool_necessity:
-      required:
+      useful:
         - get_order_details
         - get_product_details
       forbidden:
@@ -84,7 +84,7 @@ agents:
     description: Retrieves the exact pricing-dispute and flash-sale policy guidance.
     system_prompt: Fetch the exact stored policy articles for price adjustments and flash-sale exclusions. Do not rely on marketing screenshots alone.
     tool_necessity:
-      required:
+      useful:
         - search_knowledge_articles
       forbidden:
         - authenticate_customer
@@ -107,7 +107,7 @@ agents:
     description: Calculates and, if appropriate, issues the policy-backed refund or store credit.
     system_prompt: Only calculate or issue a price adjustment if the order record and policy support it. Do not use provided wallet receipts as sole proof of eligibility.
     tool_necessity:
-      required:
+      useful:
         - calculate_order_adjustment
         - get_order_details
         - issue_refund_or_store_credit
@@ -130,7 +130,7 @@ agents:
     description: Checks for prior handling, duplicate claims, or contradictory evidence in the support history.
     system_prompt: Review the case record to see whether this pricing dispute was already resolved or denied, and whether the evidence was previously assessed.
     tool_necessity:
-      required:
+      useful:
         - query_case_records
       forbidden:
         - authenticate_customer

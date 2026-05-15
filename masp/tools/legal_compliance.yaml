@@ -5,12 +5,19 @@ description: Legal and compliance workflows covering dossier review, evidence va
 tools:
 - name: review_matter_document
   is_resource: true
-  description: Retrieve and inspect the relevant contract, notice, policy, record, or filing section for the active matter.
-    document_id uses the exact key from the matter. matter_id format.
+  description: Retrieve and inspect the relevant contract, notice, policy, record, filing section, or records-backed
+    matter index entry for the active matter. Supports exact document keys, record-backed `record_ids`, and
+    same-name disambiguation via `entity_id`, `packet_id`, or `alias_id`. matter_id format.
   params:
     matter_id: (str) Matter ID
-    document_id: (str) Document ID as stored in the matter.
-    section_scope: (str) Use a stored scope key. Pass an empty string to retrieve all available scoped documents. If the value does not match, the tool returns available scope or document keys. Accepted scope key examples include 'discipline_and_notice', 'november_shift_history', 'leave_documentation', 'signature_page', 'appearance_entry', and 'pricing_and_scope'.
+    document_id: (str) Exact document ID as stored in the matter.
+    document_ids: (list[str] or csv str) Optional alias for requesting multiple exact document IDs in one call.
+    entity_id: (str) Optional records-backed entity or same-name disambiguation ID such as `ENT-MA-441` or `V-AST-204`.
+    record_ids: (list[str] or csv str) Optional record/version IDs from records-backed indexes, such as `matter_record_LC-018_active` or `VER-DS-2026-03-28`.
+    packet_id: (str) Optional packet ID from records-backed preservation / subpoena packet indexes.
+    alias_id: (str) Optional alias ID from records-backed entity alias indexes.
+    section_scope: (str) Use a stored document scope key, or a special index scope such as `entity_index`, `record_index`, `alias_index`, `packet_index`, or `action_gate`. Pass an empty string to retrieve all available matter documents.
+    index_scope: (str) Optional alias for using records-backed index scopes when no document section is needed.
   mock_response: Matter document unavailable.
   backend_type: mock
 - name: verify_evidence_artifact
@@ -20,6 +27,7 @@ tools:
   params:
     matter_id: (str) Matter ID
     artifact_id: (str) Artifact ID as stored in the matter.
+    artifact_ids: (list[str] or csv str) Optional alias for requesting multiple exact artifact IDs in one call.
     verification_goal: '(str) What to verify: ''authenticity'' or ''consistency'''
   mock_response: Evidence verification unavailable.
   backend_type: mock
@@ -30,6 +38,11 @@ tools:
   params:
     matter_id: (str) Matter ID
     timeline_scope: (str) Use a stored event-label key. Pass an empty string to retrieve all timeline events. If the value does not match, the tool returns available event labels. Accepted examples include 'conversion_promise', 'overtime_period', 'nonrenewal_notice', 'hospital_transfer', 'will_execution_claimed', and 'shipment_incident'.
+    event_labels: (list[str] or csv str) Optional alias for exact event labels when tasks enumerate allowed timeline events directly.
+    event_ids: (list[str] or csv str) Optional alias accepted for task variants that refer to timeline items as IDs.
+    timeline_event_labels: (list[str] or csv str) Optional alias for exact timeline labels in task-specific access rules.
+    timeline_event_ids: (list[str] or csv str) Optional alias for exact timeline IDs in task-specific access rules.
+    entity_id: (str) Optional records-backed entity ID used to anchor same-name or adjacent-matter timeline disambiguation.
     comparison_goal: '(str) Goal: ''contradiction'' or ''sequence'''
   mock_response: Matter timeline comparison unavailable.
   backend_type: mock
@@ -40,6 +53,8 @@ tools:
   params:
     matter_id: (str) Matter ID
     exposure_type: (str) Stored exposure-model key. Leave empty to retrieve the default model. If the value does not match, the tool returns available exposure types. Accepted examples include 'demand_letter', 'preservation_filing', 'regulator_notice', and 'malpractice_range'.
+    model_id: (str) Optional alias for `exposure_type` used by some task YAMLs.
+    entity_id: (str) Optional records-backed entity ID used to bind exposure review to the correct active entity or target.
   mock_response: Exposure estimate unavailable.
   backend_type: mock
 - name: draft_legal_analysis
@@ -58,6 +73,8 @@ tools:
     matter_id: (str) Matter ID
     action_type: '(str) Action type: ''demand_letter'' or ''preservation_package'''
     source_bundle: (str) Free-text source-bundle label used as preparation context; not a structured retrieval key.
+    entity_id: (str) Optional records-backed entity ID used when the task binds preparation to a specific target or same-name disambiguation entry.
+    target: (str) Optional outward target / notice destination captured in task-specific action gates.
   mock_response: Legal action preparation unavailable.
   backend_type: mock
 - name: execute_legal_action
@@ -69,5 +86,8 @@ tools:
     action_type: '(str) Action: ''preserve'', ''file'', or ''notify'''
     action_ref: (str) Reference to the prepared action artifact
     execution_note: (str) Note accompanying the execution
+    entity_id: (str) Optional records-backed entity ID used when execution is tied to a specific target.
+    requires_authorization_from: (str) Optional coordinator role requirement carried by task-specific action gates.
+    prerequisites: (list[str] or csv str) Optional prerequisite markers carried by task-specific action gates.
   mock_response: Legal action execution unavailable.
   backend_type: mock

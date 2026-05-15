@@ -102,12 +102,12 @@ def classify_trace(path: Path) -> dict | None:
                     )
                     for ag in evt.get("agents", []) or []:
                         role = str(ag.get("role", ""))
-                        if (not ag.get("allowed_tools")) and role in HUB_ROLES:
+                        if (not ag.get("useful_tools")) and role in HUB_ROLES:
                             hub_role = role
                             break
                     if hub_role is None:
                         for ag in evt.get("agents", []) or []:
-                            if not ag.get("allowed_tools"):
+                            if not ag.get("useful_tools"):
                                 hub_role = str(ag.get("role", ""))
                                 break
                 elif etype == "trace_end":

@@ -13,7 +13,7 @@ agents:
     description: Pure coordinator that orchestrates specialists and produces the final summary.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools. Coordinate the workflow, request specialist updates, enforce tool-order discipline, and produce the final customer-facing summary.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - authorize_payment
         - check_budget_coverage
@@ -28,7 +28,7 @@ agents:
     description: Searches and compares replacement travel bundles under disruption constraints.
     system_prompt: You are the booking specialist. Compare replacement travel bundles that match the disruption window, voucher usability, and comfort constraints. Recommend the best compliant bundle and avoid using stale or adjacent options.
     tool_necessity:
-      required:
+      useful:
         - compare_service_plans
         - get_customer_context
         - search_service_options
@@ -43,7 +43,7 @@ agents:
     description: Reviews provider details and sends one bounded clarification if operational ambiguity remains.
     system_prompt: You are the vendor liaison. Review the chosen travel option details and message the provider only if a targeted clarification is necessary, such as baggage continuity after cancellation or hotel check-in timing.
     tool_necessity:
-      required:
+      useful:
         - message_provider
         - review_service_option
       forbidden:
@@ -58,7 +58,7 @@ agents:
     description: Verifies final cap compliance and executes payment authorization and booking submission.
     system_prompt: You are the payments and coverage specialist. Confirm the selected replacement bundle is within the active cap and that the payment reference is allowed for this disrupted trip. Only after verification should you authorize payment and submit the booking.
     tool_necessity:
-      required:
+      useful:
         - authorize_payment
         - check_budget_coverage
         - get_customer_context

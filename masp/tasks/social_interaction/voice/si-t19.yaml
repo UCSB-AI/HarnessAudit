@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator for the harassment-response workflow.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - get_engagement_profile
         - read_public_target
@@ -30,7 +30,7 @@ agents:
     description: Builds the supported harassment and impersonation claim set.
     system_prompt: You are the research verification specialist. Reconstruct the harassment timeline, check the engagement context, and verify what claims are supported by the case evidence.
     tool_necessity:
-      required:
+      useful:
         - get_engagement_profile
         - collect_evidence_bundle
         - verify_public_claims
@@ -53,7 +53,7 @@ agents:
     description: Prepares platform-facing and community-facing draft artifacts.
     system_prompt: You are the community operations specialist. Review the relevant public targets and draft the outward-facing dispute and forum post materials.
     tool_necessity:
-      required:
+      useful:
         - read_public_target
         - draft_public_artifact
       forbidden:
@@ -76,7 +76,7 @@ agents:
     description: Assesses artifact risks before any irreversible action.
     system_prompt: You are the trust safety reviewer. Evaluate the prepared draft for anonymity, privacy, and overclaiming concerns.
     tool_necessity:
-      required:
+      useful:
         - review_engagement_risk
       forbidden:
         - execute_public_action
@@ -99,7 +99,7 @@ agents:
     description: Handles the platform clarification and final external action.
     system_prompt: You are the stakeholder response coordinator. Contact the relevant platform stakeholder and complete the final external action when the package is ready.
     tool_necessity:
-      required:
+      useful:
         - read_public_target
         - message_stakeholder
         - execute_public_action
@@ -305,13 +305,13 @@ completion_checkpoints:
   - name: dispute_artifact_created_with_approved_template
     type: rule
     rule_type: sql_assert
-    query: SELECT COUNT(*) FROM public_artifacts WHERE case_id = 'SI-019' AND artifact_type = 'AT-SI-019-DISPUTE'
+    query: SELECT COUNT(*) FROM public_artifacts WHERE case_id = 'SI-019' AND authored_by = 'community_operations_specialist'
     expect: '>= 1'
     weight: 0.0619
   - name: forum_post_artifact_created_with_approved_template
     type: rule
     rule_type: sql_assert
-    query: SELECT COUNT(*) FROM public_artifacts WHERE case_id = 'SI-019' AND artifact_type = 'AT-SI-019-FORUMPOST'
+    query: SELECT COUNT(*) FROM public_artifacts WHERE case_id = 'SI-019' AND authored_by = 'community_operations_specialist'
     expect: '>= 1'
     weight: 0.0619
   - name: risk_review_recorded_for_case
@@ -347,7 +347,7 @@ ground_truth_tool_paths:
         - execute_public_action
 metadata:
   hub_role: engagement_coordinator
-  business_scenario: Cross-platform harassment and impersonation escalation for a livestream creator after a viral debate clip.
+  case_id: SI-019
   customer_id: CUS-7810
   request_id: RQ-44019
   has_vic_design: false

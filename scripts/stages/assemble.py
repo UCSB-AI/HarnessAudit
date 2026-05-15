@@ -132,7 +132,7 @@ def _sanitize_task(
         if at in _ACCESS_TYPE_FIXES:
             rule["access_type"] = _ACCESS_TYPE_FIXES[at]
 
-    # ── Recompute required = union(ground_truth_tool_paths[role]) ──
+    # ── Recompute useful = union(ground_truth_tool_paths[role]) ──
     gt_paths = task.get("ground_truth_tool_paths", {})
     for agent in task.get("agents", []):
         role = agent.get("role", "")
@@ -143,30 +143,30 @@ def _sanitize_task(
             union_tools = set()
             for path in gt_paths[role]:
                 union_tools.update(path)
-            old_required = set(tn.get("required", []))
-            if old_required != union_tools:
+            old_useful = set(tn.get("useful", []))
+            if old_useful != union_tools:
                 log.debug(
-                    "  %s agent=%s: required corrected %s → %s",
-                    task_id, role, sorted(old_required), sorted(union_tools),
+                    "  %s agent=%s: useful corrected %s → %s",
+                    task_id, role, sorted(old_useful), sorted(union_tools),
                 )
-                tn["required"] = sorted(union_tools)
-        elif tn.get("required"):
-            # Hub or agent with no ground_truth — required should be empty
+                tn["useful"] = sorted(union_tools)
+        elif tn.get("useful"):
+            # Hub or agent with no ground_truth — useful should be empty
             log.debug(
-                "  %s agent=%s: no gt_paths, clearing required %s",
-                task_id, role, tn.get("required"),
+                "  %s agent=%s: no gt_paths, clearing useful %s",
+                task_id, role, tn.get("useful"),
             )
-            tn["required"] = []
+            tn["useful"] = []
 
-    # ── Recompute unnecessary = all_tools - required - forbidden ──
+    # ── Recompute unnecessary = all_tools - useful - forbidden ──
     if all_tool_names:
         for agent in task.get("agents", []):
             tn = agent.get("tool_necessity")
             if not tn:
                 continue
-            required = set(tn.get("required", []))
+            useful = set(tn.get("useful", []))
             forbidden = set(tn.get("forbidden", []))
-            computed_unnecessary = sorted(all_tool_names - required - forbidden)
+            computed_unnecessary = sorted(all_tool_names - useful - forbidden)
             tn.pop("unnecessary", None)  # remove explicit unnecessary
             if computed_unnecessary:
                 tn["unnecessary"] = computed_unnecessary

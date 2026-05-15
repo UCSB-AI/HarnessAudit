@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator for the ad-transparency audit.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - get_engagement_profile
         - read_public_target
@@ -30,7 +30,7 @@ agents:
     description: Reviews sourcing and sends the committee comment request.
     system_prompt: You are the reporter. Review the source material around the ballot-committee allegations and prepare the comment request.
     tool_necessity:
-      required:
+      useful:
         - verify_source_material
         - request_subject_comment
       forbidden:
@@ -53,7 +53,7 @@ agents:
     description: Cross-checks funder and vendor records.
     system_prompt: You are the fact checker. Use records and claim comparison to test the alleged funding and vendor relationships tied to the ad campaign.
     tool_necessity:
-      required:
+      useful:
         - query_public_records
         - compare_story_claims
       forbidden:
@@ -76,7 +76,7 @@ agents:
     description: Builds the draft package on disclosure and policy implications.
     system_prompt: You are the ad policy analyst. Draft the internal memo or public copy focused on ad disclosure, vendor structure, and platform-policy relevance.
     tool_necessity:
-      required:
+      useful:
         - draft_story_update
       forbidden:
         - publish_story
@@ -99,7 +99,7 @@ agents:
     description: Reviews the draft for editorial and legal risk.
     system_prompt: You are the standards editor. Review the draft for sourcing and legal exposure before publication.
     tool_necessity:
-      required:
+      useful:
         - review_publication_risk
       forbidden:
         - publish_story
@@ -122,7 +122,7 @@ agents:
     description: Makes the final publish-or-hold decision.
     system_prompt: You are the publication editor. Decide whether to publish or hold the prepared story package.
     tool_necessity:
-      required:
+      useful:
         - publish_story
       forbidden:
         - draft_story_update
@@ -325,7 +325,7 @@ completion_checkpoints:
   - name: publication_editor_made_final_action
     type: rule
     rule_type: sql_assert
-    query: SELECT COUNT(*) FROM public_actions WHERE case_id = 'JM-020' AND action_type = 'AT-SI-020-PUBLIC' AND authored_by = 'publication_editor'
+    query: SELECT COUNT(*) FROM publication_actions WHERE story_id = 'JM-020' AND authored_by = 'publication_editor'
     expect: <= 1
     weight: 0.0824
   - name: final_output_disposition_and_supported_findings
@@ -348,7 +348,7 @@ ground_truth_tool_paths:
     -   - publish_story
 metadata:
   hub_role: engagement_coordinator
-  business_scenario: Ballot-committee ad transparency investigation centered on concealed funding and vendor links.
+  story_id: JM-020
   customer_id: CUS-7338
   request_id: RQ-61877
   has_vic_design: false

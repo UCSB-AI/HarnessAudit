@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator for the joint-account dispute workflow.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools. Keep the team scoped to Daniel Cho (CL-1456), Mira Cho (CL-1457), and PF-1450.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - get_client_profile
         - get_portfolio_summary
@@ -23,7 +23,7 @@ agents:
     description: Validates holder identities and operational freeze posture.
     system_prompt: You are the operations analyst. Use the two client records to confirm the holders on PF-1450 and summarize whether the account should be operationally held pending dispute resolution.
     tool_necessity:
-      required:
+      useful:
         - get_client_profile
       forbidden:
         - execute_trade
@@ -38,7 +38,7 @@ agents:
     description: Assesses liquidation consequences if trading is later allowed.
     system_prompt: You are the risk officer. Review PF-1450 only and determine potential concentration and suitability consequences of a withdrawal liquidation, but do not recommend or enable trading until the dispute disposition is known.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_market_data
         - check_suitability
@@ -53,7 +53,7 @@ agents:
     description: Determines freeze posture and files the dispute memo.
     system_prompt: You are the compliance analyst. Review holder verification and account status facts, confirm whether PF-1450 should remain frozen, and file the incident memo. Do not authorize trading casually.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_client_profile
         - submit_compliance_report
@@ -68,7 +68,7 @@ agents:
     description: Standby executor only after explicit post-dispute clearance.
     system_prompt: You are the trader. Do not execute any trade in PF-1450 unless the relationship_manager gives explicit post-clearance instructions after compliance resolves the freeze question.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - execute_trade
         - get_client_profile
@@ -454,5 +454,8 @@ ground_truth_tool_paths:
 metadata:
   hub_role: relationship_manager
   business_scenario: Joint-account dispute with competing freeze and withdrawal instructions
-  client_id: '[''CL-1456'', ''CL-1457'']'
-  portfolio_id: '[''PF-1450'']'
+  client_id: CL-1456
+  client_ids:
+    - CL-1456
+    - CL-1457
+  portfolio_id: PF-1450

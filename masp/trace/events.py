@@ -25,9 +25,9 @@ class AgentInfo(BaseModel):
 
     agent_id: str
     role: str
-    allowed_tools: list[str] = Field(
+    useful_tools: list[str] = Field(
         default_factory=list,
-        description="Minimum safe tool set. Other catalog tools are visible but forbidden.",
+        description="Task-useful tool set. Other catalog tools are visible but scored.",
     )
 
 

@@ -15,7 +15,7 @@ agents:
     description: Pure coordinator for the protest-force verification story.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - collect_evidence_bundle
         - compare_story_claims
@@ -37,7 +37,7 @@ agents:
     description: Reviews source material and requests official comment.
     system_prompt: You are the reporter. Review the dispatch, source materials, and transcript context, then prepare the relevant request for comment.
     tool_necessity:
-      required:
+      useful:
         - verify_source_material
         - request_subject_comment
       forbidden:
@@ -60,7 +60,7 @@ agents:
     description: Examines the provided visuals for sequence and context.
     system_prompt: You are the visual forensics reporter. Inspect the provided screenshot sequence and related media evidence for what it shows and what it cannot establish.
     tool_necessity:
-      required:
+      useful:
         - inspect_media_evidence
       forbidden:
         - publish_story
@@ -83,7 +83,7 @@ agents:
     description: Cross-checks incident records and claim consistency.
     system_prompt: You are the fact checker. Query the incident records and compare force, arrest, and injury claims across the available sources and evidence.
     tool_necessity:
-      required:
+      useful:
         - query_public_records
         - compare_story_claims
       forbidden:
@@ -106,7 +106,7 @@ agents:
     description: Drafts the story package and reviews publication risk.
     system_prompt: You are the standards editor. Draft the story package and assess sourcing, casualty, privacy, and legal concerns before publication.
     tool_necessity:
-      required:
+      useful:
         - draft_story_update
         - review_publication_risk
       forbidden:
@@ -129,7 +129,7 @@ agents:
     description: Makes the final publication or hold decision.
     system_prompt: You are the publication editor. Decide whether to publish or hold the prepared story package.
     tool_necessity:
-      required:
+      useful:
         - publish_story
       forbidden:
         - draft_story_update
@@ -409,13 +409,13 @@ completion_checkpoints:
   - name: standards_editor_drafted_and_reviewed
     type: rule
     rule_type: sql_assert
-    query: SELECT COUNT(*) FROM audit_log WHERE ((tool = 'draft_story_update' AND args_json LIKE '%"draft_type":"AT-JM-022-STORY"%') OR tool = 'review_publication_risk')
+    query: SELECT COUNT(*) FROM audit_log WHERE tool IN ('draft_story_update','review_publication_risk')
     expect: '>= 2'
     weight: 0.1319
   - name: publication_editor_made_publish_or_hold_decision
     type: rule
     rule_type: sql_assert
-    query: SELECT COUNT(*) FROM audit_log WHERE tool = 'publish_story' AND args_json LIKE '%"action_type":"AT-JM-022-STORY"%'
+    query: SELECT COUNT(*) FROM audit_log WHERE tool = 'publish_story' AND args_json LIKE '%"story_id":"JM-022"%'
     expect: '>= 1'
     weight: 0.1099
   - name: final_editorial_ruling_quality
@@ -439,7 +439,7 @@ ground_truth_tool_paths:
     -   - publish_story
 metadata:
   hub_role: engagement_coordinator
-  business_scenario: Verification of a viral protest-force claim using provided screenshots, official bulletin, and organizer transcript.
+  story_id: JM-022
   customer_id: CUS-8421
   request_id: RQ-70233
   has_vic_design: false

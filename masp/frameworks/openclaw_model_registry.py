@@ -6,8 +6,6 @@ import os
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-OPENCLAW_DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
-
 
 @dataclass(frozen=True)
 class OpenClawModelResolution:
@@ -18,30 +16,39 @@ class OpenClawModelResolution:
     provider_config: dict[str, Any] | None = None
 
 
-PROXY_A_MODELS: tuple[dict[str, Any], ...] = (
+OPENROUTER_MODELS: tuple[dict[str, Any], ...] = (
     {
-        "id": "claude-sonnet-4-6",
-        "name": "Claude Sonnet 4.6",
+        "id": "anthropic/claude-sonnet-4.6",
+        "name": "Anthropic: Claude Sonnet 4.6",
         "input": ["text", "image"],
+        "contextWindow": 1000000,
     },
     {
-        "id": "claude-opus-4-6",
-        "name": "Claude Opus 4.6",
+        "id": "anthropic/claude-opus-4.6",
+        "name": "Anthropic: Claude Opus 4.6",
         "input": ["text", "image"],
+        "contextWindow": 1000000,
     },
     {
-        "id": "gemini-3.1-pro-preview",
-        "name": "Gemini 3.1 Pro Preview",
+        "id": "openai/gpt-5.4",
+        "name": "OpenAI: GPT-5.4",
         "input": ["text", "image"],
+        "contextWindow": 1000000,
     },
     {
-        "id": "qwen3.5-plus",
-        "name": "Qwen 3.5 Plus",
+        "id": "google/gemini-3.1-pro-preview",
+        "name": "Google: Gemini 3.1 Pro Preview",
+        "reasoning": True,
         "input": ["text", "image"],
+        "contextWindow": 1000000,
     },
-)
-
-PROXY_B_MODELS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "qwen/qwen3.5-plus-20260420",
+        "name": "Qwen: Qwen3.5 Plus 2026-04-20",
+        "reasoning": True,
+        "input": ["text", "image"],
+        "contextWindow": 1000000,
+    },
     {
         "id": "moonshotai/kimi-k2.6",
         "name": "MoonshotAI: Kimi K2.6",
@@ -58,23 +65,27 @@ PROXY_B_MODELS: tuple[dict[str, Any], ...] = (
     },
 )
 
-_PROXY_A_MODEL_BY_ID = {str(model["id"]): model for model in PROXY_A_MODELS}
-_PROXY_B_MODEL_BY_ID = {str(model["id"]): model for model in PROXY_B_MODELS}
-_PROXY_A_BACKED_PROVIDERS = {"proxy_a"}
-_PROXY_B_BACKED_PROVIDERS = {"proxy_b"}
+OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+_OPENROUTER_MODEL_BY_ID = {str(model["id"]): model for model in OPENROUTER_MODELS}
 
 _ALIASES: dict[str, tuple[str, str]] = {
-    "claude-sonnet-4-6": ("anthropic", "claude-sonnet-4-6"),
-    "claude-opus-4-6": ("anthropic", "claude-opus-4-6"),
-    "proxy-claude-sonnet-4-6": ("proxy_a", "claude-sonnet-4-6"),
-    "proxy-claude-opus-4-6": ("proxy_a", "claude-opus-4-6"),
-    "gemini-3.1-pro": ("proxy_a", "gemini-3.1-pro-preview"),
-    "gemini-3.1-pro-preview": ("proxy_a", "gemini-3.1-pro-preview"),
-    "kimi-k2.6": ("proxy_b", "moonshotai/kimi-k2.6"),
-    "moonshotai/kimi-k2.6": ("proxy_b", "moonshotai/kimi-k2.6"),
-    "glm-5v-turbo": ("proxy_b", "z-ai/glm-5v-turbo"),
-    "z-ai/glm-5v-turbo": ("proxy_b", "z-ai/glm-5v-turbo"),
-    "qwen3.5-plus": ("proxy_a", "qwen3.5-plus"),
+    "claude-sonnet-4-6": ("openrouter", "anthropic/claude-sonnet-4.6"),
+    "claude-opus-4-6": ("openrouter", "anthropic/claude-opus-4.6"),
+    "openrouter-claude-sonnet-4-6": ("openrouter", "anthropic/claude-sonnet-4.6"),
+    "openrouter-claude-opus-4-6": ("openrouter", "anthropic/claude-opus-4.6"),
+    "anthropic/claude-sonnet-4.6": ("openrouter", "anthropic/claude-sonnet-4.6"),
+    "anthropic/claude-opus-4.6": ("openrouter", "anthropic/claude-opus-4.6"),
+    "gpt-5.4": ("openrouter", "openai/gpt-5.4"),
+    "openai/gpt-5.4": ("openrouter", "openai/gpt-5.4"),
+    "gemini-3.1-pro": ("openrouter", "google/gemini-3.1-pro-preview"),
+    "gemini-3.1-pro-preview": ("openrouter", "google/gemini-3.1-pro-preview"),
+    "google/gemini-3.1-pro-preview": ("openrouter", "google/gemini-3.1-pro-preview"),
+    "kimi-k2.6": ("openrouter", "moonshotai/kimi-k2.6"),
+    "moonshotai/kimi-k2.6": ("openrouter", "moonshotai/kimi-k2.6"),
+    "glm-5v-turbo": ("openrouter", "z-ai/glm-5v-turbo"),
+    "z-ai/glm-5v-turbo": ("openrouter", "z-ai/glm-5v-turbo"),
+    "qwen3.5-plus": ("openrouter", "qwen/qwen3.5-plus-20260420"),
+    "qwen/qwen3.5-plus-20260420": ("openrouter", "qwen/qwen3.5-plus-20260420"),
 }
 
 
@@ -86,27 +97,8 @@ def _normalized_base_url(value: str) -> str:
     return value.strip().rstrip("/")
 
 
-def _copy_config(value: dict[str, Any] | None) -> dict[str, Any]:
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _proxy_a_models_for_provider(
-    provider_id: str,
-    model_id: str,
-) -> list[dict[str, Any]]:
-    if provider_id == "proxy_a":
-        return [dict(model) for model in PROXY_A_MODELS]
-    model = _PROXY_A_MODEL_BY_ID.get(model_id)
-    if model is None:
-        return [{"id": model_id, "name": model_id, "input": ["text"]}]
-    return [dict(model)]
-
-
-def _proxy_b_models_for_provider(model_id: str) -> list[dict[str, Any]]:
-    model = _PROXY_B_MODEL_BY_ID.get(model_id)
-    if model is None:
-        return [{"id": model_id, "name": model_id, "input": ["text"]}]
-    return [dict(model) for model in PROXY_B_MODELS]
+def _openrouter_models_for_provider() -> list[dict[str, Any]]:
+    return [dict(model) for model in OPENROUTER_MODELS]
 
 
 def _resolve_provider_and_model(requested_model: str) -> tuple[str, str]:
@@ -122,109 +114,63 @@ def _resolve_provider_and_model(requested_model: str) -> tuple[str, str]:
         provider_id, model_id = (part.strip() for part in model.split("/", 1))
         if not provider_id or not model_id:
             raise ValueError(f"Invalid OpenClaw model ref: {requested_model!r}")
-        return provider_id, model_id
+        if provider_id == "openrouter":
+            return provider_id, model_id
+        supported = ", ".join(sorted(_ALIASES))
+        raise RuntimeError(
+            "OpenClaw models must use OpenRouter. Use a supported alias "
+            f"or an openrouter/<model-id> ref. Supported aliases: {supported}"
+        )
 
-    return ("openai", model)
-
-
-def _uses_proxy_a_credentials(provider_id: str, model_id: str) -> bool:
-    return provider_id in _PROXY_A_BACKED_PROVIDERS
-
-
-def _uses_proxy_b_credentials(provider_id: str, model_id: str) -> bool:
-    return provider_id in _PROXY_B_BACKED_PROVIDERS
+    supported = ", ".join(sorted(_ALIASES))
+    raise RuntimeError(
+        f"Unsupported OpenClaw model {requested_model!r}. "
+        f"Supported aliases: {supported}"
+    )
 
 
 def resolve_openclaw_model(
     requested_model: str,
     *,
     env: Mapping[str, str] | None = None,
-    existing_provider_config: dict[str, Any] | None = None,
-    openai_base_url_fallback: str = OPENCLAW_DEFAULT_OPENAI_BASE_URL,
-    include_openai_base_url_env: bool = False,
 ) -> OpenClawModelResolution:
     env_map = env or os.environ
     provider_id, model_id = _resolve_provider_and_model(requested_model)
-    provider_config: dict[str, Any] | None = None
 
-    if _uses_proxy_a_credentials(provider_id, model_id):
-        if provider_id == "proxy_a" and model_id not in _PROXY_A_MODEL_BY_ID:
-            supported = ", ".join(sorted(_PROXY_A_MODEL_BY_ID))
-            raise RuntimeError(
-                "Unsupported OpenClaw proxy A model "
-                f"{provider_id}/{model_id}. Supported proxy A models: {supported}"
-            )
-        api_key = _env_value(env_map, "OPENCLAW_PROXY_A_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "OPENCLAW_PROXY_A_API_KEY is required for OpenClaw model "
-                f"{provider_id}/{model_id}"
-            )
-        base_url = _normalized_base_url(_env_value(env_map, "OPENCLAW_PROXY_A_BASE_URL"))
-        if not base_url:
-            raise RuntimeError(
-                "OPENCLAW_PROXY_A_BASE_URL is required for OpenClaw model "
-                f"{provider_id}/{model_id}"
-            )
-        provider_config = {
-            "baseUrl": base_url,
-            "apiKey": api_key,
-            "api": "openai-completions",
-            "models": _proxy_a_models_for_provider(provider_id, model_id),
-        }
-    elif _uses_proxy_b_credentials(provider_id, model_id):
-        if provider_id == "proxy_b" and model_id not in _PROXY_B_MODEL_BY_ID:
-            supported = ", ".join(sorted(_PROXY_B_MODEL_BY_ID))
-            raise RuntimeError(
-                "Unsupported OpenClaw proxy B model "
-                f"{provider_id}/{model_id}. Supported proxy B models: {supported}"
-            )
-        api_key = _env_value(env_map, "OPENCLAW_PROXY_B_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "OPENCLAW_PROXY_B_API_KEY is required for OpenClaw model "
-                f"{provider_id}/{model_id}"
-            )
-        base_url = _normalized_base_url(_env_value(env_map, "OPENCLAW_PROXY_B_BASE_URL"))
-        if not base_url:
-            raise RuntimeError(
-                "OPENCLAW_PROXY_B_BASE_URL is required for OpenClaw model "
-                f"{provider_id}/{model_id}"
-            )
-        authorization_header = f"Bearer {api_key}"
-        provider_config = {
-            "baseUrl": base_url,
-            "apiKey": api_key,
-            "auth": "api-key",
-            "authHeader": True,
-            "api": "openai-completions",
+    if model_id not in _OPENROUTER_MODEL_BY_ID:
+        supported = ", ".join(sorted(_OPENROUTER_MODEL_BY_ID))
+        raise RuntimeError(
+            "Unsupported OpenClaw OpenRouter model "
+            f"{provider_id}/{model_id}. Supported OpenRouter models: {supported}"
+        )
+
+    api_key = _env_value(env_map, "OPENROUTER_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is required for OpenClaw model "
+            f"{provider_id}/{model_id}"
+        )
+    base_url = _normalized_base_url(
+        _env_value(env_map, "OPENROUTER_BASE_URL")
+        or OPENROUTER_DEFAULT_BASE_URL
+    )
+    authorization_header = f"Bearer {api_key}"
+    provider_config = {
+        "baseUrl": base_url,
+        "apiKey": api_key,
+        "auth": "api-key",
+        "authHeader": True,
+        "api": "openai-completions",
+        "headers": {
+            "Authorization": authorization_header,
+        },
+        "request": {
             "headers": {
                 "Authorization": authorization_header,
             },
-            "request": {
-                "headers": {
-                    "Authorization": authorization_header,
-                },
-            },
-            "models": _proxy_b_models_for_provider(model_id),
-        }
-    elif provider_id == "openai":
-        existing = _copy_config(existing_provider_config)
-        base_url = (
-            _env_value(env_map, "OPENCLAW_OPENAI_BASE_URL")
-            or str(existing.get("baseUrl", "")).strip()
-            or (
-                _env_value(env_map, "OPENAI_BASE_URL")
-                if include_openai_base_url_env
-                else ""
-            )
-            or openai_base_url_fallback
-        )
-        provider_config = {
-            **existing,
-            "baseUrl": base_url,
-            "models": [{"id": model_id, "name": model_id}],
-        }
+        },
+        "models": _openrouter_models_for_provider(),
+    }
 
     return OpenClawModelResolution(
         requested_model=requested_model,
@@ -240,8 +186,6 @@ def apply_openclaw_model_config(
     requested_model: str,
     *,
     env: Mapping[str, str] | None = None,
-    openai_base_url_fallback: str = OPENCLAW_DEFAULT_OPENAI_BASE_URL,
-    include_openai_base_url_env: bool = False,
 ) -> OpenClawModelResolution:
     models_cfg = config.get("models")
     if not isinstance(models_cfg, dict):
@@ -252,17 +196,9 @@ def apply_openclaw_model_config(
         providers = {}
         models_cfg["providers"] = providers
 
-    provider_id, _ = _resolve_provider_and_model(requested_model)
-    existing_provider = providers.get(provider_id)
-    existing_provider_config = (
-        existing_provider if isinstance(existing_provider, dict) else None
-    )
     resolved = resolve_openclaw_model(
         requested_model,
         env=env,
-        existing_provider_config=existing_provider_config,
-        openai_base_url_fallback=openai_base_url_fallback,
-        include_openai_base_url_env=include_openai_base_url_env,
     )
 
     agents_config = config.get("agents")

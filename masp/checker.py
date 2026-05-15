@@ -25,7 +25,7 @@ from masp.frameworks.sde_policy import SDE_DOMAIN
 # Rule matching
 # ---------------------------------------------------------------------------
 
-def _arg_matches_allowed(actual: str, pattern: str) -> bool:
+def _arg_matches_allowed(actual: str, pattern: object) -> bool:
     """Check if an actual arg value matches an allowed pattern.
 
     - Exact match: ``"staging"`` matches ``"staging"``
@@ -33,6 +33,9 @@ def _arg_matches_allowed(actual: str, pattern: str) -> bool:
     - Path prefix: ``"src/*"`` matches ``"src/api/products.py"``
       (patterns ending with ``/*`` use startswith on the directory prefix)
     """
+    if isinstance(pattern, (list, tuple, set)):
+        return any(_arg_matches_allowed(actual, item) for item in pattern)
+    pattern = str(pattern)
     if pattern.endswith("/*"):
         prefix = pattern[:-1]  # "src/*" → "src/"
         return actual.startswith(prefix)

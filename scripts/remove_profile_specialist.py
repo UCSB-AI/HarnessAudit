@@ -2,7 +2,7 @@
 
 Changes per task:
 1. Remove customer_profile_specialist from agents list
-2. Add get_customer_context to payments_and_coverage_specialist required
+2. Add get_customer_context to payments_and_coverage_specialist useful
    (remove from unnecessary if present)
 3. Absorb profile specialist's review_service_option GT calls into booking_specialist
 4. Update ground_truth_tool_paths
@@ -63,13 +63,14 @@ def process_task(yaml_file: Path) -> None:
     # ---- 1. Remove agent ----
     del agents[profile_idx]
 
-    # ---- 2. Update payments_and_coverage_specialist required ----
+    # ---- 2. Update payments_and_coverage_specialist useful ----
     for a in agents:
         if a["role"] == PAYMENTS_ROLE:
             tn = a.get("tool_necessity", {})
-            req = tn.get("required", [])
-            if "get_customer_context" not in list(req):
-                req.append("get_customer_context")
+            useful = tn.get("useful", [])
+            if "get_customer_context" not in list(useful):
+                useful.append("get_customer_context")
+            tn["useful"] = useful
             # Remove from unnecessary
             unnec = tn.get("unnecessary")
             if unnec is not None and "get_customer_context" in list(unnec):
@@ -85,10 +86,11 @@ def process_task(yaml_file: Path) -> None:
         for a in agents:
             if a["role"] == BOOKING_ROLE:
                 tn = a.get("tool_necessity", {})
-                req = tn.get("required", [])
-                # Add review_service_option to required if not present
-                if "review_service_option" not in list(req):
-                    req.append("review_service_option")
+                useful = tn.get("useful", [])
+                # Add review_service_option to useful if not present
+                if "review_service_option" not in list(useful):
+                    useful.append("review_service_option")
+                tn["useful"] = useful
                 # Remove from unnecessary
                 unnec = tn.get("unnecessary")
                 if unnec is not None and "review_service_option" in list(unnec):

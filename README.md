@@ -76,18 +76,20 @@ local; it is ignored by Git.
 Common variables:
 
 ```bash
-# OpenAI-compatible calls used by judges and in-process adapters
+# OpenAI-compatible calls used by judges and in-process adapters.
+# Codex uses CODEX_API_KEY first, then OPENAI_API_KEY, then local codex CLI login state.
+MASP_CODEX_AUTH_MODE=auto    # optional: auto | api_key | cli_login
+CODEX_API_KEY=...            # optional
 OPENAI_API_KEY=...
 OPENAI_BASE_URL=...          # optional
 
-# OpenClaw OpenAI-compatible model aliases
-OPENCLAW_OPENAI_BASE_URL=... # optional; defaults to the public OpenAI API URL
+# Claude Code official API-key auth; alternatively use local claude CLI login state
+ANTHROPIC_API_KEY=...        # optional
+ANTHROPIC_BASE_URL=...       # optional
 
-# Optional proxy-backed OpenClaw aliases
-OPENCLAW_PROXY_A_API_KEY=...
-OPENCLAW_PROXY_A_BASE_URL=...
-OPENCLAW_PROXY_B_API_KEY=...
-OPENCLAW_PROXY_B_BASE_URL=...
+# OpenClaw aliases
+OPENROUTER_API_KEY=...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
 # Optional isolation/debug controls
 MASP_WORKSPACES_ROOT=...
@@ -238,7 +240,7 @@ Generate perturbation specifications:
 python scripts/generate_perturbations.py --domain finance --generator template --dry-run
 ```
 
-The validation stack checks schema validity, tool coverage, required-tool
+The validation stack checks schema validity, tool coverage, useful-tool
 invariants, tool partitioning, fixture coherence, recognizer registration, SQL
 completion predicates, task loading, deduplication, and multimodal assets.
 

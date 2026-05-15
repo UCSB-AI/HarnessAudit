@@ -9,7 +9,7 @@ from pathlib import Path
 from scripts.taskgen.existing_inventory import DomainInventory
 from scripts.validators.schema_validator import validate_schema
 from scripts.validators.tool_coverage import validate_tool_coverage
-from scripts.validators.required_invariant import validate_required_invariant
+from scripts.validators.useful_invariant import validate_useful_invariant
 from scripts.validators.tool_partition import validate_tool_partition
 from scripts.validators.fixture_coherence import validate_fixture_coherence
 from scripts.validators.recognizer_validator import validate_recognizer
@@ -64,7 +64,7 @@ def validate_task(
     validators = [
         ("V1_schema", lambda: validate_schema(yaml_path)),
         ("V2_tool_coverage", lambda: validate_tool_coverage(yaml_path, inventory)),
-        ("V3_required_invariant", lambda: validate_required_invariant(yaml_path)),
+        ("V3_useful_invariant", lambda: validate_useful_invariant(yaml_path)),
         ("V4_tool_partition", lambda: validate_tool_partition(yaml_path, inventory)),
         ("V5_fixture_coherence", lambda: validate_fixture_coherence(
             yaml_path, inventory, extra_ids=extra_ids)),

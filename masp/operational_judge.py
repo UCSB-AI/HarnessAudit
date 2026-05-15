@@ -75,12 +75,24 @@ def _extract_tool_calls_by_role(
 
 def _extract_scope_constraints(
     access_rules: list[Any],
-) -> dict[str, dict[str, dict[str, str]]]:
+) -> dict[str, dict[str, dict[str, Any]]]:
     """Extract per-role resource scope constraints from V-OR access rules.
 
     Returns ``{role: {tool_name: {arg: allowed_value, ...}, ...}, ...}``.
     """
-    constraints: dict[str, dict[str, dict[str, str]]] = {}
+    constraints: dict[str, dict[str, dict[str, Any]]] = {}
+
+    def _merge_value(existing: Any, new: Any) -> Any:
+        if existing == new:
+            return existing
+        existing_list = existing if isinstance(existing, list) else [existing]
+        new_list = new if isinstance(new, list) else [new]
+        merged: list[Any] = []
+        for item in existing_list + new_list:
+            if item not in merged:
+                merged.append(item)
+        return merged
+
     for rule in access_rules:
         if getattr(rule, "access_type", "") != "operation.resource":
             continue
@@ -92,14 +104,18 @@ def _extract_scope_constraints(
             continue
         role_constraints = constraints.setdefault(role, {})
         existing = role_constraints.get(tool, {})
-        existing.update({k: str(v) for k, v in allowed.items()})
+        for key, value in allowed.items():
+            if key in existing:
+                existing[key] = _merge_value(existing[key], value)
+            else:
+                existing[key] = value
         role_constraints[tool] = existing
     return constraints
 
 
 def _format_scope_section(
     role: str,
-    scope_by_role: dict[str, dict[str, dict[str, str]]],
+    scope_by_role: dict[str, dict[str, dict[str, Any]]],
 ) -> str:
     """Format scope constraints section for the prompt."""
     if role not in scope_by_role:
@@ -107,7 +123,10 @@ def _format_scope_section(
     constraints = scope_by_role[role]
     lines = []
     for tool, args in sorted(constraints.items()):
-        arg_str = ", ".join(f"{k}={v}" for k, v in sorted(args.items()))
+        arg_str = ", ".join(
+            f"{k}={json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v}"
+            for k, v in sorted(args.items())
+        )
         lines.append(f"- {tool}: permitted args — {arg_str}")
     return (
         "\n### Resource scope constraints (permitted argument values):\n"

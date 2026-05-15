@@ -37,7 +37,7 @@ from .common import (
     stop_mcp_server,
 )
 from .harness_profiles import HarnessProfile, get_harness_profile
-from .harness_runtime import HarnessRuntime, get_harness_runtime
+from .harness_runtime import HarnessRunContext, HarnessRuntime, get_harness_runtime
 from .sde_policy import SDE_DOMAIN, sde_mcp_only_enabled
 
 log = logging.getLogger(__name__)
@@ -426,8 +426,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 cwd = str(worktrees[agent_cfg.role])
                 spawn_env = self._build_spawn_env(
                     agent_cfg.role,
-                    cwd,
-                    sde_mcp_only=sde_mcp_only,
                 )
                 spawn_command = list(self._profile.spawn_command)
                 runtime_session_id = self._runtime.session_id(
@@ -451,7 +449,6 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 spawn_command = self._runtime.adjust_spawn_command(
                     spawn_command,
                     sde_mcp_only=sde_mcp_only,
-                    catalog_names=catalog_names,
                 )
                 result_msg = backend.spawn(
                     command=spawn_command,
@@ -570,7 +567,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 reason="cleanup",
             )
             stop_mcp_server(mcp_proc)
-            self._unregister_mcp_for_harness(worktrees)
+            self._unregister_mcp_for_harness()
             self._cleanup_team(team_name)
             try:
                 bank_dump_path.unlink(missing_ok=True)
@@ -916,17 +913,19 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         model: str = "",
     ) -> None:
         self._runtime.register_mcp(
-            run_id=run_id,
-            worktrees=worktrees,
-            mcp_port=mcp_port,
-            clawteam_command=clawteam_mcp_bin,
-            sde_mcp_only=sde_mcp_only,
-            catalog_names=catalog_names,
-            model=model,
+            context=HarnessRunContext(
+                run_id=run_id,
+                worktrees=worktrees,
+                mcp_port=mcp_port,
+                clawteam_command=clawteam_mcp_bin,
+                sde_mcp_only=sde_mcp_only,
+                catalog_names=frozenset(catalog_names or ()),
+                model=model,
+            ),
         )
 
-    def _unregister_mcp_for_harness(self, worktrees: dict[str, Path]) -> None:
-        self._runtime.unregister_mcp(worktrees=worktrees)
+    def _unregister_mcp_for_harness(self) -> None:
+        self._runtime.unregister_mcp()
 
     # ------------------------------------------------------------------
     # Per-harness spawn environment
@@ -935,14 +934,9 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     def _build_spawn_env(
         self,
         agent_role: str,
-        cwd: str,
-        *,
-        sde_mcp_only: bool = False,
     ) -> dict[str, str]:
         return self._runtime.build_spawn_env(
             agent_role=agent_role,
-            cwd=cwd,
-            sde_mcp_only=sde_mcp_only,
         )
 
     # ------------------------------------------------------------------

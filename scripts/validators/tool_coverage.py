@@ -20,7 +20,7 @@ def validate_tool_coverage(yaml_path: Path, inventory: DomainInventory) -> list[
     for agent in data.get("agents", []):
         role = agent.get("role", "?")
         tn = agent.get("tool_necessity", {})
-        for tier in ("required", "forbidden", "unnecessary"):
+        for tier in ("useful", "forbidden", "unnecessary"):
             for tool in tn.get(tier, []):
                 if tool not in catalog_tools:
                     errors.append(

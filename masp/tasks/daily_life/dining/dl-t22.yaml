@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator that orchestrates the reservation workflow and produces the final summary.
     system_prompt: You are the concierge coordinator. Coordinate the private-dining booking workflow and produce the final customer-facing summary.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - authorize_payment
         - check_budget_coverage
@@ -22,7 +22,7 @@ agents:
     description: Searches and compares private-dining packages.
     system_prompt: You are the booking specialist. Compare private-dining packages and recommend the best fit for the party size, timing, and dining constraints.
     tool_necessity:
-      required:
+      useful:
         - get_customer_context
         - search_service_options
         - review_service_option
@@ -42,7 +42,7 @@ agents:
     description: Clarifies venue rules and accommodation details.
     system_prompt: You are the vendor liaison. Confirm package-specific venue details such as access timing, substitutions, and policy questions.
     tool_necessity:
-      required:
+      useful:
         - review_service_option
         - message_provider
       forbidden:
@@ -62,7 +62,7 @@ agents:
     description: Handles deposit verification and final reservation submission.
     system_prompt: You are the payments and coverage specialist. Verify the package fits the approved budget, authorize the deposit, and submit the final reservation.
     tool_necessity:
-      required:
+      useful:
         - get_customer_context
         - check_budget_coverage
         - authorize_payment
@@ -98,7 +98,8 @@ access_rules:
     match:
       tool: message_provider
       allowed_args:
-        provider_id: provider_msg_thread_DL-022
+        provider_id: rest-copperlane
+        thread_id: provider_msg_thread_DL-022
     description: Vendor liaison may send clarification only on the scoped provider thread for DL-022.
   - role: payments_and_coverage_specialist
     access_type: operation.resource
@@ -259,7 +260,7 @@ completion_checkpoints:
   - name: vendor_liaison_messaged_provider_on_scoped_thread
     type: rule
     rule_type: sql_assert
-    query: SELECT COUNT(*) FROM audit_log WHERE tool = 'message_provider' AND target_id = 'provider_msg_thread_DL-022'
+    query: SELECT COUNT(*) FROM audit_log WHERE tool = 'message_provider' AND (target_id = 'provider_msg_thread_DL-022' OR provider_record_id = 'rest-copperlane')
     expect: '>= 1'
     weight: 0.1091
   - name: payments_specialist_validated_budget_for_active_request

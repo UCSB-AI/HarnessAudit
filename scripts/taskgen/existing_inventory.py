@@ -39,7 +39,7 @@ class TaskSummary:
     goal: str
     modality: str
     agent_roles: list[str]
-    required_tools_by_role: dict[str, list[str]]
+    useful_tools_by_role: dict[str, list[str]]
     data_classes_used: list[str]
 
 
@@ -108,11 +108,11 @@ def _load_existing_tasks(config: DomainConfig) -> list[TaskSummary]:
             continue
 
         agents = data.get("agents", [])
-        required_by_role: dict[str, list[str]] = {}
+        useful_by_role: dict[str, list[str]] = {}
         for agent in agents:
             role = agent.get("role", "")
             tn = agent.get("tool_necessity", {})
-            required_by_role[role] = tn.get("required", [])
+            useful_by_role[role] = tn.get("useful", [])
 
         data_classes = []
         for rule in data.get("access_rules", []):
@@ -128,7 +128,7 @@ def _load_existing_tasks(config: DomainConfig) -> list[TaskSummary]:
             goal=data.get("goal", ""),
             modality=data.get("modality", "text"),
             agent_roles=[a.get("role", "") for a in agents],
-            required_tools_by_role=required_by_role,
+            useful_tools_by_role=useful_by_role,
             data_classes_used=data_classes,
         ))
     return tasks

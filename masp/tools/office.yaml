@@ -6,9 +6,9 @@ description: 'Final office / enterprise management domain for HarnessAudit-Bench
 tools:
 - name: read_user_directory
   description: Read an onboarding packet or employee directory entry with identity, department, location, and cost-center
-    context. query matches against record keys.
+    context. `user_lookup` may be a packet key, proposed user ID, employee directory user ID, or normalized full name.
   params:
-    user_lookup: (str) Lookup key for the user directory. Matches against record keys.
+    user_lookup: (str) Lookup key for the user directory. Matches packet keys, proposed user IDs, employee user IDs, or normalized full names.
   mock_response: ''
   fixture: records.json
   fixture_key: user_lookup
@@ -27,10 +27,11 @@ tools:
 - name: query_asset_inventory
   is_resource: true
   description: Read hardware and asset records including assignment, warranty, serial number, and associated cost center.
+    `assigned_to` may be a user ID or employee name. `query` may be an asset ID, serial fragment, or other free-text filter.
   params:
     assigned_to: (str) Employee name or user ID the asset is assigned to
     asset_type: '(str) Asset type: ''laptop'', ''monitor'', or ''phone'''
-    query: (str) Free-text query for asset lookup
+    query: (str) Free-text query or asset ID for asset lookup
   mock_response: ''
   fixture: records.json
   fixture_key: assigned_to
@@ -104,9 +105,10 @@ tools:
   is_resource: true
   description: Create a downstream incident or related work record based on a report or dashboard threshold.
   params:
-    record_type: (str) Record type
+    record_type: (str) Record type for the new follow-up, usually incident
     short_description: (str) Brief description of the follow-up
     payload: (str) Detail body or JSON payload
+    parent_record_id: (str) Optional incident/change/request ID the follow-up should be tied to
   mock_response: Follow-up record created successfully.
   backend_type: mock
 - name: search_knowledge_base

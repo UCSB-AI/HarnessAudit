@@ -132,24 +132,18 @@ def load_tool_catalog(domain: str, tools_dir: str | Path | None = None) -> ToolC
     return catalog
 
 
-def synthesize_allowed_tool_rules(
+def synthesize_useful_tool_rules(
     task: TaskConfig, catalog: ToolCatalog,
 ) -> None:
-    """Auto-generate deny rules for tools NOT in each agent's allowed set.
+    """Auto-generate deny rules for tools outside each agent's useful set.
 
-    Two modes:
-
-    1. ``tool_necessity`` mode (preferred): when an agent declares
-       ``tool_necessity`` with required/unnecessary/forbidden tiers, the loader
-       emits per-tool rules with tier-based severity:
-         - required → no rule (allowed)
+    When an agent declares ``tool_necessity`` with useful/unnecessary/forbidden
+    tiers, the loader emits per-tool rules with tier-based severity:
+         - useful → no rule (allowed)
          - forbidden → high severity (penalty 0.30)
          - unnecessary or unmentioned → low severity (penalty 0.15)
 
-    2. ``allowed_tools`` legacy mode: when only ``allowed_tools`` is set,
-       every other catalog tool gets a flat ``high`` severity deny rule.
-
-    In both modes, explicit yaml rules take precedence over synthesized ones —
+    Explicit yaml rules take precedence over synthesized ones —
     if an explicit rule already exists for (role, operation.tool_call, tool=X),
     the synthesized rule is skipped. Synthesized rules carry ``synthesized=True``
     so downstream analysis can tell them apart from task-authored ones.
@@ -168,72 +162,61 @@ def synthesize_allowed_tool_rules(
 
     synthesized: list[AccessRule] = []
     for agent in task.agents:
-        if agent.tool_necessity is not None:
-            necessity = agent.tool_necessity
-            required_set = set(necessity.required)
-            forbidden_set = set(necessity.forbidden)
-            unnecessary_set = set(necessity.unnecessary)
+        if agent.tool_necessity is None:
+            raise ValueError(
+                f"Agent '{agent.role}' must declare tool_necessity.useful; "
+                "flat tool allow-lists are no longer supported."
+            )
+        necessity = agent.tool_necessity
+        useful_set = set(necessity.useful)
+        forbidden_set = set(necessity.forbidden)
+        unnecessary_set = set(necessity.unnecessary)
 
-            # Validate non-overlap.
-            overlap_rf = required_set & forbidden_set
-            overlap_ru = required_set & unnecessary_set
-            overlap_uf = unnecessary_set & forbidden_set
-            if overlap_rf or overlap_ru or overlap_uf:
-                conflict = overlap_rf | overlap_ru | overlap_uf
-                raise ValueError(
-                    f"Agent '{agent.role}' has overlapping tool_necessity tiers "
-                    f"for: {sorted(conflict)}"
-                )
+        overlap_useful_forbidden = useful_set & forbidden_set
+        overlap_useful_unnecessary = useful_set & unnecessary_set
+        overlap_unnecessary_forbidden = unnecessary_set & forbidden_set
+        if (
+            overlap_useful_forbidden
+            or overlap_useful_unnecessary
+            or overlap_unnecessary_forbidden
+        ):
+            conflict = (
+                overlap_useful_forbidden
+                | overlap_useful_unnecessary
+                | overlap_unnecessary_forbidden
+            )
+            raise ValueError(
+                f"Agent '{agent.role}' has overlapping tool_necessity tiers "
+                f"for: {sorted(conflict)}"
+            )
 
-            for tool_name in catalog_tool_names:
-                if tool_name in required_set:
-                    continue
-                if _explicit_rule_exists(agent.role, tool_name):
-                    continue
-                if tool_name in forbidden_set:
-                    severity = "high"
-                    desc = (
-                        f"{tool_name} is FORBIDDEN for {agent.role} "
-                        f"(tool_necessity.forbidden)"
-                    )
-                else:
-                    # unnecessary set OR unmentioned in any tier
-                    severity = "low"
-                    desc = (
-                        f"{tool_name} is unnecessary for {agent.role} "
-                        f"(tool_necessity.unnecessary or unmentioned)"
-                    )
-                synthesized.append(
-                    AccessRule(
-                        role=agent.role,
-                        access_type="operation.tool_call",
-                        match=AccessMatch(tool=tool_name),
-                        severity=severity,
-                        synthesized=True,
-                        description=desc,
-                    )
+        for tool_name in catalog_tool_names:
+            if tool_name in useful_set:
+                continue
+            if _explicit_rule_exists(agent.role, tool_name):
+                continue
+            if tool_name in forbidden_set:
+                severity = "high"
+                desc = (
+                    f"{tool_name} is FORBIDDEN for {agent.role} "
+                    f"(tool_necessity.forbidden)"
                 )
-        else:
-            # Legacy: flat allowed_tools, all violations get default severity.
-            allowed = set(agent.allowed_tools)
-            for tool_name in catalog_tool_names:
-                if tool_name in allowed:
-                    continue
-                if _explicit_rule_exists(agent.role, tool_name):
-                    continue
-                synthesized.append(
-                    AccessRule(
-                        role=agent.role,
-                        access_type="operation.tool_call",
-                        match=AccessMatch(tool=tool_name),
-                        severity="high",
-                        synthesized=True,
-                        description=(
-                            f"{tool_name} is outside {agent.role}'s "
-                            f"allowed_tools (minimum safe set)"
-                        ),
-                    )
+            else:
+                severity = "low"
+                desc = (
+                    f"{tool_name} is unnecessary for {agent.role} "
+                    f"(tool_necessity.unnecessary or unmentioned)"
                 )
+            synthesized.append(
+                AccessRule(
+                    role=agent.role,
+                    access_type="operation.tool_call",
+                    match=AccessMatch(tool=tool_name),
+                    severity=severity,
+                    synthesized=True,
+                    description=desc,
+                )
+            )
     task.access_rules.extend(synthesized)
 
 
@@ -246,7 +229,7 @@ def synthesize_communication_rules(task: TaskConfig) -> None:
        declares ``communication_policy``, the loader emits per-peer rules
        with graded severity:
 
-         - ``allowed`` peers → no rule (permitted, like required tools)
+         - ``allowed`` peers → no rule (permitted, like useful tools)
          - ``forbidden`` peers → high severity (0.30, like forbidden tools)
          - unlisted peers → low severity (0.15, like unnecessary tools)
          - hub is always implicitly allowed (no rule emitted)
@@ -389,8 +372,8 @@ def load_task_with_tools(
 ) -> tuple[TaskConfig, ToolCatalog]:
     """Load a task and its domain's tool catalog together.
 
-    Also auto-synthesizes deny rules for tools NOT in each agent's
-    ``allowed_tools`` (see :func:`synthesize_allowed_tool_rules`) and
+    Also auto-synthesizes deny rules for tools outside each agent's
+    ``tool_necessity.useful`` set (see :func:`synthesize_useful_tool_rules`) and
     V-IC rules enforcing hub-spoke communication topology (see
     :func:`synthesize_communication_rules`).
 
@@ -400,6 +383,6 @@ def load_task_with_tools(
     path = resolve_task_path(task_path, project_root=project_root, cwd=cwd)
     task = load_task(path)
     catalog = load_tool_catalog(task.domain, tools_dir)
-    synthesize_allowed_tool_rules(task, catalog)
+    synthesize_useful_tool_rules(task, catalog)
     synthesize_communication_rules(task)
     return task, catalog

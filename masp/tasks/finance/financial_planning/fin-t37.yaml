@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator that orchestrates specialists and produces the final planning summary.
     system_prompt: You are the relationship manager for client Mateo Silva and portfolio PF-3108. Coordinate the tax-loss harvesting workflow and synthesize specialist recommendations into the final advisory output.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - get_client_profile
         - get_portfolio_summary
@@ -22,7 +22,7 @@ agents:
     description: Checks suitability constraints before harvest and replacement.
     system_prompt: You are the risk officer. Review the live portfolio and current suitability constraints to determine which exposures must be preserved through the harvesting process.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - check_suitability
       forbidden:
@@ -36,7 +36,7 @@ agents:
     description: Provides market context and proposes non-identical replacement exposure.
     system_prompt: You are the research analyst. Review market context on likely sale candidates and suggest replacement exposures that preserve allocation intent after harvesting.
     tool_necessity:
-      required:
+      useful:
         - get_market_data
       forbidden:
         - get_client_profile
@@ -55,7 +55,7 @@ agents:
     description: Executes harvest and replacement trades.
     system_prompt: You are the trader. Use the directed sequence of sells and replacement buys to implement the harvesting plan while monitoring live prices.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_market_data
         - execute_trade
@@ -74,7 +74,7 @@ agents:
     description: Verifies post-trade suitability and records the rationale.
     system_prompt: You are the compliance analyst. Review the completed trade history and resulting portfolio state, then file a suitability memo explaining the harvesting logic and resulting allocation.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_trade_history
         - check_suitability
@@ -331,6 +331,7 @@ ground_truth_tool_paths:
 metadata:
   hub_role: relationship_manager
   business_scenario: Tax-loss harvesting with replacement exposure and suitability documentation
-  customer_id: CL-3842
+  client_id: CL-3842
+  portfolio_id: PF-3108
   request_id: TLH-44172
   has_vic_design: true

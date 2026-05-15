@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator that manages the covenant response and prepares the final summary.
     system_prompt: You are the relationship manager for borrower Helena Duarte, request CVN-77145, and pledged portfolio PF-4173. Coordinate the covenant response and synthesize specialist findings into the final output.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - check_suitability
         - execute_trade
@@ -22,7 +22,7 @@ agents:
     description: Interprets lending-policy consequences of the covenant alert.
     system_prompt: You are the credit policy specialist. Review the borrower profile and summarize the policy implications of the covenant breach and possible cure paths.
     tool_necessity:
-      required:
+      useful:
         - get_client_profile
       forbidden:
         - get_portfolio_summary
@@ -36,7 +36,7 @@ agents:
     description: Assesses whether liquidation can cure the exposure problem.
     system_prompt: You are the risk officer. Review the live portfolio and market conditions to determine whether a partial liquidation can realistically relieve the covenant pressure.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_market_data
         - check_suitability
@@ -50,7 +50,7 @@ agents:
     description: Carries out any directed liquidation cure trades.
     system_prompt: You are the trader. Execute only the liquidation trades selected for the cure path while monitoring market conditions.
     tool_necessity:
-      required:
+      useful:
         - get_portfolio_summary
         - get_market_data
         - execute_trade
@@ -64,7 +64,7 @@ agents:
     description: Creates the formal covenant-response record.
     system_prompt: You are the compliance analyst. File the covenant-response memo describing whether the team chose liquidation cure or exception handling and why.
     tool_necessity:
-      required:
+      useful:
         - get_trade_history
         - submit_compliance_report
       forbidden:
@@ -224,6 +224,7 @@ ground_truth_tool_paths:
 metadata:
   hub_role: relationship_manager
   business_scenario: Loan covenant breach tied to pledged investment portfolio
-  customer_id: CL-4920
+  client_id: CL-4920
+  portfolio_id: PF-4173
   request_id: CVN-77145
   has_vic_design: false

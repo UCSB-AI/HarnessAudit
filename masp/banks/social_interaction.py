@@ -9,6 +9,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from masp.banks.audit import (
+    ToolWriteBackfill,
+    action_role,
+    backfill_write_roles,
+    json_args,
+    reconcile_audit_log,
+)
+from masp.banks.common import (
+    filter_rows_by_query,
+    normalize_query_text as _norm,
+)
+
 
 SCHEMA_SQL = """
 CREATE TABLE cases (
@@ -211,24 +223,6 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _norm(value: Any) -> str:
-    return (
-        str(value or "")
-        .strip()
-        .lower()
-        .replace("-", " ")
-        .replace("_", " ")
-    )
-
-
-def _parse_csv(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [str(v).strip() for v in value if str(v).strip()]
-    return [part.strip() for part in str(value).split(",") if part.strip()]
-
-
 def _artifact_seq(value: Any) -> int | None:
     raw = str(value or "").strip()
     if not raw:
@@ -410,6 +404,36 @@ class SocialInteractionBank:
         except Exception as exc:
             return f"[bank: error in {tool_name}: {type(exc).__name__}: {exc}]"
 
+    def reconcile_trace_actions(self, actions: list[Any]) -> None:
+        """Backfill caller roles from normalized traces for MCP-backed runs."""
+
+        def derive_fields(action: Any) -> dict[str, Any]:
+            tool_name = str(getattr(action, "tool_name", "") or "")
+            return {
+                "tool": tool_name,
+                "args_json": json_args(action),
+                "agent_role": action_role(action),
+            }
+
+        reconcile_audit_log(self.conn, actions, derive_fields)
+        backfill_write_roles(
+            self.conn,
+            actions,
+            [
+                ToolWriteBackfill("claim_reviews", "authored_by", "verify_public_claims"),
+                ToolWriteBackfill("public_artifacts", "authored_by", "draft_public_artifact", "artifact_id"),
+                ToolWriteBackfill("risk_reviews", "authored_by", "review_engagement_risk"),
+                ToolWriteBackfill("public_actions", "authored_by", "execute_public_action"),
+                ToolWriteBackfill("stakeholder_threads", "authored_by", "message_stakeholder"),
+                ToolWriteBackfill("jm_claim_reviews", "authored_by", "compare_story_claims"),
+                ToolWriteBackfill("story_drafts", "authored_by", "draft_story_update", "draft_id"),
+                ToolWriteBackfill("jm_risk_reviews", "authored_by", "review_publication_risk"),
+                ToolWriteBackfill("comment_requests", "authored_by", "request_subject_comment"),
+                ToolWriteBackfill("publication_actions", "authored_by", "publish_story"),
+            ],
+        )
+        self.conn.commit()
+
     def query_sql(self, query: str) -> list[dict[str, Any]]:
         stripped = query.strip().lstrip("(")
         if not stripped.upper().startswith("SELECT"):
@@ -446,39 +470,7 @@ class SocialInteractionBank:
         *,
         fields: tuple[str, ...],
     ) -> list[sqlite3.Row]:
-        queries = _parse_csv(query)
-        if not queries:
-            return rows
-
-        normalized_queries = [_norm(q) for q in queries if _norm(q) not in {"all", "full", "complete"}]
-        if not normalized_queries:
-            return rows
-
-        selected: list[sqlite3.Row] = []
-        for row in rows:
-            haystacks = [_norm(row[field]) for field in fields]
-            if any(
-                q in haystack or haystack in q
-                for q in normalized_queries
-                for haystack in haystacks
-            ):
-                selected.append(row)
-
-        if not selected and normalized_queries:
-            query_words = set()
-            for q in normalized_queries:
-                for word in q.replace(".", " ").replace("_", " ").replace("-", " ").split():
-                    word = word.strip()
-                    if len(word) >= 3:
-                        query_words.add(word)
-            if query_words:
-                for row in rows:
-                    haystacks = [_norm(row[field]) for field in fields]
-                    combined = " ".join(haystacks)
-                    if any(word in combined for word in query_words):
-                        selected.append(row)
-
-        return selected
+        return filter_rows_by_query(rows, query, fields=fields, token_fallback=True)
 
     def tool_get_engagement_profile(
         self,

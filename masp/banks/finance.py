@@ -17,10 +17,19 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from masp.banks.audit import (
+    action_args,
+    action_role,
+    json_args,
+    reconcile_audit_log,
+    tool_actions,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +284,132 @@ def _parse_percent_like(value: Any, fallback: float | None) -> float | None:
         return fallback
 
 
+def _first_scalar(value: Any) -> str:
+    """Return the first usable scalar from plain strings or short metadata lists."""
+
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            text = _first_scalar(item)
+            if text:
+                return text
+        return ""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _join_id_values(value: Any) -> str:
+    """Normalize scalar/list ID arguments into a comma-separated string."""
+
+    if isinstance(value, (list, tuple)):
+        return ",".join(str(item).strip() for item in value if str(item).strip())
+    return str(value or "").strip()
+
+
+def _first_regex(text: str, patterns: tuple[str, ...]) -> str:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(0)
+    return ""
+
+
+def _all_regex(text: str, pattern: str) -> list[str]:
+    seen: set[str] = set()
+    values: list[str] = []
+    for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+        value = match.group(0)
+        if value not in seen:
+            seen.add(value)
+            values.append(value)
+    return values
+
+
+def _report_fields_from_args(
+    args: dict[str, Any],
+    content: str,
+    *,
+    active_client_id: str = "",
+    active_portfolio_id: str = "",
+    active_request_id: str = "",
+) -> dict[str, str]:
+    """Extract report linkage fields from explicit args, then from memo text."""
+
+    text = content or ""
+    client_ids_from_text = _all_regex(text, r"\bCL-\d+(?:-[A-Z0-9]+)*\b")
+    fields = {
+        "client_id": _first_scalar(args.get("client_id")),
+        "client_ids": _join_id_values(args.get("client_ids")),
+        "portfolio_id": _first_scalar(args.get("portfolio_id")),
+        "case_id": _first_scalar(args.get("case_id")),
+        "policy_id": _first_scalar(args.get("policy_id")),
+        "claim_reference": _first_scalar(args.get("claim_reference")),
+        "loan_id": _first_scalar(args.get("loan_id")),
+    }
+
+    if not fields["client_id"] and active_client_id and active_client_id in text:
+        fields["client_id"] = active_client_id
+    if not fields["client_id"] and client_ids_from_text:
+        fields["client_id"] = client_ids_from_text[0]
+    if not fields["client_ids"] and len(client_ids_from_text) > 1:
+        fields["client_ids"] = ",".join(client_ids_from_text)
+    if not fields["portfolio_id"] and active_portfolio_id and active_portfolio_id in text:
+        fields["portfolio_id"] = active_portfolio_id
+    if not fields["portfolio_id"]:
+        fields["portfolio_id"] = _first_regex(text, (r"\bPF-\d+(?:-[A-Z0-9]+)*\b",))
+    if not fields["case_id"]:
+        fields["case_id"] = _first_regex(
+            text,
+            (
+                r"\bCASE-[A-Z0-9-]+\b",
+                r"\bFIN-T\d+-[A-Z0-9-]+\b",
+                r"\bANN-AUDIT-[A-Z0-9-]+\b",
+                r"\bEST-\d+\b",
+                r"\bHOM-\d+\b",
+            ),
+        )
+    if not fields["policy_id"]:
+        fields["policy_id"] = _first_regex(
+            text,
+            (r"\bPOL-[A-Z0-9-]+\b", r"\bEL-\d+\b", r"\bWL-[A-Z0-9-]+\b", r"\bUL-[A-Z0-9-]+\b"),
+        )
+    if not fields["claim_reference"]:
+        fields["claim_reference"] = _first_regex(
+            text,
+            (r"\bMC-\d{4}-\d+\b", r"\bHC-\d+\b", r"\bHOM-\d+\b", r"\bER-\d{4}-\d+\b"),
+        )
+    if not fields["loan_id"]:
+        fields["loan_id"] = _first_regex(text, (r"\bLN-\d+(?:-[A-Z0-9]+)*\b",))
+
+    if active_request_id:
+        if not fields["case_id"] and re.match(
+            r"^(?:CASE-|FIN-T\d+-|ANN-AUDIT-|EST-\d+|HOM-\d+)",
+            active_request_id,
+            flags=re.IGNORECASE,
+        ):
+            fields["case_id"] = active_request_id
+        if not fields["claim_reference"] and re.match(
+            r"^(?:MC-\d{4}-|HC-\d+|HOM-\d+|ER-\d{4}-)",
+            active_request_id,
+            flags=re.IGNORECASE,
+        ):
+            fields["claim_reference"] = active_request_id
+        if not fields["loan_id"] and re.match(r"^LN-\d+", active_request_id, flags=re.IGNORECASE):
+            fields["loan_id"] = active_request_id
+        if not fields["policy_id"] and re.match(
+            r"^(?:POL-|EL-\d+|WL-|UL-)",
+            active_request_id,
+            flags=re.IGNORECASE,
+        ):
+            fields["policy_id"] = active_request_id
+
+    if not fields["client_id"]:
+        fields["client_id"] = active_client_id
+    if not fields["portfolio_id"]:
+        fields["portfolio_id"] = active_portfolio_id
+    return fields
+
+
 # Suitability matrix: risk_tolerance → (approved_asset_classes, restricted_asset_classes)
 # Used by tool_check_suitability to dynamically compute suitability based on
 # the client's CURRENT risk profile (which may have been downgraded mid-run).
@@ -326,6 +461,7 @@ class FinanceBank:
         self._current_agent_role: str | None = None
         self._active_client_id: str | None = None
         self._active_portfolio_id: str | None = None
+        self._active_request_id: str | None = None
 
     # ------------------------------------------------------------------
     # Seed loading
@@ -632,10 +768,12 @@ class FinanceBank:
     def apply_task_metadata(self, metadata: dict[str, Any]) -> None:
         """Apply task-specific state mutations after seed loading."""
         metadata = metadata or {}
-        client_id = str(metadata.get("client_id") or "").strip()
-        portfolio_id = str(metadata.get("portfolio_id") or "").strip()
+        client_id = _first_scalar(metadata.get("client_id") or metadata.get("customer_id"))
+        portfolio_id = _first_scalar(metadata.get("portfolio_id"))
+        request_id = _first_scalar(metadata.get("request_id") or metadata.get("case_id"))
         self._active_client_id = client_id or None
         self._active_portfolio_id = portfolio_id or None
+        self._active_request_id = request_id or None
 
         seed_trades = metadata.get("seed_trades", [])
         if not seed_trades:
@@ -660,6 +798,104 @@ class FinanceBank:
                     raise ValueError(f"Failed to apply seed trade: {result}")
         finally:
             self._current_agent_role = previous_role
+
+    def reconcile_trace_actions(self, actions: list[Any]) -> None:
+        """Backfill caller roles and parsed linkage fields from normalized traces.
+
+        MCP tool calls share one Bank process and do not carry caller identity at
+        dispatch time.  After the harness ingests native traces, this reconciles
+        audit/report rows before deterministic SQL completion checks run.
+        """
+
+        def derive_fields(action: Any) -> dict[str, Any]:
+            args = action_args(action)
+            tool_name = str(getattr(action, "tool_name", "") or "")
+            content = str(args.get("content", "") or "")
+            fields = (
+                _report_fields_from_args(
+                    args,
+                    content,
+                    active_client_id=self._active_client_id or "",
+                    active_portfolio_id=self._active_portfolio_id or "",
+                    active_request_id=self._active_request_id or "",
+                )
+                if tool_name == "submit_compliance_report"
+                else {}
+            )
+            resource_id = str(
+                args.get("client_id")
+                or args.get("portfolio_id")
+                or args.get("tickers")
+                or fields.get("client_id")
+                or fields.get("portfolio_id")
+                or ""
+            ).strip()
+            client_id = str(args.get("client_id") or fields.get("client_id") or "").strip()
+            if tool_name == "get_client_profile" and not client_id:
+                client_id = self._active_client_id or ""
+                resource_id = resource_id or client_id
+            if tool_name in {"get_portfolio_summary", "get_trade_history", "execute_trade", "set_risk_limits"}:
+                resource_id = resource_id or (self._active_portfolio_id or "")
+                if not client_id and resource_id.startswith("PF-"):
+                    client_id = self._resolve_client_id("", portfolio_id=resource_id)
+            return {
+                "tool": tool_name,
+                "tool_name": tool_name,
+                "args_json": json_args(action),
+                "request_json": json_args(action),
+                "request_args": json_args(action),
+                "agent_role": action_role(action),
+                "actor_role": action_role(action),
+                "resource_id": resource_id,
+                "client_id": client_id,
+                "action": tool_name,
+            }
+
+        reconcile_audit_log(self.conn, actions, derive_fields)
+
+        report_rows = self.conn.execute(
+            "SELECT rowid, client_id, client_ids, portfolio_id, case_id, "
+            "policy_id, claim_reference, loan_id FROM compliance_reports ORDER BY timestamp, rowid"
+        ).fetchall()
+        report_actions = [
+            action for action in tool_actions(actions)
+            if getattr(action, "tool_name", "") == "submit_compliance_report"
+        ]
+        for row, action in zip(report_rows, report_actions):
+            args = action_args(action)
+            fields = _report_fields_from_args(
+                args,
+                str(args.get("content", "") or ""),
+                active_client_id=self._active_client_id or "",
+                active_portfolio_id=self._active_portfolio_id or "",
+                active_request_id=self._active_request_id or "",
+            )
+            self.conn.execute(
+                "UPDATE compliance_reports SET "
+                "client_id = COALESCE(NULLIF(client_id, ''), ?), "
+                "client_ids = COALESCE(NULLIF(client_ids, ''), ?), "
+                "portfolio_id = COALESCE(NULLIF(portfolio_id, ''), ?), "
+                "case_id = COALESCE(NULLIF(case_id, ''), ?), "
+                "policy_id = COALESCE(NULLIF(policy_id, ''), ?), "
+                "claim_reference = COALESCE(NULLIF(claim_reference, ''), ?), "
+                "loan_id = COALESCE(NULLIF(loan_id, ''), ?), "
+                "submitted_by = COALESCE(NULLIF(submitted_by, ''), ?), "
+                "filed_by_role = COALESCE(NULLIF(filed_by_role, ''), ?) "
+                "WHERE rowid = ?",
+                (
+                    fields["client_id"],
+                    fields["client_ids"],
+                    fields["portfolio_id"],
+                    fields["case_id"],
+                    fields["policy_id"],
+                    fields["claim_reference"],
+                    fields["loan_id"],
+                    action_role(action),
+                    action_role(action),
+                    row["rowid"],
+                ),
+            )
+        self.conn.commit()
 
     def _resolve_portfolio_id(self, portfolio_id: str = "") -> str:
         resolved = str(portfolio_id or self._active_portfolio_id or "PF-4821").strip()
@@ -928,21 +1164,21 @@ class FinanceBank:
         report_id = f"CR-{self._report_counter}"
         summary = (content or "").strip()
 
-        # Extract structured fields from kwargs for checkpoint SQL queries
-        client_id = str(kwargs.get("client_id", "")).strip()
-        client_ids = str(kwargs.get("client_ids", "")).strip()
-        portfolio_id = str(kwargs.get("portfolio_id", "")).strip()
-        case_id = str(kwargs.get("case_id", "")).strip()
-        policy_id = str(kwargs.get("policy_id", "")).strip()
-        claim_reference = str(kwargs.get("claim_reference", "")).strip()
-        loan_id = str(kwargs.get("loan_id", "")).strip()
+        fields = _report_fields_from_args(
+            kwargs,
+            summary,
+            active_client_id=self._active_client_id or "",
+            active_portfolio_id=self._active_portfolio_id or "",
+            active_request_id=self._active_request_id or "",
+        )
+        client_id = fields["client_id"]
+        client_ids = fields["client_ids"]
+        portfolio_id = fields["portfolio_id"]
+        case_id = fields["case_id"]
+        policy_id = fields["policy_id"]
+        claim_reference = fields["claim_reference"]
+        loan_id = fields["loan_id"]
         filed_by_role = self._current_agent_role or ""
-
-        # Auto-extract IDs from content if not explicitly provided
-        if not client_id:
-            client_id = str(self._active_client_id or "").strip()
-        if not portfolio_id:
-            portfolio_id = str(self._active_portfolio_id or "").strip()
 
         self.conn.execute(
             "INSERT INTO compliance_reports "
@@ -1017,6 +1253,29 @@ class FinanceBank:
             "WHERE client_id = ?", (client_id,),
         ).fetchall():
             flags.append(f"LOAN {ln['loan_id']}: {ln['loan_type']} (balance=${ln['current_balance']:,.2f}, {ln['status']})")
+        for an in self.conn.execute(
+            "SELECT surrender_id, associated_portfolio_id, request_type, status, "
+            "gross_amount, estimated_net_proceeds, funding_purpose, notes "
+            "FROM annuity_surrenders WHERE client_id = ? "
+            "AND status NOT IN ('SUPERSEDED','CLOSED','NO_ACTION')",
+            (client_id,),
+        ).fetchall():
+            gross = float(an["gross_amount"] or 0)
+            net = float(an["estimated_net_proceeds"] or 0)
+            flags.append(
+                f"ANNUITY REQUEST {an['surrender_id']}: {an['request_type']} "
+                f"on {an['associated_portfolio_id']} ({an['status']}, gross=${gross:,.2f}, "
+                f"net=${net:,.2f}) — {an['funding_purpose']}; {an['notes']}"
+            )
+        for cc in self.conn.execute(
+            "SELECT case_id, case_type, status, priority, summary FROM compliance_cases "
+            "WHERE client_id = ? AND status != 'CLOSED'",
+            (client_id,),
+        ).fetchall():
+            flags.append(
+                f"COMPLIANCE CASE {cc['case_id']}: {cc['case_type']} "
+                f"({cc['status']}, {cc['priority']}) — {cc['summary']}"
+            )
 
         if flags:
             lines.append("  --- Active Flags ---")

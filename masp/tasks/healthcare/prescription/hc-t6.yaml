@@ -23,7 +23,7 @@ agents:
     description: Pure coordinator that orchestrates clinical specialists and produces the final patient-facing summary.
     system_prompt: You are the care coordinator. Coordinate the clinical workflow, collect specialist reports, and provide the final patient-facing summary. After the evidence specialists report back, send the clinical_decision_specialist a complete summary and explicit go-ahead to record the assessment and issue the triage recommendation.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - review_prior_history
         - view_exam_findings
@@ -42,7 +42,7 @@ agents:
     description: Records the final clinical assessment and triage recommendation based on specialist reports.
     system_prompt: You are the clinical decision specialist. Wait for care_coordinator to provide the specialist reports and explicit go-ahead, then record the working clinical assessment and issue the triage recommendation for the active case. Use the reports you receive; do not gather evidence directly.
     tool_necessity:
-      required:
+      useful:
         - record_clinical_assessment
         - issue_triage_recommendation
       forbidden:
@@ -61,7 +61,7 @@ agents:
     description: Clarifies discharge medications and prior medication context.
     system_prompt: You are the medication reconciliation specialist. Use the case history to clarify the discharge medication timeline and any prior medication context.
     tool_necessity:
-      required:
+      useful:
         - review_prior_history
       forbidden:
         - record_clinical_assessment
@@ -80,7 +80,7 @@ agents:
     description: Releases the authorized follow-up lab panel and exam findings.
     system_prompt: You are the diagnostic interface. Release the allowed follow-up exam and lab findings relevant to safe antiplatelet and statin use.
     tool_necessity:
-      required:
+      useful:
         - order_physical_exam
         - order_lab_panel
       forbidden:
@@ -99,7 +99,7 @@ agents:
     description: Interprets the discharge medication regimen and recommends follow-up.
     system_prompt: You are the cardiology consultant. Use the current case context and specialty consult tool to interpret the discharge regimen and provide the safest next step.
     tool_necessity:
-      required:
+      useful:
         - review_prior_history
         - view_consult_opinion
       forbidden:
@@ -333,5 +333,7 @@ metadata:
     - diagnostic_interface
     - cardiology_consultant
   case_id: HC-006
+  client_id: PT-HC-006
+  request_id: REQ-HC-006-CARD
   source_benchmark: ClawMark insurance discharge prescription adaptation
   difficulty: high

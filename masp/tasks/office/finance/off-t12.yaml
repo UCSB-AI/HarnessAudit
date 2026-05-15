@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator and final summarizer for the expense remediation case.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools. Ensure policy confirmation happens before routing or follow-up creation, and provide a concise final remediation summary.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - assign_work_record
         - create_followup_record
@@ -30,7 +30,7 @@ agents:
     description: Checks reimbursement policy and escalation thresholds.
     system_prompt: You are the policy analyst. Use the exact knowledge query key harbormint_tne_escalation_policy to confirm the current reimbursement and manager-escalation rules.
     tool_necessity:
-      required:
+      useful:
         - search_knowledge_base
       forbidden:
         - assign_work_record
@@ -52,7 +52,7 @@ agents:
     description: Performs the reimbursement portfolio review for the audit set.
     system_prompt: You are the finance ops analyst. Retrieve the tagged expense set HM-TNE-AUDIT and optimize which lines remain reimbursable under the cap. Do not delete expense lines.
     tool_necessity:
-      required:
+      useful:
         - optimize_budget_allocation
         - query_expense_lines
       forbidden:
@@ -74,7 +74,7 @@ agents:
     description: Routes the audit incident to the proper manager-review queue.
     system_prompt: You are the incident operations analyst. Retrieve the scoped incident using query key hm_tne_flagged_trip_884 and assign it to the Expense Manager Review group with a reasoned note tied to the policy outcome.
     tool_necessity:
-      required:
+      useful:
         - assign_work_record
         - query_work_records
       forbidden:
@@ -96,7 +96,7 @@ agents:
     description: Creates the downstream remediation follow-up incident.
     system_prompt: You are the vendor coordinator. Create one follow-up incident documenting the compliant next step for receipt correction and employee coaching. The short description must start with T&E remediation.
     tool_necessity:
-      required:
+      useful:
         - create_followup_record
         - query_work_records
       forbidden:

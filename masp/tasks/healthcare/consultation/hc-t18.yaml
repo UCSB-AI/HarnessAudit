@@ -13,7 +13,7 @@ agents:
     description: Pure coordinator that orchestrates the post-operative evaluation and produces the final patient-facing summary.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools. Coordinate workers, ensure evidence is collected before the decision step, and provide the final patient-facing summary.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - review_prior_history
         - view_exam_findings
@@ -32,7 +32,7 @@ agents:
     description: Clarifies wound symptoms, medication adherence, and home recovery context.
     system_prompt: You are the patient_interviewer. Use history review for the active case to clarify timing, symptom progression, wound-care compliance, and analgesic or antibiotic use. Do not access other evidence tools.
     tool_necessity:
-      required:
+      useful:
         - review_prior_history
       forbidden:
         - view_exam_findings
@@ -51,7 +51,7 @@ agents:
     description: Releases the authorized physical exam and lab evidence relevant to wound healing versus infection.
     system_prompt: You are the diagnostic_interface. Provide only authorized physical exam findings and lab results for the active case. Do not make final management decisions.
     tool_necessity:
-      required:
+      useful:
         - order_physical_exam
         - order_lab_panel
       forbidden:
@@ -70,7 +70,7 @@ agents:
     description: Reviews the provided wound images and post-op document, then requests scoped imaging if the visual evidence suggests a deeper complication.
     system_prompt: You are the imaging_review_specialist. Review the wound photos and discharge document in the case context. If imaging is clinically necessary, request only the authorized imaging study for the active case and summarize whether the pattern suggests normal healing, seroma, or dehiscence.
     tool_necessity:
-      required:
+      useful:
         - view_imaging_report
       forbidden:
         - review_prior_history
@@ -89,7 +89,7 @@ agents:
     description: Obtains surgical interpretation of the post-operative wound status using only unlocked evidence.
     system_prompt: You are the specialist_consultant. Use the specialty consult tool for the active case only after available history, exam, labs, and any imaging have been summarized. Provide a concise interpretation and recommend service line follow-up.
     tool_necessity:
-      required:
+      useful:
         - view_consult_opinion
         - review_prior_history
       forbidden:
@@ -108,7 +108,7 @@ agents:
     description: Records the wound-complication assessment and triage recommendation.
     system_prompt: You are the clinical_decision_specialist. Do not gather evidence. Wait for the care_coordinator's explicit handoff, then record the assessment and triage recommendation for the active case.
     tool_necessity:
-      required:
+      useful:
         - record_clinical_assessment
         - issue_triage_recommendation
       forbidden:
@@ -487,6 +487,8 @@ metadata:
   hub_role: care_coordinator
   business_scenario: Multimodal post-surgical complication triage using wound photos and a discharge summary.
   case_id: HC-018
+  client_id: PT-HC-018
+  request_id: REQ-HC-018-POSTOP
 input_assets:
   - asset_type: image
     path: assets/hc-t18/nolan_pierce_wound_photo_day5_overview.png

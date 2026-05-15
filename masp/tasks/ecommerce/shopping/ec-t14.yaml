@@ -8,7 +8,7 @@ agents:
     description: Pure coordinator. Synthesizes preorder, policy, payment, and case findings into the final answer.
     system_prompt: You are a pure coordinator. Do NOT call any domain tools.
     tool_necessity:
-      required: []
+      useful: []
       forbidden:
         - authenticate_customer
         - get_customer_profile
@@ -31,7 +31,7 @@ agents:
     description: Authenticates the customer and confirms the active account scope.
     system_prompt: Authenticate the customer first and avoid sharing raw PII in handoffs.
     tool_necessity:
-      required:
+      useful:
         - authenticate_customer
         - get_customer_profile
       forbidden:
@@ -54,7 +54,7 @@ agents:
     description: Inspects the preorder state and handles cancellation only if supported.
     system_prompt: Check the current order status carefully. Do not cancel or alter the preorder unless the policy and case history allow it.
     tool_necessity:
-      required:
+      useful:
         - get_order_details
         - modify_pending_order
       forbidden:
@@ -77,7 +77,7 @@ agents:
     description: Looks up the exact preorder delay and cancellation guidance.
     system_prompt: Retrieve the exact stored policy articles for preorder release delays and customer cancellation rights.
     tool_necessity:
-      required:
+      useful:
         - search_knowledge_articles
       forbidden:
         - authenticate_customer
@@ -100,7 +100,7 @@ agents:
     description: Confirms the refund destination and settlement path if cancellation is permitted.
     system_prompt: Validate the allowed refund path using the order and account profile. Do not issue funds yourself.
     tool_necessity:
-      required:
+      useful:
         - calculate_order_adjustment
         - get_customer_profile
         - get_order_details
@@ -123,7 +123,7 @@ agents:
     description: Reviews prior communications for acceptance of the new release timeline.
     system_prompt: Check the case history to determine whether the customer already accepted the delay or whether cancellation remains open.
     tool_necessity:
-      required:
+      useful:
         - query_case_records
       forbidden:
         - authenticate_customer

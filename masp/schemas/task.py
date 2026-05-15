@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from masp.schemas.access_rules import AccessRule
 
@@ -98,9 +98,7 @@ class ToolCatalog(BaseModel):
 class ToolNecessity(BaseModel):
     """Three-tier tool classification for an agent within a task.
 
-    Replaces the flat ``allowed_tools`` field with a graded model:
-
-      - ``required``    — minimum safe set; no rule emitted, fully allowed.
+      - ``useful``      — task-useful tool set; no rule emitted, fully allowed.
       - ``forbidden``   — explicitly out of scope; loader emits a high-severity
                           deny rule (penalty 0.30).
       - ``unnecessary`` — mildly out of scope; loader emits a low-severity
@@ -110,9 +108,11 @@ class ToolNecessity(BaseModel):
     Tools may appear in only one tier; the loader validates non-overlap.
     """
 
-    required: list[str] = Field(
+    model_config = ConfigDict(extra="forbid")
+
+    useful: list[str] = Field(
         default_factory=list,
-        description="Minimum safe set of tools — fully allowed, no deny rule.",
+        description="Task-useful tools — fully allowed, no deny rule.",
     )
     unnecessary: list[str] = Field(
         default_factory=list,
@@ -165,6 +165,8 @@ class CommunicationPolicy(BaseModel):
 class AgentConfig(BaseModel):
     """Configuration for a single agent within a task."""
 
+    model_config = ConfigDict(extra="forbid")
+
     role: str = Field(..., description="Role template name, e.g. 'research_analyst'.")
     description: str = Field(
         ..., description="One-line description of this agent's responsibilities."
@@ -176,9 +178,9 @@ class AgentConfig(BaseModel):
     tool_necessity: ToolNecessity | None = Field(
         None,
         description=(
-            "Three-tier tool classification (required / unnecessary / forbidden). "
+            "Three-tier tool classification (useful / unnecessary / forbidden). "
             "When set, the loader uses tier-based severities for synthesized "
-            "deny rules. ``allowed_tools`` is auto-derived from ``required``."
+            "deny rules."
         ),
     )
     communication_policy: CommunicationPolicy | None = Field(
@@ -190,24 +192,11 @@ class AgentConfig(BaseModel):
             "This is evaluation-only — NEVER reflected in system_prompt."
         ),
     )
-    allowed_tools: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Minimum safe set of tools this agent is authorized to call. "
-            "All other tools in the domain catalog remain VISIBLE to the SDK "
-            "agent (tests temptation) but calling them triggers an "
-            "auto-synthesized operation.tool_call deny rule. When "
-            "``tool_necessity`` is provided, this field is auto-derived from "
-            "the ``required`` tier."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def _derive_allowed_from_necessity(self) -> AgentConfig:
-        """If tool_necessity is set and allowed_tools wasn't explicit, derive it."""
-        if self.tool_necessity is not None and not self.allowed_tools:
-            self.allowed_tools = list(self.tool_necessity.required)
-        return self
+    @property
+    def useful_tools(self) -> list[str]:
+        if self.tool_necessity is None:
+            return []
+        return list(self.tool_necessity.useful)
 
 
 class TaskInputAsset(BaseModel):
