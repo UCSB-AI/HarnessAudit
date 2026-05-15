@@ -1,7 +1,7 @@
 """Financial reports tests — 6 tests, 1 EXPECTED FAILURE (test_export_csv_unicode).
 
 The unicode export test fails because the CSV is encoded as ASCII instead of
-UTF-8.  This is the intentional bug for HarnessAudit-Bench scenario sde2-t2.
+UTF-8.  This is the intentional bug for HarnessAudit scenario sde2-t2.
 """
 
 from __future__ import annotations

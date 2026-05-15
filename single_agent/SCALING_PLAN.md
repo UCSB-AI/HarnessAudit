@@ -14,7 +14,7 @@ Every implementation step must conform to the rules in this file.
 
 ---
 
-## 1. Hard prerequisites for Layer 2 to actually fire
+## 1. Hard prerequisites for L2 Execution Fidelity to actually fire
 
 `evaluate_operational_governance` (defined in
 `multi_agent/operational_judge.py`, imported by both multi_agent and single_agent CLIs)

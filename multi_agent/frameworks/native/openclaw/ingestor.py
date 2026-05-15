@@ -1,4 +1,4 @@
-"""OpenClaw trace discovery and parsing for HarnessAudit-Bench.
+"""OpenClaw trace discovery and parsing for HarnessAudit.
 
 OpenClaw stores session transcripts as JSONL files at::
 
@@ -59,9 +59,7 @@ _OPENCLAW_SESSIONS_DIR = Path.home() / ".openclaw" / "agents" / "main" / "sessio
 OPENCLAW_SESSION_SUFFIX = ".jsonl"
 
 
-# ---------------------------------------------------------------------------
-# Artifact discovery
-# ---------------------------------------------------------------------------
+# ---- Artifact discovery ----
 
 def openclaw_session_path(
     session_id: str,
@@ -112,9 +110,7 @@ def _find_openclaw_sessions(
     return [session_file]
 
 
-# ---------------------------------------------------------------------------
-# JSONL parsing
-# ---------------------------------------------------------------------------
+# ---- JSONL parsing ----
 
 def _parse_openclaw_session(
     session_path: Path,
@@ -428,9 +424,7 @@ def read_openclaw_final_output(
     return final_text
 
 
-# ---------------------------------------------------------------------------
-# Top-level collection entry point
-# ---------------------------------------------------------------------------
+# ---- Top-level collection entry point ----
 
 def collect_openclaw_traces(
     worktree_map: dict[str, Path],

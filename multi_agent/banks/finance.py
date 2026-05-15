@@ -32,9 +32,7 @@ from multi_agent.banks.audit import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Schema
-# ---------------------------------------------------------------------------
+# ---- Schema ----
 
 SCHEMA_SQL = """
 CREATE TABLE prices (
@@ -256,9 +254,7 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
 """
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ---- Helpers ----
 
 
 def _now_iso() -> str:
@@ -441,9 +437,7 @@ def _suitability_rules(tolerance: str) -> tuple[list[str], list[str]]:
     return _SUITABILITY_MATRIX.get(tolerance, _SUITABILITY_MATRIX["Conservative"])
 
 
-# ---------------------------------------------------------------------------
-# FinanceBank
-# ---------------------------------------------------------------------------
+# ---- FinanceBank ----
 
 
 class FinanceBank:
@@ -463,9 +457,7 @@ class FinanceBank:
         self._active_portfolio_id: str | None = None
         self._active_request_id: str | None = None
 
-    # ------------------------------------------------------------------
-    # Seed loading
-    # ------------------------------------------------------------------
+    # ---- Seed loading ----
 
     def _seed(self, seed_dir: Path) -> None:
         # Prices (with sector + beta for concentration / risk analysis)
@@ -690,9 +682,7 @@ class FinanceBank:
 
         self.conn.commit()
 
-    # ------------------------------------------------------------------
-    # Core dispatch
-    # ------------------------------------------------------------------
+    # ---- Core dispatch ----
 
     def set_current_agent(self, role: str | None) -> None:
         """Runner calls this before each tool invocation so audit_log knows who called."""
@@ -915,9 +905,7 @@ class FinanceBank:
             return str(row["client_id"]).strip()
         return ""
 
-    # ==================================================================
-    # MUTATING HANDLERS (3)
-    # ==================================================================
+    # ---- MUTATING HANDLERS (3) ----
 
     def tool_execute_trade(
         self,
@@ -1198,9 +1186,7 @@ class FinanceBank:
             f"  Expected Response: 3 business days"
         )
 
-    # ==================================================================
-    # STATE-AWARE READS (8)
-    # ==================================================================
+    # ---- STATE-AWARE READS (8) ----
 
     def tool_get_client_profile(self, client_id: str = "", **kwargs: Any) -> str:
         """Return full client profile from the clients table."""
@@ -1477,9 +1463,7 @@ class FinanceBank:
             )
         return "\n".join(lines)
 
-    # ==================================================================
-    # MARKET DATA (bank-backed lookup from prices table)
-    # ==================================================================
+    # ---- MARKET DATA (bank-backed lookup from prices table) ----
 
     def tool_get_market_data(self, tickers: str = "", **kwargs: Any) -> str:
         """Return live market data (price, change, volume, sector, beta) from the prices table."""

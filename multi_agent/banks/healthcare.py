@@ -30,9 +30,7 @@ from multi_agent.banks.common import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Schema
-# ---------------------------------------------------------------------------
+# ---- Schema ----
 
 SCHEMA_SQL = """
 CREATE TABLE cases (
@@ -168,9 +166,7 @@ _TOOL_TABLE_MAP = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ---- Helpers ----
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -195,9 +191,7 @@ def _iter_seed_objects(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-# ---------------------------------------------------------------------------
-# Bank
-# ---------------------------------------------------------------------------
+# ---- Bank ----
 
 class HealthcareBank:
     """SQLite-backed stateful backend for healthcare encounter tools."""
@@ -213,9 +207,7 @@ class HealthcareBank:
         self._active_request_id: str | None = None
         self._seed(seed_dir)
 
-    # -----------------------------------------------------------------------
-    # Seed loading
-    # -----------------------------------------------------------------------
+    # ---- Seed loading ----
 
     def _seed(self, seed_dir: Path) -> None:
         with open(seed_dir / "seed_cases.json") as f:
@@ -634,9 +626,7 @@ class HealthcareBank:
                         (case_id, study_name, _s(val.get("modality")), content),
                     )
 
-    # -----------------------------------------------------------------------
-    # Public interface
-    # -----------------------------------------------------------------------
+    # ---- Public interface ----
 
     def set_current_agent(self, role: str | None) -> None:
         self._current_agent_role = role
@@ -738,9 +728,7 @@ class HealthcareBank:
     def close(self) -> None:
         self.conn.close()
 
-    # -----------------------------------------------------------------------
-    # Internal resolution helpers
-    # -----------------------------------------------------------------------
+    # ---- Internal resolution helpers ----
 
     def _resolve_case_id(self, case_id: str = "") -> str:
         return str(case_id or self._active_case_id or "").strip()
@@ -763,9 +751,7 @@ class HealthcareBank:
     ) -> list[sqlite3.Row]:
         return filter_rows_by_query(rows, query, fields=fields)
 
-    # -----------------------------------------------------------------------
-    # Tool handlers — READ
-    # -----------------------------------------------------------------------
+    # ---- Tool handlers — READ ----
 
     def tool_review_prior_history(self, case_id: str = "", history_scope: str = "", **kwargs: Any) -> str:
         resolved_case_id = self._resolve_case_id(case_id)
@@ -937,9 +923,7 @@ class HealthcareBank:
             f"Recommended Next Step: {row['recommended_next_step']}",
         ])
 
-    # -----------------------------------------------------------------------
-    # Tool handlers — MUTATE
-    # -----------------------------------------------------------------------
+    # ---- Tool handlers — MUTATE ----
 
     def tool_record_clinical_assessment(
         self, case_id: str = "", assessment_type: str = "",
@@ -997,9 +981,7 @@ class HealthcareBank:
         self.conn.commit()
         return f"Triage recommendation saved for {resolved_case_id}."
 
-    # ------------------------------------------------------------------
-    # View-side aliases (read-only, same logic as order_* handlers)
-    # ------------------------------------------------------------------
+    # ---- View-side aliases (read-only, same logic as order_* handlers) ----
 
     def tool_view_exam_findings(self, case_id: str = "", exam_scope: str = "", **kwargs) -> str:
         """View physical exam findings (read-only alias for order_physical_exam)."""
@@ -1017,9 +999,7 @@ class HealthcareBank:
         """View specialist opinion (read-only alias for order_specialty_consult)."""
         return self.tool_order_specialty_consult(case_id=case_id, specialty=specialty, **kwargs)
 
-    # ------------------------------------------------------------------
-    # Trace reconciliation
-    # ------------------------------------------------------------------
+    # ---- Trace reconciliation ----
 
     def reconcile_trace_actions(self, actions: list[Any]) -> None:
         def derive_fields(action: Any) -> dict[str, Any]:

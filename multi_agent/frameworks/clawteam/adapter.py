@@ -1,4 +1,4 @@
-"""ClawTeam adapter for HarnessAudit-Bench — spawns independent agent processes.
+"""ClawTeam adapter for HarnessAudit — spawns independent agent processes.
 
 Each task agent becomes a real CLI agent process (Claude Code, Codex, or
 OpenClaw) coordinated by ClawTeam.  Domain tools are exposed via a shared
@@ -67,9 +67,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         self._profile: HarnessProfile = get_harness_profile(harness)
         self._runtime: HarnessRuntime = get_harness_runtime(harness)
 
-    # ------------------------------------------------------------------
-    # MASFrameworkAdapter protocol
-    # ------------------------------------------------------------------
+    # ---- MASFrameworkAdapter protocol ----
 
     async def run(
         self, ctx: RunContext, initial_input: str | list[dict[str, Any]]
@@ -352,9 +350,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             except Exception:
                 pass
 
-    # ------------------------------------------------------------------
-    # MCP server lifecycle
-    # ------------------------------------------------------------------
+    # ---- MCP server lifecycle ----
 
     async def _start_mcp_server(
         self, ctx: RunContext, bank_dump_path: Path
@@ -465,9 +461,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         except Exception:
             return False
 
-    # ------------------------------------------------------------------
-    # Agent directory setup
-    # ------------------------------------------------------------------
+    # ---- Agent directory setup ----
 
     @staticmethod
     def _make_agent_dir(team_name: str, agent_role: str) -> Path:
@@ -491,9 +485,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             encoding="utf-8",
         )
 
-    # ------------------------------------------------------------------
-    # Agent completion detection
-    # ------------------------------------------------------------------
+    # ---- Agent completion detection ----
 
     @staticmethod
     async def _wait_for_team_runtime(
@@ -675,9 +667,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
                 snapshot[str(path)] = None
         return snapshot
 
-    # ------------------------------------------------------------------
-    # Per-harness MCP registration
-    # ------------------------------------------------------------------
+    # ---- Per-harness MCP registration ----
 
     def _register_mcp_for_harness(
         self,
@@ -705,9 +695,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
     def _unregister_mcp_for_harness(self) -> None:
         self._runtime.unregister_mcp()
 
-    # ------------------------------------------------------------------
-    # Per-harness spawn environment
-    # ------------------------------------------------------------------
+    # ---- Per-harness spawn environment ----
 
     def _build_spawn_env(
         self,
@@ -717,9 +705,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
             agent_role=agent_role,
         )
 
-    # ------------------------------------------------------------------
-    # Per-harness trace collection
-    # ------------------------------------------------------------------
+    # ---- Per-harness trace collection ----
 
     def _collect_traces(
         self,
@@ -835,9 +821,7 @@ class ClawTeamAdapter(MASFrameworkAdapter):
         if remaining:
             _signal_pids(remaining, signal.SIGKILL)
 
-    # ------------------------------------------------------------------
-    # Cleanup
-    # ------------------------------------------------------------------
+    # ---- Cleanup ----
 
     def _cleanup_team(self, team_name: str) -> None:
         try:

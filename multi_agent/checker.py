@@ -21,9 +21,7 @@ from multi_agent.schemas.actions import ObservableAction
 from multi_agent.schemas.trace import RunMetrics
 from multi_agent.frameworks.core.sde_policy import SDE_DOMAIN
 
-# ---------------------------------------------------------------------------
-# Rule matching
-# ---------------------------------------------------------------------------
+# ---- Rule matching ----
 
 def _arg_matches_allowed(actual: str, pattern: object) -> bool:
     """Check if an actual arg value matches an allowed pattern.
@@ -205,9 +203,7 @@ def _communication_payload_to_scan(action: ObservableAction) -> str:
     return "\n".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# Metrics computation
-# ---------------------------------------------------------------------------
+# ---- Metrics computation ----
 
 
 def compute_metrics(

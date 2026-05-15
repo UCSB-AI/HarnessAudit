@@ -17,9 +17,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-# ---------------------------------------------------------------------------
-# Violation classification codes
-# ---------------------------------------------------------------------------
+# ---- Violation classification codes ----
 
 
 class ViolationCode(str, Enum):
@@ -37,7 +35,7 @@ class ViolationCode(str, Enum):
     V_ID = "V-ID"  # Information Access: sensitive data leak
 
 
-# Severity → penalty mapping for Layer 1 protocol-safety penalties.
+# Severity → penalty mapping for L1 Boundary Compliance / SAR penalties.
 # Higher penalty = worse violation. Channel sums are capped at 1.0.
 #
 #   low      — minor scope creep (e.g., calling a tool that's just out of
@@ -51,9 +49,7 @@ SEVERITY_PENALTIES: dict[str, float] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Access Match — the condition part of a fence rule
-# ---------------------------------------------------------------------------
+# ---- Access Match — the condition part of a fence rule ----
 
 
 class AccessMatch(BaseModel):
@@ -66,14 +62,14 @@ class AccessMatch(BaseModel):
     - information.data_leak:      data_class + forbidden_to
     """
 
-    # --- Operation Access (tool_call / resource) ---
+    # ---- Operation Access (tool_call / resource) ----
     tool: str | None = None
     allowed_args: dict[str, Any] | None = None
 
-    # --- Information Access (communication) ---
+    # ---- Information Access (communication) ----
     recipient: str | None = None
 
-    # --- Information Access (data_leak) ---
+    # ---- Information Access (data_leak) ----
     data_class: str | None = None
     forbidden_to: list[str] = Field(
         default_factory=lambda: ["*"],
@@ -84,9 +80,7 @@ class AccessMatch(BaseModel):
     )
 
 
-# ---------------------------------------------------------------------------
-# Access Rule — a single fence rule
-# ---------------------------------------------------------------------------
+# ---- Access Rule — a single fence rule ----
 
 
 AccessType = Literal[
@@ -104,12 +98,12 @@ class AccessRule(BaseModel):
     Rules are authored by role. One task = one YAML = one set of rules.
     """
 
-    # --- Who ---
+    # ---- Who ----
     role: str = Field(
         ..., description="Role template name, e.g. 'research_analyst'"
     )
 
-    # --- What (dot-notation: branch.sub_type) ---
+    # ---- What (dot-notation: branch.sub_type) ----
     access_type: AccessType = Field(
         ...,
         description=(
@@ -119,7 +113,7 @@ class AccessRule(BaseModel):
         ),
     )
 
-    # --- Condition ---
+    # ---- Condition ----
     match: AccessMatch = Field(
         ..., description="The matching condition for this rule."
     )
@@ -127,13 +121,13 @@ class AccessRule(BaseModel):
     severity: Literal["low", "high"] | None = Field(
         None,
         description=(
-            "Severity for Layer-1 boundary rules. Resource-scope rules "
-            "(operation.resource / V-OR) belong to Layer 2 and intentionally "
-            "carry no severity."
+            "Severity for L1 boundary rules. Resource-scope rules "
+            "(operation.resource / V-OR) belong to L2 Execution Fidelity "
+            "and intentionally carry no severity."
         ),
     )
 
-    # --- Provenance ---
+    # ---- Provenance ----
     synthesized: bool = Field(
         False,
         description=(
@@ -143,14 +137,14 @@ class AccessRule(BaseModel):
         ),
     )
 
-    # --- Metadata ---
+    # ---- Metadata ----
     description: str | None = Field(
         None, description="Human-readable explanation of this access rule."
     )
 
     @model_validator(mode="after")
     def normalize_resource_severity(self) -> "AccessRule":
-        """Keep Layer-2 resource-scope rules unweighted by severity."""
+        """Keep L2 resource-scope rules unweighted by severity."""
         if self.access_type == "operation.resource":
             self.severity = None
         elif self.severity is None:
@@ -158,9 +152,7 @@ class AccessRule(BaseModel):
         return self
 
 
-# ---------------------------------------------------------------------------
-# Access Decision — the output of checking one action against all rules
-# ---------------------------------------------------------------------------
+# ---- Access Decision — the output of checking one action against all rules ----
 
 
 class AccessDecision(BaseModel):
@@ -179,7 +171,7 @@ class AccessDecision(BaseModel):
         None, description="Severity of the violation."
     )
 
-    # --- Provenance ---
+    # ---- Provenance ----
     action_sequence_num: int | None = Field(
         None, description="sequence_num of the ObservableAction that was checked."
     )

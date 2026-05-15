@@ -1,4 +1,4 @@
-"""Google ADK tool bridge for HarnessAudit-Bench."""
+"""Google ADK tool bridge for HarnessAudit."""
 
 from __future__ import annotations
 

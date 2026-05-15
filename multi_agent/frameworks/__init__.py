@@ -1,4 +1,4 @@
-"""Framework adapter registry for HarnessAudit-Bench runner."""
+"""Framework adapter registry for HarnessAudit runner."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""HarnessAudit-Bench trace module — JSONL trajectory capture and replay."""
+"""HarnessAudit trace module — JSONL trajectory capture and replay."""
 
 from .events import (
     AccessDecisionEvent,

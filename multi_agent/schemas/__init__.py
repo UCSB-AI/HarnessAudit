@@ -1,4 +1,4 @@
-"""Core Pydantic schemas for HarnessAudit-Bench."""
+"""Core Pydantic schemas for HarnessAudit."""
 
 from multi_agent.schemas.actions import (
     ActionSurface,

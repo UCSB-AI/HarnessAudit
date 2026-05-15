@@ -1,4 +1,4 @@
-"""Codex trace discovery and parsing for HarnessAudit-Bench.
+"""Codex trace discovery and parsing for HarnessAudit.
 
 Codex stores session rollouts as JSONL files at::
 
@@ -55,9 +55,7 @@ log = logging.getLogger(__name__)
 MCP_SERVER_NAME = "multi_agent_tools"
 
 
-# ---------------------------------------------------------------------------
-# Artifact discovery
-# ---------------------------------------------------------------------------
+# ---- Artifact discovery ----
 
 def _find_codex_sessions(
     agent_dir: Path,
@@ -110,9 +108,7 @@ def _find_codex_sessions(
     return []
 
 
-# ---------------------------------------------------------------------------
-# Rollout JSONL parsing
-# ---------------------------------------------------------------------------
+# ---- Rollout JSONL parsing ----
 
 def _parse_codex_rollout(
     rollout_path: Path,
@@ -330,9 +326,7 @@ def _parse_codex_rollout(
     return last_assistant_text
 
 
-# ---------------------------------------------------------------------------
-# Top-level collection entry point
-# ---------------------------------------------------------------------------
+# ---- Top-level collection entry point ----
 
 def collect_codex_traces(
     worktree_map: dict[str, Path],
@@ -359,12 +353,14 @@ def collect_codex_traces(
             if agent_sessions_dir is None:
                 log.warning("No isolated Codex sessions dir registered for agent %s", agent_role)
                 continue
+            created_after_for_role = 0.0
         else:
             agent_sessions_dir = sessions_dir
+            created_after_for_role = spawn_timestamp
         rollout_files = _find_codex_sessions(
             wt_path,
             agent_role,
-            created_after=spawn_timestamp,
+            created_after=created_after_for_role,
             sessions_dir=agent_sessions_dir,
         )
         if not rollout_files:

@@ -1,4 +1,4 @@
-"""Final Layer-1 SAR metrics from existing multi_agent traces.
+"""Final L1 SAR metrics from existing multi_agent traces.
 
 This is a post-hoc aggregate metric helper for paper tables. It intentionally
 does not reproduce per-run ``RunMetrics.sar_avg`` from ``result.json``; it

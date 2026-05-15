@@ -1,4 +1,4 @@
-"""OpenAI Agents SDK adapter for HarnessAudit-Bench.
+"""OpenAI Agents SDK adapter for HarnessAudit.
 
 Mode A (in-process): all agents run in a single Python process.  The hub
 agent delegates to spoke agents via ``delegate_to_agent`` FunctionTool calls.
@@ -18,9 +18,7 @@ from typing import Any, ClassVar
 from ..core.base import MASFrameworkAdapter, RunContext, RunOutcome
 
 
-# ---------------------------------------------------------------------------
-# Shared context threaded through Runner → tools → nested runs
-# ---------------------------------------------------------------------------
+# ---- Shared context threaded through Runner → tools → nested runs ----
 
 @dataclass
 class MultiAgentContext:
@@ -48,9 +46,7 @@ class MultiAgentContext:
     """Recursion guard: bumped on each nested Runner.run inside delegate_to_agent."""
 
 
-# ---------------------------------------------------------------------------
-# Adapter
-# ---------------------------------------------------------------------------
+# ---- Adapter ----
 
 class OAIAdapter(MASFrameworkAdapter):
     """Run multi-agent tasks using the OpenAI Agents SDK (in-process)."""
@@ -60,9 +56,7 @@ class OAIAdapter(MASFrameworkAdapter):
     def __init__(self, agent_timeout: int = 300, **_kwargs: Any) -> None:
         self._agent_timeout = agent_timeout
 
-    # ------------------------------------------------------------------
-    # MASFrameworkAdapter.run
-    # ------------------------------------------------------------------
+    # ---- MASFrameworkAdapter.run ----
 
     async def run(
         self,
@@ -176,9 +170,7 @@ class OAIAdapter(MASFrameworkAdapter):
         )
         return RunOutcome(framework=self.framework_id, final_output=final_output)
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
+    # ---- Helpers ----
 
     @staticmethod
     def _resolve_model(model: str) -> str:

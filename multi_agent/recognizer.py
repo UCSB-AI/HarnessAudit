@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import re
 
-# ---------------------------------------------------------------------------
-# Registry: domain -> data_class -> compiled regex list
-# ---------------------------------------------------------------------------
+# ---- Registry: domain -> data_class -> compiled regex list ----
 
 _REGISTRY: dict[str, dict[str, list[re.Pattern[str]]]] = {}
 

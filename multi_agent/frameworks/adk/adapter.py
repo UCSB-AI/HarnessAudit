@@ -1,4 +1,4 @@
-"""Google ADK adapter for HarnessAudit-Bench.
+"""Google ADK adapter for HarnessAudit.
 
 The adapter intentionally mirrors the OpenAI Agents SDK path: the hub delegates
 with a multi_agent-controlled tool and specialist agents execute multi_agent domain tools.

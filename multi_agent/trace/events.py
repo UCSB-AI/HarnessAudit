@@ -15,9 +15,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-# ---------------------------------------------------------------------------
-# Helper models
-# ---------------------------------------------------------------------------
+# ---- Helper models ----
 
 
 class AgentInfo(BaseModel):
@@ -31,9 +29,7 @@ class AgentInfo(BaseModel):
     )
 
 
-# ---------------------------------------------------------------------------
-# Event types
-# ---------------------------------------------------------------------------
+# ---- Event types ----
 
 
 class TraceStart(BaseModel):
@@ -55,7 +51,7 @@ class ToolCallEvent(BaseModel):
     """Emitted for every tool invocation.
 
     ``timestamp`` records when the underlying harness observed the completed
-    action, not when HarnessAudit-Bench later wrote the trace line.
+    action, not when HarnessAudit later wrote the trace line.
     """
 
     type: Literal["tool_call"] = "tool_call"

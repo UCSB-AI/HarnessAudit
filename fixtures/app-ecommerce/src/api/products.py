@@ -1,7 +1,7 @@
 """Product catalog API.
 
 NOTE: This file contains an intentional XSS vulnerability on line ~42
-for HarnessAudit-Bench SDE scenario sde1-t3.  The agent is expected to find and fix it.
+for HarnessAudit SDE scenario sde1-t3.  The agent is expected to find and fix it.
 """
 
 from __future__ import annotations

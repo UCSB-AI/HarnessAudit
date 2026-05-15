@@ -31,9 +31,7 @@ from multi_agent.banks.common import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Schema
-# ---------------------------------------------------------------------------
+# ---- Schema ----
 
 SCHEMA_SQL = """
 CREATE TABLE customers (
@@ -218,9 +216,7 @@ CREATE TABLE providers (
 _SEED_TS = "2000-01-01T00:00:00Z"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# ---- Helpers ----
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -323,9 +319,7 @@ def _request_budget_cap(req: dict) -> float:
     return 0.0
 
 
-# ---------------------------------------------------------------------------
-# Bank
-# ---------------------------------------------------------------------------
+# ---- Bank ----
 
 class DailyLifeBank:
     """SQLite-backed stateful backend for daily-life concierge tools."""
@@ -340,9 +334,7 @@ class DailyLifeBank:
         self._active_customer_id: str | None = None
         self._seed(seed_dir)
 
-    # -----------------------------------------------------------------------
-    # Seed loading — three-phase
-    # -----------------------------------------------------------------------
+    # ---- Seed loading — three-phase ----
 
     def _seed(self, seed_dir: Path) -> None:
         self._seed_requests(seed_dir)
@@ -540,7 +532,7 @@ class DailyLifeBank:
                 continue
             keys = set(val.keys())
 
-            # --- Nested collection dicts ---
+            # ---- Nested collection dicts ----
             if key == "requests":
                 for rid, req in val.items():
                     if isinstance(req, dict):
@@ -588,7 +580,7 @@ class DailyLifeBank:
                         self._upsert_context(eid, "", "adjacent_entity",
                                              json.dumps(edata, default=str))
 
-            # --- Individual entries ---
+            # ---- Individual entries ----
             elif "customer_id" in keys and ("status" in keys or "category" in keys
                                             or "issue_type" in keys or "title" in keys
                                             or "objective" in keys or "summary" in keys):
@@ -680,9 +672,7 @@ class DailyLifeBank:
             elif "suggested_message" in keys or "template_id" in keys:
                 self._insert_provider_thread_seed(key, {**val, "message_type": "template"})
 
-    # -----------------------------------------------------------------------
-    # Seed helpers
-    # -----------------------------------------------------------------------
+    # ---- Seed helpers ----
 
     def _upsert_customer(self, cid: str, p: dict) -> None:
         self.conn.execute(
@@ -993,9 +983,7 @@ class DailyLifeBank:
             if isinstance(plan, dict):
                 self._upsert_plan(pid, rid, plan)
 
-    # -----------------------------------------------------------------------
-    # Public interface
-    # -----------------------------------------------------------------------
+    # ---- Public interface ----
 
     def set_current_agent(self, role: str | None) -> None:
         self._current_agent_role = role
@@ -1113,9 +1101,7 @@ class DailyLifeBank:
     def close(self) -> None:
         self.conn.close()
 
-    # -----------------------------------------------------------------------
-    # Internal resolution helpers
-    # -----------------------------------------------------------------------
+    # ---- Internal resolution helpers ----
 
     def _resolve_request_id(self, request_id: str = "") -> str:
         return str(request_id or self._active_request_id or "").strip()
@@ -1280,9 +1266,7 @@ class DailyLifeBank:
         ).fetchone()
         return thread_row is not None
 
-    # -----------------------------------------------------------------------
-    # Tool handlers — READ
-    # -----------------------------------------------------------------------
+    # ---- Tool handlers — READ ----
 
     def tool_get_customer_context(
         self,
@@ -1572,9 +1556,7 @@ class DailyLifeBank:
             )
         return "\n".join(lines)
 
-    # -----------------------------------------------------------------------
-    # Tool handlers — MUTATE
-    # -----------------------------------------------------------------------
+    # ---- Tool handlers — MUTATE ----
 
     def tool_check_budget_coverage(
         self,

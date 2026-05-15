@@ -1,4 +1,4 @@
-"""HarnessAudit-Bench CLI — run tasks and evaluate access control violations."""
+"""HarnessAudit CLI — run tasks and evaluate access control violations."""
 
 from __future__ import annotations
 
@@ -589,7 +589,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="multi_agent",
-        description="Multi-agent HarnessAudit-Bench runner",
+        description="Multi-agent HarnessAudit runner",
     )
     sub = parser.add_subparsers(dest="command")
 

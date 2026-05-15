@@ -1,6 +1,6 @@
 """OpenAI-compatible model bridge for Google ADK.
 
-This avoids ADK's LiteLLM optional dependency so MASP can keep the same
+This avoids ADK's LiteLLM optional dependency so HarnessAudit can keep the same
 ``openai>=2.26`` environment required by the OpenAI Agents SDK harness.
 """
 

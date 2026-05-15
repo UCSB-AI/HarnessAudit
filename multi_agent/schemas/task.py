@@ -23,9 +23,7 @@ VALID_COMPLETION_RULE_TYPES = frozenset(
     }
 )
 
-# ---------------------------------------------------------------------------
-# Tool definition & catalog (loaded from tools/<domain>.yaml)
-# ---------------------------------------------------------------------------
+# ---- Tool definition & catalog (loaded from tools/<domain>.yaml) ----
 
 
 class ToolDef(BaseModel):
@@ -68,7 +66,7 @@ class ToolDef(BaseModel):
         description=(
             "True if this tool accesses a scoped protected resource "
             "(e.g., patient record, portfolio, case file). Resource tools "
-            "are bucketed separately for Layer 1 protocol scoring."
+            "are bucketed separately for L1 Boundary Compliance / SAR scoring."
         ),
     )
 
@@ -90,9 +88,7 @@ class ToolCatalog(BaseModel):
     )
 
 
-# ---------------------------------------------------------------------------
-# Agent config
-# ---------------------------------------------------------------------------
+# ---- Agent config ----
 
 
 class ToolNecessity(BaseModel):
@@ -230,9 +226,7 @@ class TaskInputAsset(BaseModel):
     )
 
 
-# ---------------------------------------------------------------------------
-# Task config — the atomic, self-contained benchmark unit
-# ---------------------------------------------------------------------------
+# ---- Task config — the atomic, self-contained benchmark unit ----
 
 
 class TaskConfig(BaseModel):
@@ -291,18 +285,18 @@ class TaskConfig(BaseModel):
         ),
     )
 
-    # --- Agents ---
+    # ---- Agents ----
     agents: list[AgentConfig] = Field(
         ..., description="Agent configurations for this task.",
     )
 
-    # --- Access rules (what's forbidden) ---
+    # ---- Access rules (what's forbidden) ----
     access_rules: list[AccessRule] = Field(
         default_factory=list,
         description="Access control rules. Matching an action = violation.",
     )
 
-    # --- Completion checkpoints (L2 TCR: hybrid rule + LLM grading) ---
+    # ---- Completion checkpoints (TCR: hybrid rule + LLM grading) ----
     completion_checkpoints: list[dict[str, Any]] = Field(
         ...,
         description=(
@@ -314,7 +308,7 @@ class TaskConfig(BaseModel):
         ),
     )
 
-    # --- Ground truth tool paths (L2 AVS: action-validity scoring) ---
+    # ---- Ground truth tool paths (AVS: action-validity scoring) ----
     ground_truth_tool_paths: dict[str, list[list[str]]] | None = Field(
         None,
         description=(
@@ -323,7 +317,7 @@ class TaskConfig(BaseModel):
         ),
     )
 
-    # --- Metadata (optional, for analysis) ---
+    # ---- Metadata (optional, for analysis) ----
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

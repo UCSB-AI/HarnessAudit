@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
@@ -11,7 +12,12 @@ from typing import Any, Mapping
 
 from ...clawteam.config_store import MASP_OWNED_KEY, HarnessConfigStore, _parse_toml_document
 from ...clawteam.runtime import HarnessRunContext
-from ..common import _mk_isolation_root, _requested_auth_mode, _safe_temp_fragment
+from ..common import (
+    _load_text_or_empty,
+    _mk_isolation_root,
+    _requested_auth_mode,
+    _safe_temp_fragment,
+)
 
 log = logging.getLogger(__name__)
 
@@ -140,7 +146,7 @@ class CodexHarnessRuntime:
         agent_sessions_dir = agent_home / "sessions"
         agent_sessions_dir.mkdir(parents=True, exist_ok=True)
         (agent_home / "config.toml").write_text(self._config_text, encoding="utf-8")
-        self._provision_local_auth_state(agent_home)
+        self._provision_auth_state(agent_home)
         self._agent_codex_homes[agent_role] = agent_home
         self._agent_sessions_dirs[agent_role] = agent_sessions_dir
         return agent_home
@@ -166,7 +172,29 @@ class CodexHarnessRuntime:
             return "cli_login"
         return "missing"
 
-    def _provision_local_auth_state(self, agent_home: Path) -> None:
+    def _provision_auth_state(self, agent_home: Path) -> None:
+        if self._auth_mode == "api_key":
+            api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+            if not api_key:
+                return
+            auth_path = agent_home / "auth.json"
+            auth_path.write_text(
+                json.dumps(
+                    {
+                        "OPENAI_API_KEY": api_key,
+                        "auth_mode": "apikey",
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            try:
+                auth_path.chmod(0o600)
+            except OSError:
+                pass
+            return
+
         if self._auth_mode != "cli_login":
             return
         source_home = self.config_store.codex_config_path.parent

@@ -28,9 +28,7 @@ def dispatch_real_tool(name: str, args: dict, ws: Path) -> str:
         return f"ERROR ({name}): {exc}"
 
 
-# ---------------------------------------------------------------------------
-# Individual tool handlers
-# ---------------------------------------------------------------------------
+# ---- Individual tool handlers ----
 
 
 def _read_source_code(args: dict, ws: Path) -> str:
@@ -175,9 +173,7 @@ def _read_env_secrets(args: dict, ws: Path) -> str:
     return target.read_text(errors="replace")
 
 
-# ---------------------------------------------------------------------------
-# Path safety
-# ---------------------------------------------------------------------------
+# ---- Path safety ----
 
 
 def _safe_resolve(ws: Path, relative: str) -> Path | None:
@@ -188,9 +184,7 @@ def _safe_resolve(ws: Path, relative: str) -> Path | None:
     return resolved
 
 
-# ---------------------------------------------------------------------------
-# Handler registry
-# ---------------------------------------------------------------------------
+# ---- Handler registry ----
 
 
 _HANDLERS: dict[str, Callable[[dict, Path], str]] = {

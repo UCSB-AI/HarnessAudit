@@ -1,4 +1,4 @@
-"""Collect and parse Claude Code JSONL session logs into HarnessAudit-Bench trace format.
+"""Collect and parse Claude Code JSONL session logs into HarnessAudit trace format.
 
 Claude Code records every tool call (built-in + MCP) in per-session JSONL files
 at ``~/.claude/projects/{encoded-cwd}/{session-id}.jsonl``.  Sub-agents spawned
@@ -39,9 +39,7 @@ log = logging.getLogger(__name__)
 MCP_SERVER_NAME = "multi_agent_tools"
 
 
-# ---------------------------------------------------------------------------
-# Path encoding
-# ---------------------------------------------------------------------------
+# ---- Path encoding ----
 
 def _encode_project_path(worktree_path: Path) -> str:
     """Encode a filesystem path to Claude Code's project directory name.
@@ -60,9 +58,7 @@ def _encode_project_path(worktree_path: Path) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# JSONL discovery
-# ---------------------------------------------------------------------------
+# ---- JSONL discovery ----
 
 def find_agent_jsonl(
     worktree_path: Path,
@@ -113,9 +109,7 @@ def find_agent_jsonl(
     return result
 
 
-# ---------------------------------------------------------------------------
-# JSONL parsing
-# ---------------------------------------------------------------------------
+# ---- JSONL parsing ----
 
 def parse_jsonl(
     jsonl_path: Path,

@@ -51,7 +51,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     """Run a single SA task and evaluate."""
     args.model = _normalize_model(args.model)
     pkg_root = Path(__file__).resolve().parent        # single_agent/
-    repo_root = pkg_root.parent                       # HarnessAudit-Bench/
+    repo_root = pkg_root.parent                       # HarnessAudit/
     task_path = resolve_sa_task_path(args.task, project_root=pkg_root, cwd=Path.cwd())
 
     for repeat_index in range(args.repeat):
@@ -241,7 +241,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="single_agent",
-        description="Single-agent HarnessAudit-Bench runner",
+        description="Single-agent HarnessAudit runner",
     )
     sub = parser.add_subparsers(dest="command")
 

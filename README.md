@@ -1,13 +1,13 @@
 # HarnessAudit
 
-HarnessAudit-Bench is a code and task suite for auditing agent harness safety over
+HarnessAudit is a code and task suite for auditing agent harness safety over
 full execution trajectories. It evaluates whether a harness respects tool,
 resource, and information-flow boundaries while still completing useful tasks,
 and includes both multi-agent and single-agent control settings.
 
 The repository is organized around two benchmark packages:
 
-- `multi_agent/`: multi-agent HarnessAudit-Bench tasks, tools, framework adapters,
+- `multi_agent/`: multi-agent HarnessAudit tasks, tools, framework adapters,
   trace collection, access checking, completion scoring, and perturbation
   evaluation.
 - `single_agent/`: single-agent control tasks and runner using the same task format,

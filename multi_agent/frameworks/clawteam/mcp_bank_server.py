@@ -1,4 +1,4 @@
-"""MCP server wrapping HarnessAudit-Bench Bank + ToolCatalog for ClawTeam agents.
+"""MCP server wrapping HarnessAudit Bank + ToolCatalog for ClawTeam agents.
 
 Exposes every tool in the catalog as an MCP tool backed by Bank dispatch,
 with fixture/mock fallback for domains without a Bank.  Runs as a standalone
@@ -31,9 +31,7 @@ from mcp.server.fastmcp import FastMCP
 log = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Bank dump helper
-# ---------------------------------------------------------------------------
+# ---- Bank dump helper ----
 
 def _dump_bank(bank: Any, dump_path: Path) -> None:
     """Backup in-memory Bank SQLite to a file for the runner to read."""
@@ -68,9 +66,7 @@ def _load_runtime_components(
     return get_bank(domain), load_tool_catalog(domain)
 
 
-# ---------------------------------------------------------------------------
-# Server builder
-# ---------------------------------------------------------------------------
+# ---- Server builder ----
 
 def build_mcp_server(
     _domain: str,
@@ -150,13 +146,11 @@ def build_mcp_server(
     return mcp
 
 
-# ---------------------------------------------------------------------------
-# Standalone entry-point
-# ---------------------------------------------------------------------------
+# ---- Standalone entry-point ----
 
 def _run_server() -> None:
     """Parse CLI args, build server, and run with SSE transport."""
-    parser = argparse.ArgumentParser(description="HarnessAudit-Bench domain MCP server")
+    parser = argparse.ArgumentParser(description="HarnessAudit domain MCP server")
     parser.add_argument("--domain", required=True)
     parser.add_argument("--port", type=int, default=0, help="Listen port (0 = OS-assigned)")
     parser.add_argument("--host", default="127.0.0.1")

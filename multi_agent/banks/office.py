@@ -254,9 +254,7 @@ class OfficeEnterpriseManagementBank:
         self._followup_counter = 7300
         self._seed(seed_dir)
 
-    # -----------------------------------------------------------------------
-    # Seed loading
-    # -----------------------------------------------------------------------
+    # ---- Seed loading ----
 
     def _seed(self, seed_dir: Path) -> None:
         self._seed_directory(seed_dir)
@@ -465,9 +463,7 @@ class OfficeEnterpriseManagementBank:
                      _s(val.get("status", "archived"))),
                 )
 
-    # -----------------------------------------------------------------------
-    # Public interface
-    # -----------------------------------------------------------------------
+    # ---- Public interface ----
 
     def set_current_agent(self, role: str | None) -> None:
         self._current_agent_role = role
@@ -533,9 +529,7 @@ class OfficeEnterpriseManagementBank:
     def close(self) -> None:
         self.conn.close()
 
-    # -----------------------------------------------------------------------
-    # Internal helpers
-    # -----------------------------------------------------------------------
+    # ---- Internal helpers ----
 
     def _employee_by_lookup(self, user_lookup: str) -> sqlite3.Row | None:
         row = self.conn.execute(
@@ -675,9 +669,7 @@ class OfficeEnterpriseManagementBank:
             lines.append(line)
         return "\n".join(lines)
 
-    # -----------------------------------------------------------------------
-    # Tool handlers — same logic as before, unchanged
-    # -----------------------------------------------------------------------
+    # ---- Tool handlers — same logic as before, unchanged ----
 
     def tool_read_user_directory(self, user_lookup: str = "", **kwargs: Any) -> str:
         user_lookup = (

@@ -22,9 +22,7 @@ if TYPE_CHECKING:
     from multi_agent.schemas.task import ToolCatalog, ToolDef
 
 
-# ---------------------------------------------------------------------------
-# Parameter schema helpers
-# ---------------------------------------------------------------------------
+# ---- Parameter schema helpers ----
 
 _TYPE_PREFIX_RE = re.compile(r"^\((int|float|str|string|bool)\)\s*")
 
@@ -57,9 +55,7 @@ def _build_params_schema(td: ToolDef) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Domain tool factory
-# ---------------------------------------------------------------------------
+# ---- Domain tool factory ----
 
 def build_domain_tools(
     catalog: ToolCatalog,
@@ -126,9 +122,7 @@ def _make_domain_handler(td: ToolDef, workspace: Any):
     return handler
 
 
-# ---------------------------------------------------------------------------
-# Delegate-to-agent tool (hub → spoke, enables parallel execution)
-# ---------------------------------------------------------------------------
+# ---- Delegate-to-agent tool (hub → spoke, enables parallel execution) ----
 
 def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
     """Create the ``delegate_to_agent`` tool used by the hub.
@@ -149,7 +143,7 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
         except Exception as exc:
             return f"[ERROR] Invalid delegation arguments: {exc}"
 
-        # --- recursion guard ---
+        # ---- recursion guard ----
         if run_ctx.depth >= 2:
             return "[ERROR] Max delegation depth reached."
 
@@ -157,7 +151,7 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
         if spoke is None:
             return f"[ERROR] Unknown agent '{target}'. Available: {list(run_ctx.spoke_agents.keys())}"
 
-        # --- emit hub → spoke communication ---
+        # ---- emit hub → spoke communication ----
         sink.emit_communication(
             agent_id=sender,
             agent_role=sender,
@@ -167,7 +161,7 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
             raw_event={"framework": "oai", "capture_mode": "delegation"},
         )
 
-        # --- run spoke agent (async → concurrent when parallel_tool_calls) ---
+        # ---- run spoke agent (async → concurrent when parallel_tool_calls) ----
         from .adapter import MultiAgentContext  # deferred to avoid circular import
 
         spoke_ctx = MultiAgentContext(
@@ -194,7 +188,7 @@ def build_delegate_tool(max_spoke_turns: int = 10) -> FunctionTool:
         except Exception as exc:
             output = f"[ERROR] {exc}"
 
-        # --- emit spoke → hub communication ---
+        # ---- emit spoke → hub communication ----
         sink.emit_communication(
             agent_id=target,
             agent_role=target,

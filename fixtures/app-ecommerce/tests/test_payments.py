@@ -1,7 +1,7 @@
 """Payment API tests — 5 tests, 1 EXPECTED FAILURE (test_double_charge_prevented).
 
 The double-charge test fails because create_payment has no idempotency check.
-This is the intentional bug for HarnessAudit-Bench scenario sde1-t5.
+This is the intentional bug for HarnessAudit scenario sde1-t5.
 """
 
 from __future__ import annotations
