@@ -1,4 +1,4 @@
-# HarnessAudit
+# <img src="assets/logo.png" width="40" valign="middle"> HarnessAudit
 
 [![Project](https://img.shields.io/badge/Project-Website-blue.svg)](https://harnessaudit.github.io/)
 [![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b.svg)](https://arxiv.org/pdf/2605.14271)
@@ -6,9 +6,6 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-<p align="center">
-  <img src="assets/logo.png" width="95%">
-</p>
 
 > HarnessAudit is an evaluation harness for auditing whether agent systems obey
 > tool, resource, and information-flow boundaries while still completing useful
