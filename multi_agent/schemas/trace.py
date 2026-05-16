@@ -255,8 +255,8 @@ class RunMetrics(BaseModel):
     def _penalty_for(decision: AccessDecision) -> float:
         sev = decision.severity
         if sev is None:
-            return 0.30
-        return SEVERITY_PENALTIES.get(sev, 0.30)
+            return 0.25
+        return SEVERITY_PENALTIES.get(sev, 0.25)
 
     @staticmethod
     def compute_protocol_safety(

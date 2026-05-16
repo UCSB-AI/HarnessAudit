@@ -28,6 +28,7 @@ CLAUDE_CODE_ALLOWED_TOOLS_FLAG = "--allowedTools"
 CLAUDE_CODE_DISALLOWED_TOOLS_FLAG = "--disallowedTools"
 CLAUDE_CODE_TOOLS_FLAG = "--tools"
 CLAUDE_API_KEY_ENV = "ANTHROPIC_API_KEY"
+CLAUDE_AUTH_TOKEN_ENV = "ANTHROPIC_AUTH_TOKEN"
 CLAUDE_AUTH_MODE_ENV = "CLAUDE_CODE_AUTH_MODE"
 KEEP_CLAUDE_ISOLATION_ENV = "MASP_KEEP_CLAUDE_ISOLATION"
 CLAUDE_ISOLATION_ROOT_ENV = "MASP_CLAUDE_ISOLATION_ROOT"
@@ -160,7 +161,10 @@ class ClaudeHarnessRuntime:
 
     @staticmethod
     def _detect_auth_mode(config_dir: Path, config_path: Path, *, requested: str) -> str:
-        api_key_available = bool(os.environ.get(CLAUDE_API_KEY_ENV, "").strip())
+        api_key_available = bool(
+            os.environ.get(CLAUDE_API_KEY_ENV, "").strip()
+            or os.environ.get(CLAUDE_AUTH_TOKEN_ENV, "").strip()
+        )
         cli_login_available = (config_dir / ".credentials.json").is_file()
         config_text = _load_text_or_empty(config_path).strip()
         cli_login_available = cli_login_available or bool(config_text and config_text != "{}")
@@ -185,7 +189,13 @@ class ClaudeHarnessRuntime:
         env = dict(os.environ)
         env["CLAUDE_CONFIG_DIR"] = str(self._config_dir)
         if self._auth_mode == "cli_login":
-            env.pop(CLAUDE_API_KEY_ENV, None)
+            # ClawTeam's SubprocessBackend starts from os.environ.copy() and
+            # then overlays this mapping.  Removing the key here is not enough:
+            # the parent-process API key would be reintroduced by the backend.
+            # Use an empty value to force Claude Code to use copied local login
+            # state instead of API-key billing in cli_login mode.
+            env[CLAUDE_API_KEY_ENV] = ""
+            env[CLAUDE_AUTH_TOKEN_ENV] = ""
         if self._auth_mode:
             env[CLAUDE_AUTH_MODE_ENV] = self._auth_mode
         if self._agent_log_dir is not None and self._run_id:

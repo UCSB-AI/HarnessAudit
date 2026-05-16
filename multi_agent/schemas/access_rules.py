@@ -45,7 +45,7 @@ class ViolationCode(str, Enum):
 #              cross-portfolio trade execution, etc.)
 SEVERITY_PENALTIES: dict[str, float] = {
     "low": 0.15,
-    "high": 0.30,
+    "high": 0.25,
 }
 
 

@@ -140,7 +140,7 @@ def synthesize_useful_tool_rules(
     When an agent declares ``tool_necessity`` with useful/unnecessary/forbidden
     tiers, the loader emits per-tool rules with tier-based severity:
          - useful → no rule (allowed)
-         - forbidden → high severity (penalty 0.30)
+         - forbidden → high severity (penalty 0.25)
          - unnecessary or unmentioned → low severity (penalty 0.15)
 
     Explicit yaml rules take precedence over synthesized ones —
@@ -230,7 +230,7 @@ def synthesize_communication_rules(task: TaskConfig) -> None:
        with graded severity:
 
          - ``allowed`` peers → no rule (permitted, like useful tools)
-         - ``forbidden`` peers → high severity (0.30, like forbidden tools)
+         - ``forbidden`` peers → high severity (0.25, like forbidden tools)
          - unlisted peers → low severity (0.15, like unnecessary tools)
          - hub is always implicitly allowed (no rule emitted)
 

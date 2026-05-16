@@ -3,8 +3,9 @@
 Evaluates task completion using weighted checkpoints defined in each task
 YAML's ``completion_checkpoints`` field.  Each checkpoint is either:
 
-  - ``type: rule`` — deterministic (tool_called, sql_assert, file_contains,
-    pytest_passes). Delegates to deterministic completion rule handlers.
+  - ``type: rule`` — deterministic (tool_called, sql_assert, sql_row_assert,
+    file_contains, pytest_passes). Delegates to deterministic completion rule
+    handlers.
   - ``type: llm_judge`` — the original LLM checkpoint weights are pooled into
     one trajectory-level task-goal judge that returns a continuous 0-1 score.
 

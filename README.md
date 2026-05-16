@@ -61,6 +61,124 @@ decisions, completion scores, operational judgments, and run-level metadata.
 
 ---
 
+## 🧪 How the Evaluation Works
+
+HarnessAudit evaluates a harness from the full trajectory it produces, not from
+the final response alone. A run has five stages:
+
+1. **Load a task and tool catalog.** Each task defines agent roles, a user goal,
+   domain tools, boundary rules, completion checkpoints, and optional
+   perturbation variants. The tool catalog defines the callable task tools and
+   which tools expose protected resources.
+2. **Instantiate run state.** Most domains receive an isolated SQLite-backed
+   mock service, called a domain bank. Tool calls mutate this bank, and the final
+   database snapshot is saved for auditing. SDE tasks are handled separately:
+   each run receives its own disposable git worktree of the target fixture
+   repository, so code edits, tests, and file-system changes are isolated from
+   the source fixture.
+3. **Run the target harness.** The selected harness, for example OpenClaw,
+   Claude Code, or Codex, executes the task through the configured framework.
+   HarnessAudit records normalized observable actions: tool calls,
+   communications, tool arguments, tool results, final output, and harness
+   metadata.
+4. **Score the trajectory.**
+   - **L1 Boundary Compliance** applies deterministic access rules to every
+     normalized action. It reports `sar_tool`, `sar_resource`, `sar_flow`, and
+     `sar_avg`.
+   - **L2 Execution Fidelity** reports `avs` and `tcr`. `avs` is a post-hoc
+     operational judge over tool-path and scoped-resource behavior. `tcr` is the
+     original completion score: deterministic rule checkpoints keep their YAML
+     weights, and LLM completion checkpoints are pooled into one
+     trajectory-level judge.
+   - **L3 Perturbation Stability** reruns selected tasks under perturbations
+     such as indirect injection, ambiguous goals, and robustness failures, then
+     scores whether the harness preserves safe and useful behavior.
+5. **Write reproducibility artifacts.** Each run writes a JSONL trace, a JSON
+   report, and, when applicable, a SQLite bank snapshot. SDE reports also record
+   the per-run workspace path so code diffs and test-side effects can be audited.
+   These artifacts are sufficient to inspect violations, recompute metrics,
+   debug task completion, and audit tool-side state transitions.
+
+---
+
+## 🧮 Metric Calculation and Re-scoring
+
+HarnessAudit writes per-run metrics into each result JSON during
+`python -m multi_agent run`. The main metric sources are:
+
+| Metric | How it is computed | Implementation |
+| --- | --- | --- |
+| `sar_tool`, `sar_resource`, `sar_flow`, `sar_avg` | Deterministic rule matching over normalized actions. Tool violations, protected-resource violations, and communication/data-leak violations are counted from access decisions. | `multi_agent/checker.py`, `multi_agent/schemas/trace.py` |
+| Aggregate SAR tables | Post-hoc aggregation over existing `multi_agent/traces/` and paired `multi_agent/results/`. This helper recomputes channel-level SAR series for trace groups. | `multi_agent/sar_calculate.py` |
+| `avs` | LLM-as-judge score over each role's actual tool path, compared against task `ground_truth_tool_paths` and resource-scope constraints from access rules. Role scores are averaged. | `multi_agent/operational_judge.py` |
+| `tcr` | Weighted task-completion score. Rule checkpoints are evaluated deterministically; LLM checkpoints are pooled into one trajectory-level completion judge. | `multi_agent/completion_judge.py` |
+| L3 perturbation score | Perturbed runs are scored for delivery, hard safety caps, perturbation-specific rubrics, and optional LLM stability judgment. | `multi_agent/perturbation_eval.py` |
+
+To inspect aggregate SAR and the paired AVS/TCR means for a completed
+harness/model group:
+
+```bash
+python multi_agent/sar_calculate.py --group openclaw/gpt-5.4
+```
+
+The helper reads from the default artifact roots:
+
+```text
+multi_agent/traces/<harness>/<model>/*.jsonl
+multi_agent/results/<harness>/<model>/*.json
+```
+
+The public CLI computes AVS/TCR as part of a run and does not overwrite old
+result JSONs in place. To refresh judge-dependent scores, run the task again
+with the desired judge model and write to a clean output directory:
+
+```bash
+python -m multi_agent run multi_agent/tasks/daily_life/wellness/dl-t4.yaml \
+  --framework clawteam \
+  --harness openclaw \
+  --model gpt-5.4 \
+  --judge-model gpt-5.4 \
+  --judge-workers 4 \
+  --trace-dir /tmp/harnessaudit_rejudge/traces \
+  --output /tmp/harnessaudit_rejudge/results
+```
+
+For a full-suite refresh, use the sweep script with a clean output location or
+with `SKIP_EXISTING=0`:
+
+```bash
+HARNESS=openclaw \
+MODEL=gpt-5.4 \
+JUDGE_MODEL=gpt-5.4 \
+TASK_WORKERS=4 \
+JUDGE_WORKERS=4 \
+OUTPUT_DIR=/tmp/harnessaudit_rejudge/results \
+TRACE_DIR=/tmp/harnessaudit_rejudge/traces \
+bash multi_agent/run_ma.sh
+```
+
+Use `--skip-judge` or `SKIP_JUDGE=1` only for cheap smoke tests. In that mode,
+deterministic completion checks still run, but AVS is not evaluated and LLM
+completion checkpoints contribute no score.
+
+To run one perturbation variant:
+
+```bash
+python -m multi_agent run multi_agent/tasks/daily_life/dining/dl-t11.yaml \
+  --framework clawteam \
+  --harness openclaw \
+  --model gpt-5.4 \
+  --judge-model gpt-5.4 \
+  --perturbation-id dl-t11-inj-1 \
+  --trace-dir multi_agent/traces/perturbations \
+  --output multi_agent/results/perturbations
+```
+
+Perturbation result JSONs include a `perturbation` object with fields such as
+`attack_type`, `delivered`, `stable`, `stability_score`, and `pb`. Aggregate L3
+numbers are computed by grouping those reports by `attack_type` and averaging
+the non-null `stability_score` / `pb` values.
+
 ## 🗂️ Repository Layout
 
 ```text

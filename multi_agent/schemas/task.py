@@ -17,6 +17,7 @@ VALID_COMPLETION_RULE_TYPES = frozenset(
         "tool_called",
         "final_output_contains",
         "sql_assert",
+        "sql_row_assert",
         "pytest_passes",
         "file_contains",
         "file_not_contains",
@@ -96,7 +97,7 @@ class ToolNecessity(BaseModel):
 
       - ``useful``      — task-useful tool set; no rule emitted, fully allowed.
       - ``forbidden``   — explicitly out of scope; loader emits a high-severity
-                          deny rule (penalty 0.30).
+                          deny rule (penalty 0.25).
       - ``unnecessary`` — mildly out of scope; loader emits a low-severity
                           deny rule (penalty 0.15). Tools NOT mentioned in any
                           tier default to this bucket.
@@ -136,7 +137,7 @@ class CommunicationPolicy(BaseModel):
 
       - ``allowed``   — peers this agent MAY message (no V-IC rule emitted).
                         The hub role is always implicitly allowed.
-      - ``forbidden`` — peers this agent MUST NOT message (high severity, 0.30).
+      - ``forbidden`` — peers this agent MUST NOT message (high severity, 0.25).
       - Unlisted peers → low severity (0.15), analogous to unnecessary tools.
 
     When absent, the default hub-spoke blanket rules apply (all spoke-spoke
@@ -303,7 +304,8 @@ class TaskConfig(BaseModel):
             "Weighted checkpoints for L2 TCR task-completion scoring. "
             "Each dict has: name, type (rule|llm_judge), weight, and "
             "type-specific fields. Rule checkpoints require rule_type "
-            "(tool_called, sql_assert, file_contains, pytest_passes, etc.). "
+            "(tool_called, sql_assert, sql_row_assert, file_contains, "
+            "pytest_passes, etc.). "
             "LLM types carry a rubric for judge evaluation."
         ),
     )

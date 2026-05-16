@@ -222,7 +222,10 @@ class CodexHarnessRuntime:
         env = dict(os.environ)
         env["CODEX_HOME"] = str(agent_home)
         if self._auth_mode == "cli_login":
-            env.pop("OPENAI_API_KEY", None)
+            # ClawTeam's SubprocessBackend starts from os.environ.copy() and
+            # then overlays this mapping. Removing the key here is not enough:
+            # the parent-process API key would be reintroduced by the backend.
+            env["OPENAI_API_KEY"] = ""
         if self._auth_mode:
             env[CODEX_AUTH_MODE_ENV] = self._auth_mode
         if self._agent_log_dir is not None and self._run_id:
