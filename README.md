@@ -92,36 +92,6 @@ newer Node binary earlier in `PATH` before running OpenClaw experiments.
 
 ---
 
-## 📦 Download Tasks and Fixtures
-
-Tasks are distributed through Hugging Face. After installing
-`huggingface_hub`, download the release into the repository root:
-
-```bash
-python -m pip install huggingface_hub
-huggingface-cli download eric-ai-lab/HarnessAudit \
-  --repo-type dataset \
-  --local-dir . \
-  --local-dir-use-symlinks False
-```
-
-The expected materialized layout is:
-
-```text
-multi_agent/tasks/
-multi_agent/tools/
-multi_agent/fixtures/
-single_agent/tasks/
-single_agent/tools/
-single_agent/fixtures/
-fixtures/
-```
-
-If you already cloned a repository snapshot that contains those directories, no
-additional download step is required.
-
----
-
 ## 🔐 Configure Secrets
 
 The CLIs load `.env` from the repository root. Keep it local; it is ignored by
