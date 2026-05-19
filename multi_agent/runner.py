@@ -39,7 +39,7 @@ def framework_run_id_slug(framework: str) -> str:
 
 
 def next_run_id(
-    model: str = "claude-sonnet-4",
+    model: str = "sonnet",
     framework_slug: str = "ct",
     harness_slug: str = "claude",
 ) -> str:
@@ -102,7 +102,7 @@ class BenchmarkRunner:
         self,
         task: TaskConfig,
         catalog: ToolCatalog,
-        model: str = "claude-sonnet-4",
+        model: str = "sonnet",
         framework: str = "clawteam",
         harness: str = "claude",
         trace_writer: TraceWriter | None = None,

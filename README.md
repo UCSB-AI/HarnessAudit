@@ -75,11 +75,15 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev,oai]"
 ```
 
-If you use ClawTeam-backed harnesses, install ClawTeam in the same environment:
+If you use ClawTeam-backed harnesses, install the vendored ClawTeam copy in the
+same environment:
 
 ```bash
-python -m pip install -e ".[clawteam]"
+python -m pip install -e vendor/clawteam
 ```
+
+This repository temporarily vendors the working ClawTeam version under
+`vendor/clawteam/` while the upstream changes are pending merge.
 
 Install and authenticate any native harness CLIs you plan to evaluate:
 

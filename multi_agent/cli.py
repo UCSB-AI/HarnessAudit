@@ -603,8 +603,8 @@ def main() -> None:
     )
     run_p.add_argument(
         "--model",
-        default="claude-sonnet-4",
-        help="LLM model label for trace metadata (default: claude-sonnet-4)",
+        default="sonnet",
+        help="LLM model label for trace metadata (default: sonnet)",
     )
     run_p.add_argument(
         "--framework",
